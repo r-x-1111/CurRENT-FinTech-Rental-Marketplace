@@ -27,6 +27,9 @@ export interface Listing {
   imageUrl: string;
   description: string;
   status: ListingStatus;
+  images?: string[];
+  availableFrom?: string;
+  availableTo?: string;
 }
 
 export interface Rental {

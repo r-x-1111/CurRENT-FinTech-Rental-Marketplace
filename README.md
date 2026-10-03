@@ -225,7 +225,7 @@ Features such as referral rewards, listing boosts and rental bundles can be trea
 
 ## Technical Foundation
 
-The repository now contains the initial mobile application foundation.
+The repository contains an interactive mobile application prototype with local persistence and a browser preview.
 
 ### Stack
 
@@ -236,7 +236,27 @@ The repository now contains the initial mobile application foundation.
 - Supabase Auth
 - Supabase Storage and Realtime planned for media and messaging
 
-### Current Prototype Screens
+### Working Prototype
+
+The app now runs as an interactive, device-local academic prototype without Supabase credentials. It opens as Alex Tan, a sample renter. Profile → Demo accounts lets you switch to the item owner to exercise both sides of a rental. This is deliberately a local simulation, not a deployed multi-user service.
+
+Implemented functions:
+
+- Responsive mobile and web marketplace, search, category/location/price/date filters, favourites and listing galleries
+- Local demo signup, sign-in, sign-out, editable profiles and profile photos
+- Simulated eKYC with pending, verified, failed and retry states
+- Owner listing creation, photo selection/main-photo management, drafts, publishing, editing, pausing and deletion
+- Rental dates, availability checks, overlapping-reservation prevention and owner approval/rejection
+- Itemised fee quotes, explainable risk scores, risk-based deposits and optional simulated protection
+- Simulated card/FPX/eligible BNPL checkout with processing, success, failure and retry; BNPL excludes the deposit and other fees
+- Rental agreements, participant messaging, notifications and payment history
+- Photo evidence at owner handover and renter return, owner inspection and simulated deposit release
+- Disputes with evidence that freeze deposit release, two-way reviews, owner earnings and payout records
+- Local persistence using AsyncStorage, including selected photos, account state and in-progress rentals
+
+Demo accounts and messages share data **only on this device/browser**. Built-in accounts use account-switch buttons. Created demo accounts use a salted password digest, which is only a prototype mechanism, not production authentication. Do not enter real identity documents or reuse a real password. External sample photography requires an internet connection.
+
+### Prototype Screens
 
 - Home marketplace
 - Explore and search
@@ -246,7 +266,7 @@ The repository now contains the initial mobile application foundation.
 - Profile and Rental Risk Score
 - Owner Mode dashboard
 
-The UI currently uses sample data so the application can be developed before the backend is connected.
+Sample listings initialise the local store once. Subsequent changes persist locally. No real payment, deposit custody, insurance, BNPL or identity checks occur. The optional demo protection fee is RM5 per rental day, and the return date is not charged. Rentals run for 1–90 days. Cancellation is supported before payment; refunds and dispute resolution are not automated in this version.
 
 ### Business Logic Included
 
@@ -292,10 +312,11 @@ cd CurRENT-FinTech-Rental-Marketplace
 
 ```bash
 npm install
-npx expo install --fix
 ```
 
-### 3. Configure Supabase
+### 3. Optional future Supabase connection
+
+**Skip this step to run the working local prototype.** The Supabase client and SQL migration are retained as backend scaffolding; setting these variables does not switch the app to live persistence or authentication. Connecting a shared backend requires replacing the local store with authenticated server operations and reviewing the initial migration’s permissive policies. Financial state transitions and risk/verification fields must be controlled by trusted server code.
 
 Copy the environment template:
 
@@ -318,7 +339,36 @@ Run the SQL migration in your Supabase project before replacing the mock data wi
 npm start
 ```
 
-You can then open the project with Expo Go or a development build.
+You can then open the project with a compatible Expo Go version or development build. For the browser:
+
+```bash
+npm run web
+```
+
+On Windows PowerShell with scripts disabled, use `npm.cmd` and `npx.cmd` in place of `npm` and `npx`.
+
+### 5. Try a complete rental
+
+1. As Alex Tan, open the Sony camera, choose dates and request the rental.
+2. In Profile, switch to Aiman Rahman. Open Owner Mode → Requests, then approve.
+3. Switch back to Alex, open Rentals and complete the demo payment. The provider response controls let you test success or failure.
+4. Switch to Aiman and upload a condition photo to confirm handover. Demo handovers can advance before the scheduled date.
+5. Switch to Alex, send a message and upload a return photo to check out.
+6. Switch to Aiman, inspect the evidence and confirm return to release the demo deposit and record the payout.
+7. Either participant can leave a review. For an alternate path, open a dispute before return confirmation to freeze the deposit.
+
+To test a new account, use Profile → Sign in or create another account. Complete the simulated verification before publishing or requesting a rental. Uploaded photos are stored locally; use modest image sizes to stay within device/browser storage limits.
+
+### 6. Validation
+
+```bash
+npm run typecheck
+npm test
+npm run build:web
+npm run test:e2e
+```
+
+Browser tests use installed Google Chrome and start a local preview of `dist/` on port 4173. Build the web export before running them. Tests cover role permissions, booking conflicts, fee calculations, the complete rental lifecycle, failure/retry states, evidence, disputes, local persistence, account creation and mobile listing management.
 
 ## Repository Structure
 
@@ -327,18 +377,19 @@ app/                    Mobile screens and navigation
 components/             Reusable interface components
 constants/              CurRENT design tokens
 data/                    Temporary sample marketplace data
-lib/                     Supabase client
+lib/                     Future Supabase client
+context/                 Persistent local marketplace store
 services/                Risk, deposit and fee calculations
 supabase/migrations/     Database schema
-services/                Business logic
+tests/                   Business-rule and browser journey tests
 types/                   TypeScript application types
 docs/BUILD_PLAN.md       Detailed MVP development roadmap
 ```
 
 ## Development Status
 
-The repository is now an **application foundation**, not a finished production marketplace.
+The repository is now a **working local academic prototype**, not a production marketplace. The core renter and owner journeys are implemented and tested in the browser. Native device runtime testing is still required.
 
-The next priority is to connect Supabase authentication and replace mock marketplace data with database-backed listings. After that, implement listing creation, booking, owner approval, messaging and check-in/check-out in that order.
+Remaining live-service work: Supabase Auth and database/storage synchronisation, server-authoritative permissions and booking concurrency, Realtime messaging across devices, authorised provider integrations, push notifications, support/admin dispute resolution, real refund/payout processing and store-release preparation. The original SQL policies are scaffolding and must not be used as a production security boundary.
 
 See [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) for the full implementation sequence.

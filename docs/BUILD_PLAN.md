@@ -2,6 +2,8 @@
 
 This document defines the implementation scope for the CurRENT mobile MVP.
 
+> Implementation update: the core workflows below now operate in a persistent, device-local academic prototype. See [IMPLEMENTATION.md](IMPLEMENTATION.md) for implemented behavior, tests and limitations. Supabase, Realtime and external-provider items in this roadmap remain future live-service work.
+
 ## Technical Stack
 
 - React Native with Expo
