@@ -222,3 +222,123 @@ This project is an academic prototype focused on demonstrating an implementable 
 The prototype should prioritise the core rental journey, owner workflow, payments, verification, risk-based deposits, item protection, messaging, check-in/check-out and dispute management.
 
 Features such as referral rewards, listing boosts and rental bundles can be treated as secondary enhancements rather than core MVP requirements.
+
+## Technical Foundation
+
+The repository now contains the initial mobile application foundation.
+
+### Stack
+
+- React Native with Expo
+- TypeScript
+- Expo Router
+- Supabase PostgreSQL
+- Supabase Auth
+- Supabase Storage and Realtime planned for media and messaging
+
+### Current Prototype Screens
+
+- Home marketplace
+- Explore and search
+- Item details with booking cost preview
+- Rentals
+- Messages
+- Profile and Rental Risk Score
+- Owner Mode dashboard
+
+The UI currently uses sample data so the application can be developed before the backend is connected.
+
+### Business Logic Included
+
+The repository includes prototype logic for:
+
+- Explainable Rental Risk Score
+- Risk-based refundable security deposits
+- 5% borrower service fee with RM5 minimum
+- 12% owner platform commission
+- Estimated owner payouts
+
+### Database Foundation
+
+`supabase/migrations/001_initial_schema.sql` contains the initial schema for:
+
+- profiles
+- listings
+- listing images
+- bookings
+- payments
+- deposits
+- messages
+- reviews
+- rental evidence
+- disputes
+- favourites
+- notifications
+
+Row Level Security is enabled as a starting point. Policies should be reviewed again before any production release.
+
+## Getting Started
+
+### 1. Requirements
+
+Install Node.js and npm, then clone the repository.
+
+```bash
+git clone https://github.com/r-x-1111/CurRENT-FinTech-Rental-Marketplace.git
+cd CurRENT-FinTech-Rental-Marketplace
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+npx expo install --fix
+```
+
+### 3. Configure Supabase
+
+Copy the environment template:
+
+```bash
+cp .env.example .env
+```
+
+Then add your Supabase project values:
+
+```env
+EXPO_PUBLIC_SUPABASE_URL=your-project-url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Run the SQL migration in your Supabase project before replacing the mock data with live queries.
+
+### 4. Start the application
+
+```bash
+npm start
+```
+
+You can then open the project with Expo Go or a development build.
+
+## Repository Structure
+
+```text
+app/                    Mobile screens and navigation
+components/             Reusable interface components
+constants/              CurRENT design tokens
+data/                    Temporary sample marketplace data
+lib/                     Supabase client
+services/                Risk, deposit and fee calculations
+supabase/migrations/     Database schema
+services/                Business logic
+types/                   TypeScript application types
+docs/BUILD_PLAN.md       Detailed MVP development roadmap
+```
+
+## Development Status
+
+The repository is now an **application foundation**, not a finished production marketplace.
+
+The next priority is to connect Supabase authentication and replace mock marketplace data with database-backed listings. After that, implement listing creation, booking, owner approval, messaging and check-in/check-out in that order.
+
+See [`docs/BUILD_PLAN.md`](docs/BUILD_PLAN.md) for the full implementation sequence.
