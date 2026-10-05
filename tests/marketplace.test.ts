@@ -4,6 +4,7 @@ import { createSeed } from "../data/seed";
 import { transition, type Action } from "../services/marketplace";
 import {
   availability,
+  availabilityCalendar,
   dateAfter,
   quoteFor,
   rentalDays,
@@ -147,6 +148,10 @@ test("approval atomically rejects overlapping requests but permits adjacent rent
   j.request("booking-2");
   j.login("owner-aiman");
   j.operation("approve");
+  const calendar = availabilityCalendar(j.state, j.state.listings[0], 5);
+  assert.equal(calendar[1].status, "reserved");
+  assert.equal(calendar[2].status, "reserved");
+  assert.equal(calendar[3].status, "available");
   assert.throws(
     () => j.act({ type: "booking", id: "booking-2", operation: "approve" }),
     /already reserved/,

@@ -30,6 +30,7 @@ export default function ExploreScreen() {
   const [saved, setSaved] = useState(params.saved === "1");
   const [filters, setFilters] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [sort, setSort] = useState("Recommended");
   useEffect(() => {
     setQuery(params.q || "");
     setCategory(params.category || "All items");
@@ -73,6 +74,11 @@ export default function ExploreScreen() {
       }
     }
     return true;
+  }).sort((a, b) => {
+    if (sort === "Price: low to high") return a.dailyPrice - b.dailyPrice;
+    if (sort === "Price: high to low") return b.dailyPrice - a.dailyPrice;
+    if (sort === "Top rated") return b.rating - a.rating;
+    return 0;
   });
   function clear() {
     setQuery("");
@@ -83,6 +89,7 @@ export default function ExploreScreen() {
     setEnd("");
     setSaved(false);
     setVerified(false);
+    setSort("Recommended");
   }
   return (
     <Screen
@@ -144,6 +151,12 @@ export default function ExploreScreen() {
               onValueChange={setVerified}
             />
           </View>
+          <Text style={s.label}>Sort results</Text>
+          <Chips
+            options={["Recommended", "Price: low to high", "Price: high to low", "Top rated"]}
+            selected={sort}
+            onSelect={setSort}
+          />
           <Button secondary onPress={clear}>
             Clear filters
           </Button>

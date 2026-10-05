@@ -294,16 +294,31 @@ export function PhotoPicker({
               style={{ width: 100, height: 90, borderRadius: 12 }}
             />
             {!single && (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() =>
-                  onChange([photo, ...photos.filter((_, i) => i !== index)])
-                }
-              >
-                <Text style={s.link}>
-                  {index === 0 ? "Main photo" : "Set as main"}
-                </Text>
-              </Pressable>
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() =>
+                    onChange([photo, ...photos.filter((_, i) => i !== index)])
+                  }
+                >
+                  <Text style={s.link}>
+                    {index === 0 ? "Main photo" : "Set as main"}
+                  </Text>
+                </Pressable>
+                {index > 0 && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Move photo ${index + 1} earlier`}
+                    onPress={() => {
+                      const next = [...photos];
+                      [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                      onChange(next);
+                    }}
+                  >
+                    <Text style={s.link}>Move earlier</Text>
+                  </Pressable>
+                )}
+              </>
             )}
             <Pressable
               accessibilityRole="button"

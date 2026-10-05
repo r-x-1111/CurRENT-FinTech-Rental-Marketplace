@@ -12,6 +12,34 @@ CurRENT is designed to make peer-to-peer renting safer and more practical by com
 
 The project focuses on a realistic mobile application experience rather than a simple marketplace landing page.
 
+## Mobile Product Brief
+
+CurRENT is one app with renter and owner workflows. Users browse normally and open **Owner Mode** from Profile; the built-in Alex Tan and Aiman Rahman accounts let one device demonstrate both sides of a transaction. The interface is designed for a roughly 390 × 844 mobile viewport, with five bottom tabs: **Home, Explore, Rentals, Messages, Profile**. Product photography, text, prices, badges and actions are separate interface elements.
+
+| Area | What the prototype demonstrates |
+| --- | --- |
+| Home | Search, categories, featured Klang Valley items, notifications and active rental reminders. |
+| Explore | Search, category, location, maximum daily price, date availability, verified-owner and saved filters, plus price and rating sorting. |
+| Item details | Photo gallery, owner identity, ratings, rental count, description, a 21-day availability preview and a date-based cost quote. |
+| Rentals | Request, approval, payment, handover, active rental, return, deposit release, dispute and review states. |
+| Messages | Conversations attached to a specific rental so collection and return arrangements stay in context. |
+| Profile | Editable identity and photo, simulated eKYC, explainable Rental Risk Score, reviews, saved items, histories, notifications and demo account switching. |
+| Owner Mode | Dashboard, listing management, incoming requests, renter information, active rentals and simulated earnings and payouts. |
+
+The main demo path is **browse → item → dates → cost preview → request → owner approval → payment → deposit secured → agreement → message → handover and check-in → rental → return and check-out → owner inspection → deposit released → reviews**. The alternate path is **problem → dispute with photo evidence → deposit release paused → under review**. The prototype records disputes for review; it does not decide them automatically.
+
+### Product rules
+
+- Rentals last **1–90 days**. The return date is exclusive for charging, and confirmed or approved reservations block overlapping bookings. The item detail screen marks booked and closed days in its 21-day preview; date fields also support dates beyond that preview.
+- The borrower service fee is **5% of rental value, with a RM5 minimum**. Owner commission is **12% of the rental fee**. Checkout separates rental fee, service fee, refundable deposit, optional protection and total payable.
+- The Rental Risk Score starts at 50 and uses demo identity status, completed rentals, ratings and disputes. Scores **75–100** are low risk, **50–74** standard risk and **0–49** higher risk. Corresponding demo deposits are **10%, 20% and 30%** of estimated item value. Late-return and transaction signals are planned inputs but are not automated in this prototype.
+- Payment methods are simulated **Card, FPX and eligible BNPL**. Demo BNPL requires a verified account and rental fees of at least RM200; only the rental fee is eligible. The deposit, service fee and protection remain separate. Failure and retry states are available.
+- Protection is an optional **RM5 per rental day** demo add-on for items valued up to RM60,000. Any real coverage, potentially up to RM60,000 for eligible items, would depend on an external partner's terms and conditions. The prototype does not promise compensation.
+- A paid rental generates a digital agreement. Handover and return require condition photos; owner confirmation releases the demo deposit and records a demo payout. Opening a dispute during an active rental or return inspection pauses release.
+- Listings can be drafts, published, paused or unavailable. Publishing requires a verified demo owner and at least one photo. Owners can pick a main image, move photos earlier, edit details, pause and delete eligible listings.
+
+All account, payment, verification, protection and deposit actions are **local simulations**. The app does not move money or perform identity checks. A live service would use appropriately authorised external providers for eKYC, payment processing, deposit handling, BNPL and insurance or item protection. CurRENT is not presented as a bank, insurer, BNPL provider or licensed escrow provider.
+
 ## Main Users
 
 ### Renters
@@ -221,7 +249,7 @@ This project is an academic prototype focused on demonstrating an implementable 
 
 The prototype should prioritise the core rental journey, owner workflow, payments, verification, risk-based deposits, item protection, messaging, check-in/check-out and dispute management.
 
-Features such as referral rewards, listing boosts and rental bundles can be treated as secondary enhancements rather than core MVP requirements.
+The priority is the complete rental and dispute journeys. Unrelated features such as referral rewards, listing boosts and rental bundles are outside the current prototype scope.
 
 ## Technical Foundation
 
@@ -242,11 +270,11 @@ The app now runs as an interactive, device-local academic prototype without Supa
 
 Implemented functions:
 
-- Responsive mobile and web marketplace, search, category/location/price/date filters, favourites and listing galleries
+- Responsive mobile and web marketplace, search, category/location/price/date/verified-owner filters, price and rating sorting, favourites and listing galleries
 - Local demo signup, sign-in, sign-out, editable profiles and profile photos
 - Simulated eKYC with pending, verified, failed and retry states
 - Owner listing creation, photo selection/main-photo management, drafts, publishing, editing, pausing and deletion
-- Rental dates, availability checks, overlapping-reservation prevention and owner approval/rejection
+- Rental dates, a 21-day booked/closed availability preview, overlapping-reservation prevention and owner approval/rejection with renter risk context
 - Itemised fee quotes, explainable risk scores, risk-based deposits and optional simulated protection
 - Simulated card/FPX/eligible BNPL checkout with processing, success, failure and retry; BNPL excludes the deposit and other fees
 - Rental agreements, participant messaging, notifications and payment history

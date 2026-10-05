@@ -119,3 +119,34 @@ export function availability(
     throw new Error("This item is already reserved for those dates.");
   }
 }
+
+export type CalendarDay = {
+  date: string;
+  status: "available" | "reserved" | "unavailable";
+};
+
+/** A short, visible availability preview. The return date is exclusive. */
+export function availabilityCalendar(
+  state: Marketplace,
+  listing: Listing,
+  count = 21,
+): CalendarDay[] {
+  return Array.from({ length: count }, (_, offset) => {
+    const date = dateAfter(offset);
+    const outsideWindow =
+      listing.status !== "published" ||
+      !!(listing.availableFrom && date < listing.availableFrom) ||
+      !!(listing.availableTo && date >= listing.availableTo);
+    const reserved = state.bookings.some(
+      (booking) =>
+        booking.listingId === listing.id &&
+        ["approved", "payment_required", "confirmed", "upcoming", "active", "return_pending", "disputed"].includes(booking.status) &&
+        booking.start <= date &&
+        date < booking.end,
+    );
+    return {
+      date,
+      status: outsideWindow ? "unavailable" : reserved ? "reserved" : "available",
+    };
+  });
+}

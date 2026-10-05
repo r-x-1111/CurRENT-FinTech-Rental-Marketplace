@@ -23,10 +23,13 @@ import {
 import { useMarketplace } from "../../context/Marketplace";
 import {
   availability,
+  availabilityCalendar,
   dateAfter,
   money,
   quoteFor,
+  riskFor,
 } from "../../services/booking";
+import { colors } from "../../constants/theme";
 import { newId } from "../../services/marketplace";
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -54,6 +57,8 @@ export default function ListingDetailScreen() {
   const reviews = state.reviews.filter(
     (r) => r.recipientId === listing.ownerId,
   );
+  const calendar = availabilityCalendar(state, listing);
+  const renterRisk = user ? riskFor(state, user) : null;
   let quote;
   let dateError = "";
   try {
@@ -193,6 +198,35 @@ export default function ListingDetailScreen() {
                 ? ` until ${listing.availableTo}`
                 : " onwards"}
             </Text>
+            <Text style={s.label}>Next 21 days</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
+              {calendar.map((day) => (
+                <Pressable
+                  key={day.date}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${day.date}, ${day.status}`}
+                  accessibilityState={{ disabled: day.status !== "available" }}
+                  disabled={day.status !== "available"}
+                  onPress={() => {
+                    setStart(day.date);
+                    setEnd(new Date(Date.parse(`${day.date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10));
+                    setError("");
+                  }}
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 8,
+                    borderRadius: 9,
+                    backgroundColor: day.status === "available" ? (start === day.date ? colors.blue : colors.paleBlue) : colors.lightGrey,
+                    opacity: day.status === "available" ? 1 : 0.6,
+                  }}
+                >
+                  <Text style={{ color: start === day.date ? "white" : colors.navy, fontSize: 12 }}>
+                    {day.date.slice(5)} {day.status === "reserved" ? "Booked" : day.status === "unavailable" ? "Closed" : ""}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={s.caption}>Tap an available day for a one-day rental, then adjust the return date. Booked and closed days cannot be selected.</Text>
             <Field
               label="Collection date (YYYY-MM-DD)"
               value={start}
@@ -229,6 +263,11 @@ export default function ListingDetailScreen() {
                   value={money(quote.serviceFee)}
                 />
                 <Row label="Refundable deposit" value={money(quote.deposit)} />
+                <Text style={s.caption}>
+                  {renterRisk
+                    ? `Your ${renterRisk.level} risk tier sets a ${renterRisk.level === "low" ? "10" : renterRisk.level === "standard" ? "20" : "30"}% deposit on the item value. This amount is refundable after an accepted return.`
+                    : "Sign in to see your risk-based refundable deposit."}
+                </Text>
                 <Row label="Item protection" value={money(quote.protection)} />
                 <View style={s.divider} />
                 <Row

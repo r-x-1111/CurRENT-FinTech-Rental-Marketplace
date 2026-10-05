@@ -16,7 +16,7 @@ import {
   s,
 } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
-import { money } from "../../services/booking";
+import { money, riskFor } from "../../services/booking";
 import { calculateOwnerPayout } from "../../services/deposit";
 import type { Action } from "../../services/marketplace";
 export default function RentalDetail() {
@@ -48,6 +48,12 @@ export default function RentalDetail() {
     (p) => p.id === (owner ? b.renterId : b.ownerId),
   );
   const payout = calculateOwnerPayout(b.quote.rentalFee);
+  const renter = state.profiles.find((profile) => profile.id === b.renterId);
+  const renterReviews = state.reviews.filter((item) => item.recipientId === b.renterId);
+  const completedRentals = state.bookings.filter(
+    (item) => item.renterId === b.renterId && item.status === "completed",
+  ).length;
+  const currentRisk = renter ? riskFor(state, renter) : null;
   const steps = [
     "Request",
     "Approval",
@@ -134,6 +140,18 @@ export default function RentalDetail() {
           </Text>
           {owner && (
             <>
+              <Row label="Identity" value={renter?.verification.replace("_", " ") || "Unknown"} />
+              <Row label="Completed rentals" value={String(completedRentals)} />
+              <Row
+                label="Renter rating"
+                value={renterReviews.length
+                  ? `${(renterReviews.reduce((sum, item) => sum + item.rating, 0) / renterReviews.length).toFixed(1)} / 5`
+                  : "No reviews yet"}
+              />
+              <Text style={s.caption}>
+                Request score: {b.riskScore}/100. Current tier: {currentRisk?.level || "unknown"}.
+                The demo score uses verification, completed rentals, reviews and disputes.
+              </Text>
               <Button onPress={() => operation("approve")}>
                 Approve request
               </Button>
