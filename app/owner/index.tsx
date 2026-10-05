@@ -71,9 +71,12 @@ export default function OwnerDashboard() {
       <Button onPress={() => router.push("/owner/edit")}>
         + Create a listing
       </Button>
+      <Button secondary onPress={() => router.push("/(tabs)/messages")}>
+        Rental messages
+      </Button>
       <Section title="Your owner workspace" />
       <Chips
-        options={["Requests", "Listings", "Rentals", "Payouts"]}
+        options={["Requests", "Listings", "Rentals", "Payouts", "Reviews"]}
         selected={tab}
         onSelect={setTab}
       />
@@ -201,6 +204,30 @@ export default function OwnerDashboard() {
           )}
         </>
       )}
+      {tab === "Reviews" &&
+        (state.reviews.filter((review) => review.recipientId === user.id)
+          .length ? (
+          state.reviews
+            .filter((review) => review.recipientId === user.id)
+            .map((review) => (
+              <Card key={review.id}>
+                <Text style={s.bold}>
+                  {"★".repeat(review.rating)} ·{" "}
+                  {
+                    state.profiles.find(
+                      (profile) => profile.id === review.authorId,
+                    )?.name
+                  }
+                </Text>
+                <Text style={s.body}>{review.text || "Review submitted."}</Text>
+              </Card>
+            ))
+        ) : (
+          <Empty
+            title="No owner reviews yet"
+            text="Reviews from completed rentals will appear here."
+          />
+        ))}
     </Screen>
   );
 }

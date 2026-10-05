@@ -30,6 +30,7 @@ export default function ExploreScreen() {
   const [saved, setSaved] = useState(params.saved === "1");
   const [filters, setFilters] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [minimumRating, setMinimumRating] = useState("Any rating");
   const [sort, setSort] = useState("Recommended");
   useEffect(() => {
     setQuery(params.q || "");
@@ -48,38 +49,42 @@ export default function ExploreScreen() {
     price !== "" && (!Number.isFinite(Number(price)) || Number(price) < 0)
       ? "Enter a valid maximum price."
       : "";
-  const results = state.listings.filter((l) => {
-    if (
-      l.status !== "published" ||
-      (category !== "All items" && l.category !== category) ||
-      (saved && !user?.favourites.includes(l.id)) ||
-      (verified && !l.verifiedOwner)
-    )
-      return false;
-    if (
-      ![l.title, l.description, l.category, l.location]
-        .join(" ")
-        .toLowerCase()
-        .includes(query.trim().toLowerCase()) ||
-      !l.location.toLowerCase().includes(location.trim().toLowerCase())
-    )
-      return false;
-    if (priceError || dateError || (price && l.dailyPrice > Number(price)))
-      return false;
-    if (start && end) {
-      try {
-        availability(state, l, start, end);
-      } catch {
+  const results = state.listings
+    .filter((l) => {
+      if (
+        l.status !== "published" ||
+        (category !== "All items" && l.category !== category) ||
+        (saved && !user?.favourites.includes(l.id)) ||
+        (verified && !l.verifiedOwner) ||
+        (minimumRating !== "Any rating" &&
+          l.rating < Number(minimumRating.slice(0, 1)))
+      )
         return false;
+      if (
+        ![l.title, l.description, l.category, l.location]
+          .join(" ")
+          .toLowerCase()
+          .includes(query.trim().toLowerCase()) ||
+        !l.location.toLowerCase().includes(location.trim().toLowerCase())
+      )
+        return false;
+      if (priceError || dateError || (price && l.dailyPrice > Number(price)))
+        return false;
+      if (start && end) {
+        try {
+          availability(state, l, start, end);
+        } catch {
+          return false;
+        }
       }
-    }
-    return true;
-  }).sort((a, b) => {
-    if (sort === "Price: low to high") return a.dailyPrice - b.dailyPrice;
-    if (sort === "Price: high to low") return b.dailyPrice - a.dailyPrice;
-    if (sort === "Top rated") return b.rating - a.rating;
-    return 0;
-  });
+      return true;
+    })
+    .sort((a, b) => {
+      if (sort === "Price: low to high") return a.dailyPrice - b.dailyPrice;
+      if (sort === "Price: high to low") return b.dailyPrice - a.dailyPrice;
+      if (sort === "Top rated") return b.rating - a.rating;
+      return 0;
+    });
   function clear() {
     setQuery("");
     setCategory("All items");
@@ -89,6 +94,7 @@ export default function ExploreScreen() {
     setEnd("");
     setSaved(false);
     setVerified(false);
+    setMinimumRating("Any rating");
     setSort("Recommended");
   }
   return (
@@ -151,9 +157,20 @@ export default function ExploreScreen() {
               onValueChange={setVerified}
             />
           </View>
+          <Text style={s.label}>Minimum rating</Text>
+          <Chips
+            options={["Any rating", "4+ stars", "5 stars"]}
+            selected={minimumRating}
+            onSelect={setMinimumRating}
+          />
           <Text style={s.label}>Sort results</Text>
           <Chips
-            options={["Recommended", "Price: low to high", "Price: high to low", "Top rated"]}
+            options={[
+              "Recommended",
+              "Price: low to high",
+              "Price: high to low",
+              "Top rated",
+            ]}
             selected={sort}
             onSelect={setSort}
           />

@@ -12,6 +12,7 @@ import {
   Badge,
   Button,
   Card,
+  Chips,
   Empty,
   Field,
   Notice,
@@ -30,6 +31,7 @@ import {
   riskFor,
 } from "../../services/booking";
 import { colors } from "../../constants/theme";
+import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -38,6 +40,8 @@ export default function ListingDetailScreen() {
   const [start, setStart] = useState(dateAfter(1));
   const [end, setEnd] = useState(dateAfter(3));
   const [protection, setProtection] = useState(false);
+  const [collectionMethod, setCollectionMethod] =
+    useState<CollectionMethod>("Meet Owner");
   const [error, setError] = useState("");
   const [photo, setPhoto] = useState("");
   const { width } = useWindowDimensions();
@@ -58,6 +62,10 @@ export default function ListingDetailScreen() {
     (r) => r.recipientId === listing.ownerId,
   );
   const calendar = availabilityCalendar(state, listing);
+  const methods = listing.collectionMethods || ["Meet Owner"];
+  const selectedMethod = methods.includes(collectionMethod)
+    ? collectionMethod
+    : methods[0];
   const renterRisk = user ? riskFor(state, user) : null;
   let quote;
   let dateError = "";
@@ -94,6 +102,7 @@ export default function ListingDetailScreen() {
         start,
         end,
         protection,
+        collectionMethod: selectedMethod,
       });
       router.push(`/rental/${bookingId}`);
     } catch (e) {
@@ -209,24 +218,61 @@ export default function ListingDetailScreen() {
                   disabled={day.status !== "available"}
                   onPress={() => {
                     setStart(day.date);
-                    setEnd(new Date(Date.parse(`${day.date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10));
+                    setEnd(
+                      new Date(Date.parse(`${day.date}T00:00:00Z`) + 86400000)
+                        .toISOString()
+                        .slice(0, 10),
+                    );
                     setError("");
                   }}
                   style={{
                     paddingHorizontal: 10,
                     paddingVertical: 8,
                     borderRadius: 9,
-                    backgroundColor: day.status === "available" ? (start === day.date ? colors.blue : colors.paleBlue) : colors.lightGrey,
+                    backgroundColor:
+                      day.status === "available"
+                        ? start === day.date
+                          ? colors.blue
+                          : colors.paleBlue
+                        : colors.lightGrey,
                     opacity: day.status === "available" ? 1 : 0.6,
                   }}
                 >
-                  <Text style={{ color: start === day.date ? "white" : colors.navy, fontSize: 12 }}>
-                    {day.date.slice(5)} {day.status === "reserved" ? "Booked" : day.status === "unavailable" ? "Closed" : ""}
+                  <Text
+                    style={{
+                      color: start === day.date ? "white" : colors.navy,
+                      fontSize: 12,
+                    }}
+                  >
+                    {day.date.slice(5)}{" "}
+                    {day.status === "reserved"
+                      ? "Booked"
+                      : day.status === "unavailable"
+                        ? "Closed"
+                        : ""}
                   </Text>
                 </Pressable>
               ))}
             </View>
-            <Text style={s.caption}>Tap an available day for a one-day rental, then adjust the return date. Booked and closed days cannot be selected.</Text>
+            <Text style={s.caption}>
+              Tap an available day for a one-day rental, then adjust the return
+              date. Booked and closed days cannot be selected.
+            </Text>
+            <Text style={s.label}>Collection method</Text>
+            <Chips
+              options={methods}
+              selected={selectedMethod}
+              onSelect={(value) =>
+                setCollectionMethod(value as CollectionMethod)
+              }
+            />
+            {selectedMethod === "Delivery Available" && (
+              <Text style={s.caption}>
+                Delivery is a demo option supported by an external logistics
+                provider in a live service. No delivery fee is included here;
+                confirm arrangements with the owner.
+              </Text>
+            )}
             <Field
               label="Collection date (YYYY-MM-DD)"
               value={start}

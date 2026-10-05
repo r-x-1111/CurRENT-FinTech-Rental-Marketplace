@@ -6,6 +6,8 @@ The initial market focus is Klang Valley.
 
 > **Positioning:** Rent what you need. Earn from what you own.
 
+Alternative brand message: **Own less. Access more.** CurRENT combines temporary access for renters, income from underused items for owners, and a visible trust layer for both.
+
 ## Project Goal
 
 CurRENT is designed to make peer-to-peer renting safer and more practical by combining marketplace functions with payment, verification and rental-risk features.
@@ -16,15 +18,15 @@ The project focuses on a realistic mobile application experience rather than a s
 
 CurRENT is one app with renter and owner workflows. Users browse normally and open **Owner Mode** from Profile; the built-in Alex Tan and Aiman Rahman accounts let one device demonstrate both sides of a transaction. The interface is designed for a roughly 390 × 844 mobile viewport, with five bottom tabs: **Home, Explore, Rentals, Messages, Profile**. Product photography, text, prices, badges and actions are separate interface elements.
 
-| Area | What the prototype demonstrates |
-| --- | --- |
-| Home | Search, categories, featured Klang Valley items, notifications and active rental reminders. |
-| Explore | Search, category, location, maximum daily price, date availability, verified-owner and saved filters, plus price and rating sorting. |
-| Item details | Photo gallery, owner identity, ratings, rental count, description, a 21-day availability preview and a date-based cost quote. |
-| Rentals | Request, approval, payment, handover, active rental, return, deposit release, dispute and review states. |
-| Messages | Conversations attached to a specific rental so collection and return arrangements stay in context. |
-| Profile | Editable identity and photo, simulated eKYC, explainable Rental Risk Score, reviews, saved items, histories, notifications and demo account switching. |
-| Owner Mode | Dashboard, listing management, incoming requests, renter information, active rentals and simulated earnings and payouts. |
+| Area         | What the prototype demonstrates                                                                                                                                      |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home         | Search, categories, featured Klang Valley items, notifications and active rental reminders.                                                                          |
+| Explore      | Search, category, location, maximum daily price, dates, minimum rating, verified-owner and saved filters, plus price and rating sorting.                             |
+| Item details | Photo gallery, owner identity, ratings, rental count, description, collection choices, a 21-day availability preview and a date-based cost quote.                    |
+| Rentals      | Request, upcoming, active, return due, completed, cancelled and disputed filters; payment, handover, return, deposit and review steps.                               |
+| Messages     | Conversations attached to a specific rental, with unread indicators and collection and return arrangements in context.                                               |
+| Profile      | Editable identity and photo, simulated eKYC, explainable Rental Risk Score, reviews, saved items, histories, notifications, Help & Trust and demo account switching. |
+| Owner Mode   | Dashboard, listing and collection-method management, incoming requests, renter information, messages, reviews, and simulated earnings and payouts.                   |
 
 The main demo path is **browse → item → dates → cost preview → request → owner approval → payment → deposit secured → agreement → message → handover and check-in → rental → return and check-out → owner inspection → deposit released → reviews**. The alternate path is **problem → dispute with photo evidence → deposit release paused → under review**. The prototype records disputes for review; it does not decide them automatically.
 
@@ -37,20 +39,35 @@ The main demo path is **browse → item → dates → cost preview → request �
 - Protection is an optional **RM5 per rental day** demo add-on for items valued up to RM60,000. Any real coverage, potentially up to RM60,000 for eligible items, would depend on an external partner's terms and conditions. The prototype does not promise compensation.
 - A paid rental generates a digital agreement. Handover and return require condition photos; owner confirmation releases the demo deposit and records a demo payout. Opening a dispute during an active rental or return inspection pauses release.
 - Listings can be drafts, published, paused or unavailable. Publishing requires a verified demo owner and at least one photo. Owners can pick a main image, move photos earlier, edit details, pause and delete eligible listings.
+- Owners choose supported collection methods: **Meet Owner**, **Self-Pickup** or **Delivery Available**. Renters select from those choices at booking. The selection is saved with the rental and written into its digital agreement. Delivery is only a simulated option; a live version would use an external logistics provider, and this prototype calculates no delivery charge.
+- Dispute reporting includes a reason, written explanation and photo evidence. The case is recorded as under review and blocks the normal deposit-release action. Resolution remains a support/admin task outside this local demo.
 
 All account, payment, verification, protection and deposit actions are **local simulations**. The app does not move money or perform identity checks. A live service would use appropriately authorised external providers for eKYC, payment processing, deposit handling, BNPL and insurance or item protection. CurRENT is not presented as a bank, insurer, BNPL provider or licensed escrow provider.
+
+### Product presentation and scope
+
+The intended audience includes students, young professionals, freelancers, creators, hobbyists and owners of underused equipment, with temporary residents and small businesses as secondary users. B40/M40/T20 groupings are internal market research labels and do not belong on customer screens. Normal screens show only information useful for a rental decision; internal acquisition costs, salaries, break-even targets and projections stay outside the app.
+
+The master prompt calls for realistic product photographs throughout the marketplace. Product images, names, prices, locations, ratings, verification badges, status labels, buttons and card backgrounds remain separate React Native elements. If this product is recreated in Canva, keep those elements individually editable and use replaceable image frames; do not flatten functional cards into pictures.
+
+Use the existing navy and blue identity with green reserved for positive states. Prioritise search, categories, listings and the current rental on Home. Vary product rows, gallery views and dashboard modules so the mobile app does not become a sequence of identical cards. BNPL, delivery, occasion discovery, listing boosts, referrals and bundles are secondary to booking, trust, payment, evidence and disputes.
+
+The **Help & Trust** screen explains the four-step rental process, deposits, verification, damage, cancellations, disputes, fees, delivery and the Rental Risk Score. It links back to Rentals for reporting a problem. This is guidance for the local academic prototype, not a live support or claims service.
 
 ## Main Users
 
 ### Renters
+
 People who need temporary access to items without buying them, including students, young professionals, freelancers and short-term residents.
 
 ### Owners
+
 Individuals or small businesses with underused equipment or valuable items that can be rented out.
 
 ## Core Features
 
 ### Marketplace
+
 - Browse and search rental listings
 - Filter by category, location, price and availability
 - View item photos, prices, ratings and owner profiles
@@ -58,6 +75,7 @@ Individuals or small businesses with underused equipment or valuable items that 
 - Check rental availability
 
 ### Account and Verification
+
 - Sign up and log in
 - User profiles
 - Profile photo
@@ -66,19 +84,26 @@ Individuals or small businesses with underused equipment or valuable items that 
 - Reviews, ratings and rental history
 
 ### Listing Management
+
 Owners can:
+
 - Create, edit, pause and delete listings
 - Upload and manage item photos
 - Select a main photo
+- Reorder photos and preview saved listings
 - Set category, description, location and daily price
 - Set item availability
+- Set supported collection methods
 - Review incoming rental requests
 
 At least one item photo is required before a listing can be published.
 
 ### Booking
+
 Renters can:
+
 - Select rental dates
+- Select a supported collection method
 - View rental fee, service fee, refundable deposit and item protection
 - Submit a rental request
 - Wait for owner approval
@@ -89,9 +114,11 @@ Renters can:
 ## FinTech Features
 
 ### Rental Risk Score
+
 The Rental Risk Score supports owner decisions and risk-based rental controls.
 
 Possible inputs include:
+
 - Identity verification
 - Rental history
 - Completed rentals
@@ -104,13 +131,16 @@ Possible inputs include:
 The score may influence security deposits, rental limits and access to higher-value items.
 
 ### Risk-Based Security Deposit
+
 The refundable security deposit may vary based on:
+
 - Item value
 - Verification status
 - Rental Risk Score
 - Rental history
 
 Possible deposit statuses include:
+
 - Required
 - Secured
 - Held
@@ -121,9 +151,11 @@ Possible deposit statuses include:
 Deposit holding should be handled through an appropriate payment or service provider rather than presented as CurRENT operating its own regulated escrow service.
 
 ### Payments
+
 The application keeps rental payments on-platform.
 
 Checkout should clearly separate:
+
 - Rental fee
 - Borrower service fee
 - Refundable security deposit
@@ -131,15 +163,18 @@ Checkout should clearly separate:
 - Total payable
 
 Current project assumptions:
+
 - Borrower service fee: 5% of rental value, with RM5 minimum where applicable
 - Owner platform commission: 12% of rental amount
 
 ### Item Protection
+
 Eligible rentals may receive protection through an external insurance or protection provider.
 
 For eligible higher-value items, protection of up to RM60,000 may be available, subject to partner terms, eligibility and coverage conditions.
 
 ### Optional BNPL
+
 Eligible users may use an external BNPL provider for selected higher-value rental fees.
 
 The refundable security deposit remains separate from BNPL.
@@ -147,6 +182,7 @@ The refundable security deposit remains separate from BNPL.
 ## Rental Process
 
 ### Renter Flow
+
 1. Sign up and complete verification
 2. Search for an item
 3. View item and owner details
@@ -165,20 +201,22 @@ The refundable security deposit remains separate from BNPL.
 16. Leave a review
 
 ### Owner Flow
+
 1. Sign up and complete verification
 2. Create a listing
 3. Upload item photos
 4. Set price, location and availability
-5. Publish the listing
-6. Receive a rental request
-7. Review renter profile and risk information
-8. Approve or reject the request
-9. Confirm payment and deposit status
-10. Complete handover and check-in
-11. Monitor the active rental
-12. Complete return and check-out
-13. Receive payout
-14. Review the renter
+5. Choose supported collection methods
+6. Publish the listing
+7. Receive a rental request
+8. Review renter profile and risk information
+9. Approve or reject the request
+10. Confirm payment and deposit status
+11. Complete handover and check-in
+12. Monitor the active rental
+13. Complete return and check-out
+14. Receive payout
+15. Review the renter
 
 ## Supporting Functions
 
@@ -209,6 +247,7 @@ Owners can access an **Owner Mode** for listings, rental requests, earnings and 
 ## Application States
 
 The interface should support realistic states such as:
+
 - Verification pending or failed
 - Listing draft, published or paused
 - Rental request pending, approved, rejected or cancelled
@@ -222,6 +261,7 @@ The interface should support realistic states such as:
 CurRENT should feel like a modern consumer marketplace with a FinTech trust layer.
 
 Main colours:
+
 - Deep Navy `#0B1F3A`
 - Cobalt Blue `#2F6BFF`
 - Soft Blue `#DCEBFF`
@@ -235,6 +275,7 @@ Use realistic rental-product photography, clear mobile layouts and simple naviga
 ## Regulatory Approach
 
 CurRENT should rely on appropriately authorised external providers for:
+
 - Payment processing
 - Deposit handling
 - eKYC
@@ -249,7 +290,7 @@ This project is an academic prototype focused on demonstrating an implementable 
 
 The prototype should prioritise the core rental journey, owner workflow, payments, verification, risk-based deposits, item protection, messaging, check-in/check-out and dispute management.
 
-The priority is the complete rental and dispute journeys. Unrelated features such as referral rewards, listing boosts and rental bundles are outside the current prototype scope.
+The priority is the complete rental and dispute journeys. Referral rewards, listing boosts and rental bundles remain optional future growth features and do not drive the current interface.
 
 ## Technical Foundation
 
@@ -270,19 +311,22 @@ The app now runs as an interactive, device-local academic prototype without Supa
 
 Implemented functions:
 
-- Responsive mobile and web marketplace, search, category/location/price/date/verified-owner filters, price and rating sorting, favourites and listing galleries
+- Responsive mobile and web marketplace, search, category/location/price/date/rating/verified-owner filters, price and rating sorting, favourites and listing galleries
 - Local demo signup, sign-in, sign-out, editable profiles and profile photos
 - Simulated eKYC with pending, verified, failed and retry states
-- Owner listing creation, photo selection/main-photo management, drafts, publishing, editing, pausing and deletion
+- Owner listing creation, photo selection/main-photo management, collection methods, drafts, publishing, editing, pausing and deletion
 - Rental dates, a 21-day booked/closed availability preview, overlapping-reservation prevention and owner approval/rejection with renter risk context
 - Itemised fee quotes, explainable risk scores, risk-based deposits and optional simulated protection
 - Simulated card/FPX/eligible BNPL checkout with processing, success, failure and retry; BNPL excludes the deposit and other fees
-- Rental agreements, participant messaging, notifications and payment history
+- Rental agreements with collection method, participant messaging with unread indicators, notifications and payment history
 - Photo evidence at owner handover and renter return, owner inspection and simulated deposit release
-- Disputes with evidence that freeze deposit release, two-way reviews, owner earnings and payout records
+- Categorised disputes with evidence that freeze deposit release, two-way reviews, owner earnings and payout records
+- Help and Trust & Safety guidance with a practical FAQ
 - Local persistence using AsyncStorage, including selected photos, account state and in-progress rentals
 
 Demo accounts and messages share data **only on this device/browser**. Built-in accounts use account-switch buttons. Created demo accounts use a salted password digest, which is only a prototype mechanism, not production authentication. Do not enter real identity documents or reuse a real password. External sample photography requires an internet connection.
+
+The latest master prompt also describes future settings, push reminders, provider-backed delivery pricing and support-led dispute resolution. Those are not live integrations in this repository. The current UI offers local notifications and Help & Trust guidance; it does not claim real settlement, automatic refunds or dispute decisions.
 
 ### Prototype Screens
 

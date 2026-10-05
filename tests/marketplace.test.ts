@@ -230,6 +230,17 @@ test("accounts, private messages and notifications stay separated", () => {
     bookingId: "booking-1",
     text: "Can we meet at noon?",
   });
+  const messageNotice = j.state.notifications.find((notice) =>
+    notice.title.includes("sent you a message"),
+  );
+  assert.ok(messageNotice && !messageNotice.read);
+  j.login("owner-aiman");
+  j.act({ type: "readConversation", bookingId: "booking-1" });
+  assert.equal(
+    j.state.notifications.find((notice) => notice.id === messageNotice.id)
+      ?.read,
+    true,
+  );
   j.login("owner-sarah");
   assert.throws(
     () => j.act({ type: "message", bookingId: "booking-1", text: "Intruding" }),
@@ -257,6 +268,47 @@ test("accounts, private messages and notifications stay separated", () => {
   j.act({ type: "verify", status: "verified" });
   j.request("verified");
   assert.equal(j.state.bookings[0].renterId, "new-user");
+});
+test("collection choices are validated and recorded in the agreement", () => {
+  let state = createSeed();
+  state.listings[0].collectionMethods = ["Meet Owner", "Self-Pickup"];
+  const request = (
+    collectionMethod: "Meet Owner" | "Self-Pickup" | "Delivery Available",
+  ) =>
+    transition(state, {
+      type: "request",
+      id: "collection-booking",
+      listingId: "sony-a7iii",
+      start: dateAfter(1),
+      end: dateAfter(3),
+      protection: false,
+      collectionMethod,
+    });
+  assert.throws(() => request("Delivery Available"), /not available/);
+  state = request("Self-Pickup");
+  assert.equal(state.bookings[0].collectionMethod, "Self-Pickup");
+  state = transition(state, { type: "login", userId: "owner-aiman" });
+  state = transition(state, {
+    type: "booking",
+    id: "collection-booking",
+    operation: "approve",
+  });
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  state = transition(state, {
+    type: "booking",
+    id: "collection-booking",
+    operation: "pay",
+    method: "Demo card",
+  });
+  state = transition(state, {
+    type: "booking",
+    id: "collection-booking",
+    operation: "payment_result",
+  });
+  assert.match(
+    state.bookings[0].agreement || "",
+    /Collection method: Self-Pickup/,
+  );
 });
 test("state snapshots can reload mid-payment without losing fees or agreement progress", () => {
   const j = journey();

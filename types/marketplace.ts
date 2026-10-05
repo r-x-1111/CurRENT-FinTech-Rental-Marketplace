@@ -1,4 +1,9 @@
-import type { Listing, RentalStatus, VerificationStatus } from "./index";
+import type {
+  CollectionMethod,
+  Listing,
+  RentalStatus,
+  VerificationStatus,
+} from "./index";
 
 export interface Profile {
   id: string;
@@ -27,6 +32,7 @@ export interface Booking {
   renterId: string;
   start: string;
   end: string;
+  collectionMethod?: CollectionMethod;
   status: RentalStatus;
   quote: Quote;
   riskScore: number;
@@ -79,6 +85,7 @@ export interface Dispute {
   bookingId: string;
   authorId: string;
   reason: string;
+  category?: string;
   status: "under_review" | "resolved";
   createdAt: string;
 }

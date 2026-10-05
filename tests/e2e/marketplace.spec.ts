@@ -177,6 +177,11 @@ test("mobile marketplace search, favourites and owner listing creation work", as
   await expect(
     page.getByText("1 finds for you", { exact: true }),
   ).toBeVisible();
+  await page.goto("/profile");
+  await page.getByRole("button", { name: "Help & Trust and Safety" }).click();
+  await expect(
+    page.getByText("Frequently asked questions", { exact: true }),
+  ).toBeVisible();
   await page.goto("/owner/edit");
   await page
     .getByRole("textbox", { name: "Listing title", exact: true })
@@ -196,15 +201,13 @@ test("mobile marketplace search, favourites and owner listing creation work", as
       exact: true,
     })
     .fill("3000");
-  await page
-    .getByRole("button", { name: "Publish listing", exact: true })
-    .click();
   await expect(
-    page.getByText("Add at least one photo before publishing.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Publish listing", exact: true }),
+  ).toBeDisabled();
   await upload(page);
+  await expect(
+    page.getByRole("button", { name: "Publish listing", exact: true }),
+  ).toBeEnabled();
   await page
     .getByRole("button", { name: "Publish listing", exact: true })
     .click();

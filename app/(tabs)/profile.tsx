@@ -207,6 +207,9 @@ export default function ProfileScreen() {
         <Button secondary onPress={() => router.push("/notifications")}>
           Notifications
         </Button>
+        <Button secondary onPress={() => router.push("../help")}>
+          Help & Trust and Safety
+        </Button>
         <Button secondary onPress={() => router.push("/(tabs)/rentals")}>
           Rental history
         </Button>

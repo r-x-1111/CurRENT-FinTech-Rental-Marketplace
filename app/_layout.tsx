@@ -12,6 +12,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="listing/[id]" />
           <Stack.Screen name="owner/index" />
+          <Stack.Screen name="help" />
         </Stack>
       </MarketplaceProvider>
     </SafeAreaProvider>

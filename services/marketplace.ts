@@ -1,4 +1,4 @@
-import type { Listing, VerificationStatus } from "../types";
+import type { CollectionMethod, Listing, VerificationStatus } from "../types";
 import type { Marketplace, Profile, Booking } from "../types/marketplace";
 import { availability, parseDate, quoteFor, riskFor } from "./booking";
 
@@ -17,6 +17,7 @@ export type Action =
       start: string;
       end: string;
       protection: boolean;
+      collectionMethod?: CollectionMethod;
     }
   | {
       type: "booking";
@@ -37,8 +38,15 @@ export type Action =
     }
   | { type: "message"; bookingId: string; text: string }
   | { type: "review"; bookingId: string; rating: number; text: string }
-  | { type: "dispute"; bookingId: string; reason: string; photo: string }
-  | { type: "readNotices" };
+  | {
+      type: "dispute";
+      bookingId: string;
+      reason: string;
+      photo: string;
+      category?: string;
+    }
+  | { type: "readNotices" }
+  | { type: "readConversation"; bookingId: string };
 
 export const newId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -159,6 +167,16 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         l.status !== "published" || user.verification === "verified",
         "Complete demo identity verification before publishing.",
       );
+      const methods = l.collectionMethods || ["Meet Owner"];
+      requireThat(
+        methods.length > 0 &&
+          methods.every((method) =>
+            ["Meet Owner", "Self-Pickup", "Delivery Available"].includes(
+              method,
+            ),
+          ),
+        "Select a valid collection method.",
+      );
       if (l.availableFrom) parseDate(l.availableFrom);
       if (l.availableTo) parseDate(l.availableTo);
       requireThat(
@@ -198,6 +216,13 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Complete demo identity verification in Profile before requesting a rental.",
       );
       availability(state, listing, action.start, action.end);
+      const collectionMethod = action.collectionMethod || "Meet Owner";
+      requireThat(
+        (listing.collectionMethods || ["Meet Owner"]).includes(
+          collectionMethod,
+        ),
+        "This collection method is not available for this item.",
+      );
       requireThat(
         !state.bookings.some(
           (b) =>
@@ -218,6 +243,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         renterId: user.id,
         start: action.start,
         end: action.end,
+        collectionMethod,
         status: "pending",
         quote: quoteFor(
           state,
@@ -307,10 +333,16 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             "No payment is processing.",
           );
           b.payment = action.failed ? "failed" : "paid";
+          if (action.failed)
+            notify(
+              b.renterId,
+              `Demo payment failed for ${b.title}. You can retry.`,
+              b.id,
+            );
           if (!action.failed) {
             b.status = "upcoming";
             b.deposit = "secured";
-            b.agreement = `DEMO RENTAL AGREEMENT • ${b.id}\nOwner: ${state.profiles.find((p) => p.id === b.ownerId)?.name}\nRenter: ${user.name}\nItem: ${b.title}\nCollection: ${b.start} • Return: ${b.end}\nRental: RM${b.quote.rentalFee.toFixed(2)} • Service: RM${b.quote.serviceFee.toFixed(2)} • Protection: RM${b.quote.protection.toFixed(2)}\nRefundable deposit: RM${b.quote.deposit.toFixed(2)}\nTotal: RM${b.quote.total.toFixed(2)}\nBoth parties record condition photos at handover and return. Deposit release follows owner return confirmation; disputed deposits remain on hold for review. No actual money, insurance or deposit custody is provided in this academic demo.\nGenerated ${now}`;
+            b.agreement = `DEMO RENTAL AGREEMENT • ${b.id}\nOwner: ${state.profiles.find((p) => p.id === b.ownerId)?.name}\nRenter: ${user.name}\nItem: ${b.title}\nCollection: ${b.start} • Return: ${b.end}\nCollection method: ${b.collectionMethod || "Meet Owner"}${b.collectionMethod === "Delivery Available" ? " (external logistics arrangement; no delivery fee is charged in this demo)" : ""}\nRental: RM${b.quote.rentalFee.toFixed(2)} • Service: RM${b.quote.serviceFee.toFixed(2)} • Protection: RM${b.quote.protection.toFixed(2)}\nRefundable deposit: RM${b.quote.deposit.toFixed(2)}\nTotal: RM${b.quote.total.toFixed(2)}\nBoth parties record condition photos at handover and return. Deposit release follows owner return confirmation; disputed deposits remain on hold for review. No actual money, insurance or deposit custody is provided in this academic demo.\nGenerated ${now}`;
             notify(
               b.ownerId,
               `Demo payment received for ${b.title}. Ready for handover.`,
@@ -442,11 +474,23 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         action.reason.trim().length >= 10 && action.photo,
         "Describe the issue (at least 10 characters) and add a photo.",
       );
+      requireThat(
+        !action.category ||
+          [
+            "Item damaged",
+            "Item not returned",
+            "Condition disagreement",
+            "Payment issue",
+            "Security deposit issue",
+          ].includes(action.category),
+        "Choose a valid dispute reason.",
+      );
       state.disputes.push({
         id: newId(),
         bookingId: b.id,
         authorId: user.id,
         reason: action.reason.trim(),
+        category: action.category,
         status: "under_review",
         createdAt: now,
       });
@@ -473,6 +517,19 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         .filter((n) => n.userId === user.id)
         .forEach((n) => {
           n.read = true;
+        });
+      break;
+    case "readConversation":
+      bookingFor(action.bookingId);
+      state.notifications
+        .filter(
+          (notice) =>
+            notice.userId === user.id &&
+            notice.bookingId === action.bookingId &&
+            notice.title.includes("sent you a message"),
+        )
+        .forEach((notice) => {
+          notice.read = true;
         });
       break;
   }

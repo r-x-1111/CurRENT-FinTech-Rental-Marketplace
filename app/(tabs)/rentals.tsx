@@ -3,12 +3,16 @@ import { router } from "expo-router";
 import { Screen, Chips, Empty } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
+import { dateAfter } from "../../services/booking";
 const filters: Record<string, string[]> = {
   All: [],
   Requests: ["pending", "approved"],
   Upcoming: ["upcoming"],
-  Active: ["active", "return_pending", "disputed"],
-  History: ["completed", "cancelled", "rejected"],
+  Active: ["active"],
+  "Return due": ["active", "return_pending"],
+  Completed: ["completed"],
+  Cancelled: ["cancelled", "rejected"],
+  Disputed: ["disputed"],
 };
 export default function RentalsScreen() {
   const { state, user } = useMarketplace();
@@ -16,7 +20,10 @@ export default function RentalsScreen() {
   const bookings = state.bookings.filter(
     (b) =>
       b.renterId === user?.id &&
-      (!filters[filter].length || filters[filter].includes(b.status)),
+      (!filters[filter].length || filters[filter].includes(b.status)) &&
+      (filter !== "Return due" ||
+        b.status === "return_pending" ||
+        b.end <= dateAfter(1)),
   );
   return (
     <Screen

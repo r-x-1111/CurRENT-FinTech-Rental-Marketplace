@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
-import { Empty, Screen, s } from "../../components/ui";
+import { Badge, Empty, Screen, s } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
 export default function MessagesScreen() {
   const { state, user } = useMarketplace();
@@ -19,6 +19,13 @@ export default function MessagesScreen() {
           );
           const messages = state.messages.filter((m) => m.bookingId === b.id);
           const last = messages[messages.length - 1];
+          const unread = state.notifications.filter(
+            (notice) =>
+              notice.userId === user?.id &&
+              notice.bookingId === b.id &&
+              !notice.read &&
+              notice.title.includes("sent you a message"),
+          ).length;
           return (
             <Pressable
               accessibilityRole="button"
@@ -28,6 +35,7 @@ export default function MessagesScreen() {
             >
               <View style={s.row}>
                 <Text style={s.h2}>{other?.name}</Text>
+                {unread > 0 && <Badge text={`${unread} new`} />}
                 <Text style={s.link}>Open →</Text>
               </View>
               <Text style={s.label}>{b.title}</Text>

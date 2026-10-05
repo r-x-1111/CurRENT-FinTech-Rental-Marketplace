@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Button, Empty, Field, Notice, Screen, s } from "../../components/ui";
@@ -12,6 +12,16 @@ export default function Conversation() {
   const b = state.bookings.find(
     (b) => b.id === id && [b.ownerId, b.renterId].includes(user?.id || ""),
   );
+  const unreadMessages = state.notifications.filter(
+    (notice) =>
+      notice.userId === user?.id &&
+      notice.bookingId === id &&
+      !notice.read &&
+      notice.title.includes("sent you a message"),
+  ).length;
+  useEffect(() => {
+    if (b && unreadMessages) act({ type: "readConversation", bookingId: b.id });
+  }, [b?.id, unreadMessages, user?.id]);
   if (!b)
     return (
       <Screen back>

@@ -29,6 +29,7 @@ export default function RentalDetail() {
   const [rating, setRating] = useState("5");
   const [review, setReview] = useState("");
   const [dispute, setDispute] = useState(false);
+  const [disputeCategory, setDisputeCategory] = useState("Item damaged");
   const b = state.bookings.find(
     (b) => b.id === id && [b.renterId, b.ownerId].includes(user?.id || ""),
   );
@@ -49,7 +50,9 @@ export default function RentalDetail() {
   );
   const payout = calculateOwnerPayout(b.quote.rentalFee);
   const renter = state.profiles.find((profile) => profile.id === b.renterId);
-  const renterReviews = state.reviews.filter((item) => item.recipientId === b.renterId);
+  const renterReviews = state.reviews.filter(
+    (item) => item.recipientId === b.renterId,
+  );
   const completedRentals = state.bookings.filter(
     (item) => item.renterId === b.renterId && item.status === "completed",
   ).length;
@@ -105,6 +108,9 @@ export default function RentalDetail() {
           {owner ? "Renter" : "Owner"}: {other?.name} ·{" "}
           {other?.verification.replace("_", " ")}
         </Text>
+        <Text style={s.caption}>
+          Collection: {b.collectionMethod || "Meet Owner"}
+        </Text>
         <Button secondary onPress={() => router.push(`/conversation/${b.id}`)}>
           Message {other?.name.split(" ")[0] || "participant"}
         </Button>
@@ -140,18 +146,30 @@ export default function RentalDetail() {
           </Text>
           {owner && (
             <>
-              <Row label="Identity" value={renter?.verification.replace("_", " ") || "Unknown"} />
+              <Row
+                label="Identity"
+                value={renter?.verification.replace("_", " ") || "Unknown"}
+              />
               <Row label="Completed rentals" value={String(completedRentals)} />
               <Row
                 label="Renter rating"
-                value={renterReviews.length
-                  ? `${(renterReviews.reduce((sum, item) => sum + item.rating, 0) / renterReviews.length).toFixed(1)} / 5`
-                  : "No reviews yet"}
+                value={
+                  renterReviews.length
+                    ? `${(renterReviews.reduce((sum, item) => sum + item.rating, 0) / renterReviews.length).toFixed(1)} / 5`
+                    : "No reviews yet"
+                }
               />
               <Text style={s.caption}>
-                Request score: {b.riskScore}/100. Current tier: {currentRisk?.level || "unknown"}.
-                The demo score uses verification, completed rentals, reviews and disputes.
+                Request score: {b.riskScore}/100. Current tier:{" "}
+                {currentRisk?.level || "unknown"}. The demo score uses
+                verification, completed rentals, reviews and disputes.
               </Text>
+              {renterReviews.slice(-2).map((item) => (
+                <Text key={item.id} style={s.caption}>
+                  {"★".repeat(item.rating)}{" "}
+                  {item.text || "Renter review submitted."}
+                </Text>
+              ))}
               <Button onPress={() => operation("approve")}>
                 Approve request
               </Button>
@@ -288,8 +306,20 @@ export default function RentalDetail() {
           {dispute && (
             <Card>
               <Text style={s.h2}>Open a dispute</Text>
+              <Text style={s.label}>Reason</Text>
+              <Chips
+                options={[
+                  "Item damaged",
+                  "Item not returned",
+                  "Condition disagreement",
+                  "Payment issue",
+                  "Security deposit issue",
+                ]}
+                selected={disputeCategory}
+                onSelect={setDisputeCategory}
+              />
               <Field
-                label="What happened?"
+                label="Explain what happened"
                 value={notes}
                 onChangeText={setNotes}
                 multiline
@@ -302,6 +332,7 @@ export default function RentalDetail() {
                     type: "dispute",
                     bookingId: id,
                     reason: notes,
+                    category: disputeCategory,
                     photo: photos[0],
                   })
                 }
@@ -320,6 +351,7 @@ export default function RentalDetail() {
         .map((d) => (
           <Card key={d.id}>
             <Badge text={d.status} />
+            {!!d.category && <Text style={s.bold}>{d.category}</Text>}
             <Text style={s.body}>{d.reason}</Text>
           </Card>
         ))}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   Button,
@@ -15,6 +15,13 @@ import {
 import { useMarketplace } from "../../context/Marketplace";
 import { categories } from "../../constants/categories";
 import { newId } from "../../services/marketplace";
+import type { CollectionMethod } from "../../types";
+import { colors } from "../../constants/theme";
+const methodOptions: CollectionMethod[] = [
+  "Meet Owner",
+  "Self-Pickup",
+  "Delivery Available",
+];
 export default function EditListing() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { state, user, act } = useMarketplace();
@@ -32,6 +39,9 @@ export default function EditListing() {
   );
   const [start, setStart] = useState(existing?.availableFrom || "");
   const [end, setEnd] = useState(existing?.availableTo || "");
+  const [collectionMethods, setCollectionMethods] = useState<
+    CollectionMethod[]
+  >(existing?.collectionMethods || ["Meet Owner"]);
   const [error, setError] = useState("");
   if (!user || (id && !existing))
     return (
@@ -59,6 +69,7 @@ export default function EditListing() {
           imageUrl: photos[0] || "",
           availableFrom: start || undefined,
           availableTo: end || undefined,
+          collectionMethods,
           rating: existing?.rating || 0,
           verifiedOwner: user!.verification === "verified",
           status,
@@ -132,9 +143,68 @@ export default function EditListing() {
           value={end}
           onChangeText={setEnd}
         />
+        <Text style={s.label}>Collection methods</Text>
+        <Text style={s.caption}>
+          Select at least one. Delivery uses an external logistics partner in a
+          live service; no delivery charge is calculated in this demo.
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {methodOptions.map((option) => (
+            <Pressable
+              key={option}
+              accessibilityRole="checkbox"
+              accessibilityState={{
+                checked: collectionMethods.includes(option),
+              }}
+              onPress={() =>
+                setCollectionMethods(
+                  collectionMethods.includes(option)
+                    ? collectionMethods.filter((method) => method !== option)
+                    : [...collectionMethods, option],
+                )
+              }
+              style={[
+                s.chip,
+                collectionMethods.includes(option) && {
+                  backgroundColor: colors.navy,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  s.label,
+                  collectionMethods.includes(option) && { color: "white" },
+                ]}
+              >
+                {option}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
         {!!error && <Notice text={error} error />}
         <View style={{ gap: 10 }}>
-          <Button onPress={() => save("published")}>Publish listing</Button>
+          {existing && (
+            <Button
+              secondary
+              onPress={() => router.push(`/listing/${existing.id}`)}
+            >
+              Preview listing
+            </Button>
+          )}
+          <Button
+            disabled={
+              !title.trim() ||
+              !description.trim() ||
+              !location.trim() ||
+              !price ||
+              !value ||
+              !photos.length ||
+              !collectionMethods.length
+            }
+            onPress={() => save("published")}
+          >
+            Publish listing
+          </Button>
           <Button secondary onPress={() => save("draft")}>
             Save as draft
           </Button>
