@@ -2,276 +2,217 @@
 
 **Rent what you need. Earn from what you own.**
 
-CurRENT is a FinTech-integrated peer-to-peer (P2P) rental marketplace for Malaysia, initially focused on **Klang Valley**. Renters can use items for a short period instead of buying them. Owners can list underused belongings and manage rentals in one place.
+CurRENT is a FinTech-integrated peer-to-peer rental marketplace designed for Malaysia, starting with Klang Valley. Renters can access items temporarily instead of buying them, while owners can earn from items they do not use regularly. The product combines marketplace, booking, payment, verification and rental-protection features in one experience.
 
-The core experience covers **finding an item, requesting a rental, checking identity and rental risk, reviewing fees and deposits, paying, handing over and returning the item, resolving problems, and reviewing each other**.
+- **[View the CurRENT Canva website](https://sea-lion-wbptl0.my.canva.site/copy-of-current-rental-marketplace-website)**
+- [View the Canva website preview](https://preview.canva.site/4aa9b6e8-5421-43a9-a1aa-780b5ed7d860/current.com/current-rental-marketplace-website)
 
-**Explore the design**
-- [CurRENT Canva website](https://sea-lion-wbptl0.my.canva.site/copy-of-current-rental-marketplace-website)
-- [Latest Canva website preview](https://preview.canva.site/4aa9b6e8-5421-43a9-a1aa-780b5ed7d860/current.com/current-rental-marketplace-website)
+> **Prototype status:** This repository contains an interactive React Native / Expo app that runs locally in a browser or compatible mobile development environment. The Canva website is a **separate product showcase**, not a deployment of this repository. Financial actions, identity checks, insurance and delivery are simulated or proposed; no real money is transferred.
 
-> **Important prototype distinction:** This repository is an interactive React Native / Expo rental app. The Canva website is a separate visual product showcase, not the deployed app. The repository supports a local end-to-end rental demonstration. Identity checks, payments, BNPL, deposits, insurance, payouts and other regulated services are **simulated or proposed**, not live. No real money is collected, held or transferred.
+## App Features
 
-## Core App Functions
+### 1. Marketplace and Item Discovery
 
-### 1. Browse, Search and Discover Rentals
+- Home page with a search bar, categories, featured items and current rental reminders.
+- Explore page with search and filters for category, location, rental dates, maximum daily price, minimum rating, verified owner and saved items.
+- Sort listings by price or rating.
+- Save and revisit favourite items.
+- Item detail pages with photos, descriptions, daily rental prices, location, owner information, ratings, supported collection methods and availability.
+- A **21-day availability preview** that marks booked or closed dates. Date fields can select later periods.
 
-- Search for rental items by name or keyword, including cameras, gaming equipment, household items and tools.
-- Browse the **Electronics, Gaming, Luxury, Household, Work & Office, Tools, Outdoors and Event Gear** categories shown in the Canva website.
-- Explore listings around Klang Valley, including Kuala Lumpur, Petaling Jaya, Subang Jaya, Shah Alam, Puchong and nearby areas.
-- Filter listings by **category, location, rental dates, maximum daily price, minimum owner rating, verified owner and saved items**.
-- Sort listings by daily price or rating, and save favourites for later.
-- View featured or popular rentals, owner verification badges, ratings, daily prices and locations.
-- Open item details to view listing photos, description, owner profile, availability, item condition, daily rate and available collection methods.
-- Check the app's **21-day availability preview** for booked or unavailable dates and select later dates through the date fields.
-- View active-rental reminders and relevant notifications from the home screen.
+### 2. Renter Account and Profile
 
-The Canva catalogue illustrates items such as Sony cameras, PlayStation consoles, projectors, monitors, office chairs, pressure washers, drones, luxury accessories, camping equipment and event gear. These are **showcase examples**, not a guarantee that every pictured listing exists in the locally seeded app.
+- Local demo sign-up, sign-in and sign-out.
+- Editable profile information and profile photo.
+- Simulated eKYC with pending, verified, failed and retry states.
+- Verification badge, Rental Risk Score explanation, reviews, saved items and rental history.
+- Rental-linked messages, notifications and Help & Trust information.
+- Switch between built-in demo accounts to experience both sides of a rental.
 
-### 2. User Accounts, Profile and Identity Verification
-
-- Create a demo account, sign in and sign out.
-- Edit profile details and profile photo.
-- Use the simulated **electronic Know Your Customer (eKYC)** flow, including pending, verified, failed and retry states.
-- Display verified-user or verified-owner status where applicable.
-- View a personal **Rental Risk Score**, risk explanation and rental activity.
-- Access favourite items, past and current rentals, reviews, transaction records and notifications.
-- Use Help & Trust information for payments, deposit handling, returns, safety and disputes.
-- Switch between built-in renter and owner demo accounts to test both participants.
-
-Identity checks are represented by demo responses. The app does **not** verify real identity documents or connect to an authorised eKYC service.
-
-### 3. List an Item and Manage Owner Listings
+### 3. Owner Mode and Listing Management
 
 Owners can:
 
-- Enter **item name, category, description, location, daily rental price and estimated replacement/item value**.
-- Add product photos, select a cover image and reorder images.
-- Set availability, manage blocked dates and choose collection methods.
-- Offer **Meet Owner**, **Self-Pickup** and/or **Delivery Available** as supported options.
-- Save drafts, publish listings, and edit, pause, resume or delete eligible listings.
-- View an estimated daily payout after the **12% owner commission**.
-- Receive rental requests and review each renter's verification and risk information.
-- Approve or reject requests, monitor booking status and communicate with renters.
-- Record handover evidence, inspect returned items and review completed rental activity.
-- View estimated earnings, simulated payouts and received reviews.
+- Access an **Owner Mode** dashboard from Profile.
+- Create a listing with its name, category, description, location, daily price and estimated item value.
+- Select and manage product photos, choose the main image and reorder photos.
+- Save a draft, publish, edit, pause, resume or delete an eligible listing.
+- Manage availability and collection methods.
+- Choose **Meet Owner**, **Self-Pickup** and/or **Delivery Available**.
+- View incoming requests, renter profiles and risk information, then approve or reject rentals.
+- Record item handover and inspect the item on return.
+- View reviews, estimated earnings and simulated payouts.
 
-In the current app, publishing requires a verified demo owner and at least one item photo. Delivery selection does not arrange a real courier or calculate delivery charges.
+Publishing requires a verified demo owner and at least one listing photo. Delivery is only a selection in the current prototype; it does not book a courier or calculate a delivery fee.
 
-**Listing Boost:** The Canva concept offers an optional **RM10 Listing Boost** to increase an item's visibility. This is a **proposed/showcase function**, not a confirmed paid promotion or implemented ranking service in the local app. The assignment also discusses referral-earned boost credits.
+### 4. Booking and Rental Management
 
-### 4. Request, Book and Manage a Rental
+- Choose start and return dates and receive an itemised price estimate.
+- Select one of the owner's supported collection methods.
+- Submit a request and wait for approval.
+- Approved or confirmed reservations prevent overlapping bookings.
+- Complete simulated checkout after approval.
+- Track requests and rentals through upcoming, active, return-due, completed, cancelled and disputed states.
+- View the digital rental agreement after successful demo payment.
+- Coordinate collection and return through rental-specific messages.
+- Upload condition photos for handover and return.
+- Complete return inspection, deposit release and two-way reviews.
 
-**Before booking**
-- Choose a start date and return date, normally for **1–90 chargeable rental days**.
-- Check item availability and choose a collection method offered by the owner.
-- Review an itemised price breakdown: rental fee, borrower service fee, refundable risk-based deposit and any optional protection charge.
-- Submit a booking request for the owner to accept or reject.
-- Prevent overlapping reservations once an existing rental is approved or confirmed.
+**Rental duration:** 1–90 days. The return date is not charged as a rental day. The current prototype allows cancellation of unpaid requests; post-payment refunds are not implemented.
 
-**After approval**
-- Complete a simulated checkout.
-- View the digital rental agreement generated after successful demo payment.
-- Track the rental from **requested / approved** through **upcoming, active, return due, completed**, or through **cancelled / disputed** when relevant.
-- Send rental-specific messages to arrange pickup, handover and return.
-- Record handover and return condition using photos.
-- Allow the owner to inspect the item and confirm completion before releasing the simulated deposit.
-- Leave a review and view the rental, payment and deposit history.
+### 5. FinTech and Trust Features
 
-The **return date is exclusive** in the app's fee calculation. For example, 10 October to 12 October is charged as two days. The prototype supports cancellation of unpaid requests only; it does not process refunds after payment.
-
-### 5. FinTech, Rental Safety and Protection
-
-| Function | Intended user experience | Current app status |
-| --- | --- | --- |
-| **eKYC / verified users** | Both parties can check verification status before proceeding. | Simulated verification and badges only. |
-| **Renter Rental Risk Score** | Owners see a 0–100 risk indicator based on verification, rental history and transaction behaviour, updated after rental activity. | Explainable local demo score using verification, completed rentals, ratings and disputes. |
-| **Risk-based security deposit** | Deposits vary according to renter risk and the item's estimated value and are shown before booking. | Calculated and tracked locally; no money is held. |
-| **Card / FPX payments** | Review the payable amount and use an authorised payment provider. | Simulated processing, success, failure and retry. |
-| **Optional Buy Now Pay Later (BNPL)** | Eligible users may spread the **rental fee** of a higher-value rental across instalments; the deposit and other charges remain separate. | Demo choice for verified renters with a rental fee of at least RM200; no lending or credit decision. |
-| **Item protection** | Eligible higher-value items may receive cover of **up to RM60,000** through an authorised external protection/insurance partner, subject to policy terms. | Optional demonstration charge only; no actual insurance policy or claims payment. |
-| **Digital rental agreement** | Show the item, parties, rental dates, collection method and agreed terms. | Generated after successful demo payment. |
-| **Check-in and check-out evidence** | Record the item's condition at handover and return, supporting later review of any damage. | Photo evidence is supported. Video evidence described in the Canva journey is not a confirmed app feature. |
-| **Deposit settlement** | Release the refundable deposit after confirmed return and satisfactory inspection. | Simulated release after owner confirmation; a dispute blocks ordinary release. |
-| **Dispute reporting** | Report damage, non-return or other rental issues with a reason, description and supporting evidence. | Records a case for review; no automated ruling, refund or insurance settlement. |
-
-#### Rental Risk Score and Demo Deposit Rules
-
-The app derives an explainable score from local demo activity. A new account starts at **50** and the score may change after verification, rentals, reviews and disputes. It is not a production credit score or an insurer-approved risk model.
-
-| App demo score | Demo risk level | Refundable deposit as a share of estimated item value |
-| --- | --- | --- |
-| 75–100 | Low risk | 10% |
-| 50–74 | Standard risk | 20% |
-| 0–49 | Higher risk | 30% |
-
-The Canva safety section illustrates a sample **82 / Low Risk** score and uses a simplified visual scale. The table above records the **current implemented app rules** rather than treating the showcase graphic as a different live scoring system. Stricter limits or account suspension for persistent high-risk behaviour are proposed safeguards, not an automated decision feature in the current app.
-
-#### Fees and Checkout Breakdown
-
-- **Rental fee:** Daily rental rate multiplied by chargeable rental days.
-- **Borrower service fee:** **5% of the rental fee or RM5 minimum**, whichever is higher.
-- **Refundable security deposit:** Based on the risk tier and estimated item value.
-- **Optional demo protection:** RM5 per rental day for eligible items with an estimated value of RM60,000 or less. This is not an actual insurance quotation.
-- **Total payable:** Rental fee + borrower service fee + refundable deposit + selected optional protection.
-- **Owner earnings:** Rental fee less the **12% owner commission**, recorded as a simulated payout after the rental is completed and the deposit is settled.
-
-**Canva booking example: Sony A7 III**
-
-| Item | Example amount |
-| --- | ---: |
-| Rental price | RM45/day |
-| Rental period | 10–12 October 2026 (2 days) |
-| Rental fee | RM90 |
-| Borrower service fee (RM5 minimum) | RM5 |
-| Risk-based refundable deposit | RM200 |
-| **Total shown payable** | **RM295** |
-| Owner estimated earnings after 12% commission | RM79.20 |
-
-This example follows the Canva showcase and excludes optional protection and any extra delivery charges. Actual demo deposits vary with the renter's score and the item's estimated value. The separate **RM39.60/day** estimated owner payout shown on the Canva listing form assumes one rental day at RM45.
-
-No amount displayed by the app represents a real deposit in custody, an authorised payment, a live BNPL offer or confirmed insurance coverage.
-
-### 6. Handover, Return and Disputes
-
-- The owner and renter coordinate collection or delivery through rental messages.
-- The owner records item handover and uploads condition photos.
-- The renter confirms receipt, uses the item during the booking period and uploads return-condition photos.
-- The owner checks the returned item and either confirms a satisfactory return or reports an issue.
-- For a satisfactory return, the simulated deposit is released and the owner's estimated payout is recorded.
-- For damage, missing items, late/non-return or disagreement, a participant can submit a **dispute reason, written explanation and photo evidence**.
-- Open disputes prevent normal deposit release until a separate review. The prototype stores the report but does not automatically assign responsibility or resolve the case.
-
-The PDF concept also proposes structured claim handling and partner-supported protection. Actual support decisions, insurance claims, compensation and post-payment refund processing remain future integrations.
-
-### 7. Messages, Reviews, Notifications and Help
-
-- Use a **Messages** area for rental-specific renter-owner conversations.
-- View unread message indicators and conversations related to pickup, item condition and return.
-- Receive in-app updates about rental requests, approvals, payments, returns and other status changes.
-- Review the other participant after a completed rental and view ratings on listings and profiles.
-- Access rental history, payment records, deposit status and simulated owner earnings.
-- Read **How It Works**, **Safety / Help & Trust** and **FAQ** information about identity checks, risk scores, security deposits, fees, BNPL, item protection, cancellations and disputes.
-- The broader website concept includes a contact/enquiry channel; a live support inbox and support-led case management have not been connected.
-
-### 8. Dashboards and Navigation
-
-| Area | User functions |
+| Feature | Behaviour in the app prototype |
 | --- | --- |
-| **Home** | Search, category shortcuts, featured listings, notifications and current-rental reminders. |
-| **Explore / Browse Rentals** | Search, filters, sort, favourites and item details. |
-| **How It Works / Safety** | Booking instructions, verification, risk scoring, deposits, protection and FAQs. |
-| **Rentals** | Requests, approvals, checkout, active rentals, return evidence, deposit and dispute status, reviews. |
-| **Messages** | Rental conversations and unread-message indicators. |
-| **Profile** | Account details, eKYC status, Rental Risk Score, saved items, history, notifications and help. |
-| **Owner Mode / List an Item** | Listings, pricing, availability, requests, handover, returns, reviews and payout estimates. |
+| **eKYC verification** | Simulated identity-verification responses and verified-user status. No real document verification. |
+| **Rental Risk Score** | Explainable demo score using identity status, completed rentals, ratings and disputes. Starts at 50; updated from local demo activity. |
+| **Risk-based deposit** | Deposit percentage depends on risk tier and estimated item value. The amount is tracked, not held as real money. |
+| **Digital payments** | Simulated Card and FPX checkout with processing, success, failure and retry states. |
+| **Optional BNPL** | Demo option for verified users when the rental fee is at least RM200. Only the rental fee is eligible, not the deposit or other fees. |
+| **Item protection** | Optional demo protection charge. Actual coverage would require an external insurance or protection partner. |
+| **Digital rental agreement** | Created after successful demo payment, including participants, dates and collection method. |
+| **Check-in / check-out evidence** | Condition photos document handover and return. |
+| **Deposit release** | Owner inspection can trigger simulated release; an open dispute blocks normal release. |
+| **Dispute reporting** | Reason, written explanation and photo evidence; a case is recorded as under review without automatic resolution. |
 
-The Canva website uses **Browse Rentals, How It Works, List an Item, Safety, Messages and Profile** in its navigation. The actual Expo app groups related actions within Home, Explore, Rentals, Messages, Profile and Owner Mode rather than reproducing the Canva page structure exactly.
+#### Demo Pricing and Deposit Rules
 
-## Complete Rental Journey
+- **Borrower service fee:** 5% of rental fee, with a minimum of RM5.
+- **Owner platform commission:** 12% of rental fee.
+- **Optional protection:** RM5 per rental day for eligible demo items valued at RM60,000 or less.
+- **Total checkout:** rental fee + borrower service fee + refundable deposit + optional protection.
+- **Owner payout estimate:** rental fee less owner commission, recorded locally after the completed rental.
 
-### Renter
+| Rental Risk Score | Demo risk category | Deposit, based on estimated item value |
+| --- | --- | --- |
+| 75–100 | Low | 10% |
+| 50–74 | Standard | 20% |
+| 0–49 | Higher | 30% |
 
-1. Sign in or use the sample renter profile, and complete simulated eKYC.
-2. Search or filter listings; check photos, owner verification, price and availability.
-3. Choose rental dates and a supported collection method.
-4. Review the rental fee, service fee, risk-based deposit and optional protection.
-5. Send a rental request and wait for owner approval.
-6. Complete simulated Card, FPX or eligible BNPL checkout and review the agreement.
-7. Message the owner and collect the item, with handover evidence.
-8. Return the item and upload condition photos.
-9. Wait for owner inspection and simulated deposit release, or submit a dispute.
-10. Leave a review.
+These figures are **prototype business rules**, not a real underwriting, financing or insurance offer. A live product could seek eligible item protection of up to RM60,000 through a partner, but no coverage or compensation is currently provided. Late returns and further transaction signals are possible future risk inputs, not fully automated in the app.
 
-### Owner
+### 6. Messages, Reviews, Notifications and Support
 
-1. Open Owner Mode; create a listing with photos, item value, daily price, location and availability.
-2. Publish the listing after simulated verification.
-3. Review the renter's profile, Rental Risk Score and proposed deposit.
-4. Approve or reject the booking.
-5. Coordinate handover, record item-condition evidence and monitor rental status.
-6. Inspect the returned item and review the renter's return photos.
-7. Confirm a satisfactory return to release the simulated deposit and record estimated earnings, or file a dispute.
-8. Review the renter.
+- Rental-specific renter/owner conversations with unread indicators.
+- In-app notifications and rental status updates.
+- Reviews and ratings by both parties after a rental.
+- Rental, payment, deposit, review and estimated payout histories.
+- **Help & Trust** guidance for how renting works, verification, fees, deposits, cancellations, return evidence, damage and disputes.
+- A **Connect with CurRENT** section in the Canva design, with Name, Email, enquiry category, Message and Send message. Delivery to an actual support inbox is not verified.
 
-## Additional Functions in the Assignment Concept
+### 7. App Navigation
 
-The BFM3130 report and Excel appendix describe possible enhancements that complement the current rental journey. They are **not confirmed implemented app features**:
+| Tab / Area | Main functions |
+| --- | --- |
+| **Home** | Featured listings, category shortcuts, search, alerts and active rental reminders. |
+| **Explore** | Search, filter, sort and save items. |
+| **Rentals** | Requests, rental statuses, checkout, check-in/out, deposits, disputes and reviews. |
+| **Messages** | Conversations about collection, handover and returns. |
+| **Profile** | Account details, verification, Rental Risk Score, favourites, history, notifications, Help & Trust and demo account switching. |
+| **Owner Mode** | Listings, incoming requests, owner actions, messages, reviews, earnings and payouts. |
 
-- **Occasion-based discovery and rental bundles:** Find or combine items for events, photography, temporary accommodation or other short-term needs.
-- **Listing Boosts:** Optional RM10 promotion in the Canva showcase to help owners increase visibility.
-- **Referrals and rewards:** Referral links/codes and tracking for lender invitations; rewards may take the form of listing boost credits.
-- **Loyalty benefits:** Points or platform credits redeemable for service-fee discounts or listing boosts.
-- **Partner-backed pickup/delivery:** Optional logistics integration for bulky items.
-- **Expanded risk management:** Additional behavioural signals, restrictions on persistently risky renters and more advanced claim-review processes.
-- **Production account security:** Secure authentication, protected identity data, and stronger access controls, potentially including PIN/biometric login.
+## How a Rental Works
 
-These are product ideas from the report/appendix, not live services or guaranteed future releases.
+### Renter Flow
 
-## Technology and Local Prototype
+1. Create an account or open the demo renter profile and complete simulated verification.
+2. Browse listings, open an item, choose dates and collection method.
+3. Review rental fees, service charges, deposit and optional protection.
+4. Send the rental request and wait for the owner to approve.
+5. Complete simulated payment and view the digital agreement.
+6. Message the owner and arrange collection or pickup.
+7. Receive the item and confirm the handover.
+8. Use the item during the rental period.
+9. Upload return condition photos and check out.
+10. Wait for the owner to inspect and release the simulated deposit.
+11. Leave a review.
 
-- **React Native + Expo** for mobile and web-compatible screens.
-- **TypeScript + Expo Router** for app logic and navigation.
-- **AsyncStorage** to save local demo listings, users, rentals and messages.
-- **Expo ImagePicker** for listing photos and check-in/check-out evidence.
-- **Supabase client and an initial migration** as future-backend scaffolding. Live Supabase authentication, shared cloud storage and multi-device syncing are **not enabled**.
+### Owner Flow
 
-Demo accounts and conversations share data only within the same local browser/device storage. Do not enter real identity documents, card details or personal financial information.
+1. Open Owner Mode and create or publish an available listing.
+2. Choose prices, item photos, availability and collection options.
+3. Review incoming requests and renter risk information.
+4. Approve or reject a request.
+5. Confirm the simulated payment and upload handover evidence.
+6. Communicate with the renter during the rental.
+7. Inspect the returned item and review condition photos.
+8. Confirm return to release the simulated deposit and record payout.
+9. Review the renter.
 
-### Run in VS Code
+### Dispute Flow
 
-Install **Node.js and npm**, open a terminal, then run:
+If an item is damaged, not returned as expected or another problem arises, a participant can report a dispute, select a reason, describe the issue and attach photos. The rental is marked as disputed and normal deposit release is paused. **The prototype records the case; it does not automatically decide liability, issue a refund or resolve an insurance claim.**
 
-    git clone https://github.com/r-x-1111/CurRENT-FinTech-Rental-Marketplace.git
-    cd CurRENT-FinTech-Rental-Marketplace
-    npm install
-    npm run web
+## Technology
 
-Open the local URL shown by Expo. For a mobile development session, run `npm start`. On Windows PowerShell, use `npm.cmd` if execution policy blocks `npm`.
+The current repository uses:
 
-No Supabase API keys are required for the local demo.
+- **React Native and Expo** for mobile and browser-compatible screens.
+- **TypeScript and Expo Router** for app logic and navigation.
+- **AsyncStorage** for persistent local demo data.
+- **Expo ImagePicker** for listing photos and rental-condition evidence.
+- **Supabase client and initial database migration** as scaffolding for possible future backend integration. The app does **not** currently use Supabase for live authentication or shared persistence.
 
-### Try the Full Rental Journey
+The built-in demo accounts and their messages share state **only within the same device or browser storage**. Use sample information rather than real identity documents, financial data or reused passwords.
 
-The app starts with **Alex Tan**, the sample renter.
+## Run the App in VS Code
 
-1. As Alex, request the sample Sony camera for available dates.
-2. In **Profile > Demo accounts**, switch to **Aiman Rahman**.
-3. In **Owner Mode > Requests**, approve Alex's request.
-4. Switch back to Alex and complete demo payment.
-5. Switch to Aiman and record handover evidence.
-6. As Alex, use messages and upload return photos.
-7. As Aiman, inspect the return, release the simulated deposit and record the payout.
-8. Complete a review. To test a problem case, submit a dispute before approving the return.
+**Requirements:** Node.js and npm.
 
-### Checks and Tests
+```bash
+git clone https://github.com/r-x-1111/CurRENT-FinTech-Rental-Marketplace.git
+cd CurRENT-FinTech-Rental-Marketplace
+npm install
+npm run web
+```
 
-    npm run typecheck
-    npm test
-    npm run build:web
-    npm run test:e2e
+Open the local URL displayed by Expo. For a mobile development session, use `npm start` and follow the Expo instructions. On Windows PowerShell, `npm.cmd` may be used if `npm` is blocked by execution policy.
 
-Build the web export before running browser end-to-end tests. Run `npm run preview` after a successful web build to open the exported static preview.
+No Supabase keys are required for the local prototype.
 
-### Project Structure
+### Test the Complete Rental
 
-    app/                    Screens and navigation
-    components/             Reusable UI components
-    constants/              Design tokens
-    context/                Persistent local marketplace state
-    data/                   Demo users and sample listings
-    services/               Booking, fee, deposit and risk logic
-    lib/                    Supabase client scaffolding
-    supabase/migrations/     Initial database schema
-    tests/                  Business-rule and browser tests
-    types/                  TypeScript types
-    docs/IMPLEMENTATION.md  Implementation details and known limitations
-    docs/BUILD_PLAN.md      Future implementation roadmap
+The app starts with **Alex Tan** as the sample renter.
 
-## Important Limitations
+1. As Alex, open the sample Sony camera listing, choose dates and request it.
+2. Go to **Profile > Demo accounts** and switch to **Aiman Rahman**.
+3. Open **Owner Mode > Requests** and approve the rental.
+4. Switch back to Alex and complete the simulated payment.
+5. Switch to Aiman to upload handover evidence.
+6. Switch to Alex to send a message and upload return evidence.
+7. Switch to Aiman to inspect the return, release the simulated deposit and record the payout.
+8. Leave a review. To test the alternative outcome, open a dispute before confirming the return.
 
-CurRENT is an **academic prototype**, not a deployed financial, payment, insurance or item-rental service. An authorised third party would be needed for real eKYC, card/FPX processing, deposit custody and release, BNPL, insurance/protection, payouts and delivery. CurRENT itself is **not a bank, insurer, identity authority or licensed escrow provider**.
+### Available Validation Commands
 
-Real cross-device messaging, support-led dispute decisions, production security, refunds after payment, live courier bookings and production-grade compliance controls have not been implemented. Some functions shown in Canva are visual examples only. Any actual partner service would depend on authorisation, eligibility, contractual and regulatory terms.
+```bash
+npm run typecheck
+npm test
+npm run build:web
+npm run test:e2e
+```
 
-For technical details, see [Implementation](docs/IMPLEMENTATION.md) and the [Build Plan](docs/BUILD_PLAN.md).
+Build the web export before running the browser end-to-end tests. An optional static preview is available with `npm run preview` after the build.
+
+## Project Structure
+
+```text
+app/                    Screens and navigation
+components/             Reusable UI components
+constants/              Design tokens
+context/                Local persistent marketplace state
+data/                   Sample profiles and listings
+services/               Booking, fees, deposits and risk rules
+lib/                    Supabase client scaffolding
+supabase/migrations/     Initial database schema
+tests/                  Business rules and browser tests
+types/                  TypeScript types
+docs/BUILD_PLAN.md      Future implementation roadmap
+docs/IMPLEMENTATION.md  Current implementation and limitations
+```
+
+## Prototype Limitations
+
+CurRENT is currently an **academic demonstration**, not a deployed rental or financial service. Real identity verification, insurance protection, card/FPX settlement, BNPL financing, deposit custody, payouts, cross-device communication and support-led claim decisions require external providers and production controls. The current Supabase policies are not production-ready. Native-device behaviour and security also need additional testing.
+
+For implementation details, see [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md). For planned work, see [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
