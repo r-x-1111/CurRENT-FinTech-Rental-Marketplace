@@ -2,6 +2,8 @@
 
 **Published Canva website:** [Explore the CurRENT rental marketplace](https://sea-lion-wbptl0.my.canva.site/copy-of-current-rental-marketplace-website)
 
+**Canva website preview:** [Open the supplied preview link](https://preview.canva.site/4aa9b6e8-5421-43a9-a1aa-780b5ed7d860/current.com/current-rental-marketplace-website)
+
 **Project status:** Academic prototype. The published Canva website presents the marketplace concept and user experience; the React Native / Expo application in this repository is a separate, locally running interactive prototype. Neither is a live financial service.
 
 CurRENT is a Malaysia-based FinTech-integrated peer-to-peer rental marketplace. It allows users to rent items they only need temporarily, while owners can earn income from underused assets.
@@ -24,7 +26,9 @@ The project has two complementary demonstrations: a publicly accessible Canva we
 
 The published website is the public-facing showcase for CurRENT. It introduces a Malaysia-focused peer-to-peer marketplace where renters can access items temporarily and owners can earn from underused belongings. It also explains the FinTech features intended to make a rental clearer and safer. The initial market focus is **Klang Valley**.
 
-### Website Sections
+### Website Presentation and Product Scope
+
+The following areas describe the website/product brief; the published page's full interactive behaviour has not been independently verified.
 
 | Website area | Purpose and content |
 | --- | --- |
@@ -60,6 +64,278 @@ The form's appearance is confirmed in the Canva design, but submission delivery 
 | Live external services | No real eKYC, payment collection, BNPL financing, deposit custody, insurance coverage, messaging server or support-case resolution is established by the website. |
 
 For a hands-on end-to-end rental demonstration using the repository code, follow **Getting Started** and **Try a complete rental** below.
+
+
+## BFM3130 Business Model and Financial Appendix
+
+This section documents the **original CurRENT business proposal**, based on the 12-page BFM3130 Assignment 1 report and its 11-worksheet Excel appendix (September–October 2026). The report describes a proposed Malaysian FinTech start-up, not an operating company. Its forecasts, competitor comparisons, partner arrangements and market estimates are **academic assumptions or research findings**, not achieved results. The proposed live platform and the local Expo prototype are distinct.
+
+### Problem, Market Opportunity and Evidence
+
+CurRENT aims to make short-term peer-to-peer item renting more affordable and trustworthy. Renters need temporary access without the full purchase cost, while owners want income from underused personal or business assets. Key barriers are fake listings, damage, non-return, high or unclear deposits, informal payment arrangements and limited dispute protection.
+
+| Business-model research component | Evidence or interpretation reported in the assignment |
+| --- | --- |
+| Market starting point | Malaysia, with an initial focus on the Klang Valley cities of Kuala Lumpur, Petaling Jaya, Subang Jaya, Shah Alam and Cyberjaya. |
+| Malaysia's digital economy | 23.5% of GDP in 2024; 25.5% by end-2025 was a cited projection, not a verified outcome. |
+| Sharing-economy context | More than 246 sharing-economy platforms; more than 1.6 million gig workers; an estimated RM18.8 billion cumulative Malaysian sharing-economy market size for 2016–2025. |
+| Global market context | Sharing economy projected to reach US$1.4 trillion by 2030; source forecast, not current market size. |
+| E-commerce fraud context | The report cites 7,662 reported cases and RM70 million losses in 2024, compared with 13,979 cases and RM129 million losses in 2025. These are e-commerce figures, not rental-specific incident counts. |
+| FinTech trend | The workbook cites BNPL transaction value rising from RM9.3 billion in H1 2025 to RM11.9 billion in H2 2025, and active accounts from 6.5 million to 7.5 million. |
+| Customer habits | The report cites research saying 61% of Malaysian Gen Z respondents actively manage finances through budgeting and related behaviours. It should not be interpreted as evidence that 61% would use CurRENT. |
+
+Market figures are reproduced **as reported in the assignment**. The original references are listed under **Research References** below.
+
+### Customer Segments and Needs
+
+| Segment | Primary / secondary | Profile and example use cases | Problem CurRENT addresses |
+| --- | --- | --- | --- |
+| Renters / borrowers | Primary | Price-conscious B40 young adults aged **18–35**, including students, fresh graduates, young professionals, creators and freelancers; cameras, GoPros, drones, gaming consoles, projectors, speakers, event or travel equipment. | Short-term access without buying, lower or fairer deposits, verified owners, transparent checkout, convenient collection and reliable returns. |
+| Owners / lenders | Primary | M40/T20 asset owners aged **21–45**, including professionals, photographers, creators, hobbyists and gamers. | Turn idle personal assets into rental income while retaining ownership; protect against loss, damage, fraud, non-payment and disputes. |
+| Temporary residents | Secondary | International/exchange students, interns, short-term professionals and workers, broadly aged **18–40**; desks, chairs, monitors, appliances, TVs, furniture and household essentials. | Flexible periods, collection/delivery, verified owners and avoiding buying, moving, reselling or disposing of temporary possessions. |
+| Micro and small businesses | Secondary | Photographers, event vendors, AV suppliers, videographers, production companies and small offices with cameras, lights, tools, projectors or equipment. | Generate revenue from underused business equipment, with structured bookings, renter verification and item protection. |
+
+These B40/M40/T20 labels are **internal segmentation assumptions**. They are not intended to appear as eligibility labels on customer-facing pages.
+
+**Initial geographic strategy:** Concentrate listings and renters in the Klang Valley to reduce the challenge of low marketplace liquidity and make handovers more practical.
+
+### Primary Research (Appendix A)
+
+The assignment interviewed **three potential users**, not a statistically representative sample. All three said they would consider CurRENT and none reported using a dedicated comparable P2P item-rental platform.
+
+| Respondent | Profile | Main concern | Feature most valued |
+| --- | --- | --- | --- |
+| 1 | Student, age 21 | Buying expensive items for infrequent use | Lower deposits and secure payment |
+| 2 | Young professional, age 27 | Fake listings and damaged items | Verification and item protection |
+| 3 | Photographer, age 43 | Underused equipment and risk of non-return | Insurance/protection and Rental Risk Score |
+
+**Interview guide (Figure A1):** prior short-term equipment need; rent-versus-buy willingness; worries about renting from another person; effects of verification, payments, insurance and risk-based deposits; willingness to list idle expensive assets; concerns about lending; existing use of similar rental platforms.
+
+### Value Proposition and Competitive Analysis
+
+**For renters:** affordable access, verified users/listings, platform-managed payment, risk-based deposits, transparent booking terms, optional eligible BNPL and a documented dispute process.
+
+**For owners:** income from idle assets, verified and risk-assessed renters, item-value-sensitive deposits, eligible third-party item protection, evidence-backed returns and clearer payout visibility.
+
+**For temporary residents and SMEs:** flexible rental periods, potential collection or delivery arrangements, improved asset utilisation and more reliable booking records.
+
+| Comparison | RentSmart Asia (research benchmark) | Facebook Marketplace (alternative channel) | CurRENT (proposed differentiation) |
+| --- | --- | --- | --- |
+| Existing strength | Dedicated rental categories, established listings, verification and protection. | Broad audience, familiar P2P listings and direct messaging. | Integrated renter/owner flows designed specifically for rentals. |
+| Identified gap | Assignment cites a standard RM100 deposit, protection up to RM10,000 and no clear public evidence of a behavioural rental score. | Primarily buy/sell; rental deposits, return checks, protection and dispute processes can be informal. | Rental Risk Score, risk-based deposits, digital agreements, condition evidence, structured disputes and proposed protection up to RM60,000 for eligible items. |
+| Limitation | Market analysis may change as competitors update services. | No rental-specific controls established by this comparison. | A new marketplace initially lacks user density, rental behaviour data and signed service partners. |
+
+**CurRENT SWOT, from the workbook**
+
+- **Strengths:** rental-specific scoring, risk-based deposits, proposed higher-value partner protection, documented disputes and optional BNPL.
+- **Weaknesses:** limited early renter/owner liquidity, little initial data for risk modelling and reliance on outside providers.
+- **Opportunities:** rising familiarity with temporary access, valuable electronics/event equipment, FinTech partnerships and owner monetisation.
+- **Threats:** competitors adopting similar features, fraud/theft/non-return, and **disintermediation** when renters and owners move repeat transactions off-platform to avoid fees.
+
+**Retention and platform-use ideas (not active offers):** rental agreements and protection linked to on-platform bookings; loyalty points or platform credits; discounts; listing-boost credits; occasion-based discovery; bundled rental packages; and optional BNPL. Any rewards, boosts or bundles require future implementation and commercial validation.
+
+### Intended Product and FinTech Components
+
+The following inventory combines the report, workbook and current documented prototype scope. **Local demo** means simulated in the Expo app as previously documented. **Planned** means the business proposal requires future development or an authorised partner.
+
+| Component | Intended user experience | Status / qualification |
+| --- | --- | --- |
+| Discovery and item marketplace | Search, categories, locations, prices, available dates, saved listings, galleries, owner information and ratings. | Local demo; presented in website concept. |
+| Renter and owner accounts | Sign-in, profile, Owner Mode, item listings, request approval and booking history. | Local demo only; not production authentication. |
+| Identity checks | eKYC, verified badges and verification failure/retry states. | Simulated; a real provider is planned. |
+| Rental Risk Score | Uses identity, completed rentals, ratings and disputes to communicate estimated renter risk; late returns, transaction behaviour and account history are longer-term inputs. | Explainable local demo; not a trained, externally validated risk model. |
+| Risk-based security deposits | Deposit related to item value and renter risk, with secured/held/pending/released/disputed states. | Calculated and tracked in local demo; no real funds are held. |
+| Booking and availability | Date-based price quote, 1–90 day rentals, booking conflicts, request, approval or rejection and status tracking. | Local demo. |
+| Payments | Itemised rental fee, service fee, deposit, optional protection and total; card/FPX concepts. | Simulated payment and retry states only. |
+| Optional BNPL | Eligible higher-value **rental fee only**, excluding deposits and other fees. | Eligibility/payment simulation only; real partner planned. |
+| Item protection | Optional demo add-on; proposed third-party insurance/protection for eligible items, potentially up to RM60,000 under partner terms. | No live cover, insurer underwriting or guaranteed claims. |
+| Digital agreements | Rental parties, dates, payment terms and agreed collection method. | Local demo. |
+| Collection and delivery | Meet Owner, Self-Pickup, Delivery Available. | Selection stored in demo; actual logistics/pricing integration planned. |
+| Messaging and notices | Rental-linked renter/owner chat, unread indicators, notifications and rental reminders. | Local device/browser demonstration, not cross-device Realtime. |
+| Item check-in and check-out | Condition photos, handover, return and owner inspection. | Local demo. |
+| Disputes and claims | Reason, written description, photo evidence and pause in deposit release. | Local dispute record only; human support resolution and insurer claims are planned. |
+| Reviews and user trust | Two-way ratings/reviews, rental history and trust guidance. | Local demo. |
+| Owner finances | Estimated earnings, commissions, payout history and listing management. | Local demo; no real payout settlement. |
+| Occasion discovery and bundles | Explore by occasions such as travel, university work, weddings, events and content creation; rent related items together. | Business proposal; not confirmed live. |
+| Listing boosts and referrals | Paid featured listings, referral links/codes, reward tracking and boost credits. | Planned growth features, not confirmed live. |
+| Help and contact | FAQ, deposits, verification, payment, cancellation, damage and safety information; Connect with CurRENT enquiry form. | Canva design includes the contact form UI; delivery to an inbox/support system is unverified. |
+
+The report proposes stricter rental limits or account suspension for consistently high-risk behaviour. These are **future policy options**, not automatic decisions demonstrated by the current prototype.
+
+### Customer Acquisition, Channels and Partnerships
+
+**Digital acquisition:** future iOS/Android app distribution, TikTok and Instagram for younger renters, Facebook for community reach and LinkedIn for owners/SMEs. Content ideas include rent-versus-buy comparisons, featured rentable items, creator use cases, potential owner income, fraud-prevention guidance, protection explanations and testimonials. The workbook assumes **RM2,000 per month** in marketing and a theoretical blended customer acquisition cost of **RM5.06 per registered user** for Year 1.
+
+| Partner category | Intended responsibility or distribution role |
+| --- | --- |
+| Payment provider / bank | Process rental payments, deposit handling, refunds and owner payouts through suitable authorised services. |
+| eKYC provider | Verify renter and owner identity and support fraud controls. |
+| Insurance / item-protection partner | Underwrite eligible item coverage, manage claims and provide relevant policy terms. |
+| BNPL provider | Offer eligible instalments for rental fees, subject to provider checks and commercial agreement. |
+| Property, landlord and co-living partners | Refer tenants needing household items at move-in or move-out; potential B2B2C channel. |
+| SME associations and business networks | Reach equipment-owning SMEs and encourage listing of idle assets. |
+| Logistics and delivery providers | Future pickup/delivery coordination, especially for larger items; charges and responsibility to be defined. |
+
+Potential commercial incentives from the workbook include referral fees, co-marketing, partner revenue sharing and listing-boost credits. **No provider partnership or revenue-share contract is established by these planning documents.**
+
+### Key Resources, Operations and Governance
+
+- **Technology:** mobile and web interfaces, secure accounts, scalable cloud hosting, marketplace/transaction database, APIs, rental-risk logic, storage, monitoring, encryption and fraud controls.
+- **People:** founder/management; software development and UI/UX; operations/customer support; sales and partnerships; marketing; finance, risk and compliance; bookkeeping and legal support.
+- **Operating processes:** listing quality, identity review, bookings, payment/deposit tracking, handover evidence, condition inspection, customer enquiries, charge/refund coordination, complaints, disputes and claims referrals.
+- **Compliance and governance:** Malaysian company setup, applicable personal-data and consent duties, user authentication, appropriate providers for regulated services, clear rental terms, dispute/refund policies, security reviews and access controls.
+
+**No direct regulated status is claimed.** CurRENT is not described as an insurer, bank, BNPL lender or licensed escrow institution.
+
+### Revenue Model and Unit Economics (Excel Appendix)
+
+The base-case forecast assumes an **average RM200 rental fee**.
+
+| Proposed revenue stream | Workbook assumption | Expected contribution to one average completed rental |
+| --- | --- | ---: |
+| Owner/lender commission | 12% of RM200 | RM24.00 |
+| Borrower service fee | 5% of RM200 (prototype also uses RM5 minimum) | RM10.00 |
+| Insurance referral income | RM2 per completed rental; model assumes all rentals attach protection | RM2.00 |
+| BNPL referral | RM5 for each participating rental at 10% adoption | RM0.50 |
+| Listing boost | RM10 per boost, with uptake equivalent to 10% of rentals | RM1.00 |
+| **Modelled average revenue** | **All five streams combined** | **RM37.50** |
+
+**Model-versus-prototype distinction:** the financial model assumes insurance referral revenue on *every* completed rental, while the current app offers optional **RM5 per day** demo protection. A demo protection charge is **not** the same as net platform referral income. The workbook's **Key Resources** sheet also discusses a different possible boost-pricing rule (3% of listing price, maximum RM100, payable after rental), while the pro forma uses **RM10** and 10% uptake. The table above follows the **pro forma**, and the alternative is a concept awaiting reconciliation.
+
+**Variable costs and assumptions:** RM1.20 gateway fee per completed rental; RM0.10 per SMS/OTP; two onboarding SMS per registered user and one transaction message per rental; RM0 eKYC in Year 1 based on the assumed provider's first 500 free monthly verifications. Provider prices and capacity are modelling inputs, not secured contracts.
+
+**Core break-even assumption:** RM37.50 expected revenue less RM1.30 direct variable cost per completed rental yields **RM36.20 contribution margin per rental**. The RM1.30 simplification excludes the separate user-onboarding SMS burden and should not be treated as a full long-run cost per transaction.
+
+### Fixed-Cost Budget (Excel Appendix)
+
+The proposed organisation and monthly budget are **forecast staffing costs**, not the current project's actual payroll.
+
+| Staff role | Modelled RM per month |
+| --- | ---: |
+| CEO | 17,000 |
+| Lead Software Engineer | 11,000 |
+| Full Stack Web Engineer | 5,500 |
+| Mobile Developer | 6,000 |
+| UI/UX Designer | 3,800 |
+| Operations Manager | 6,500 |
+| Customer Support Representative | 2,800 |
+| Marketing Executive | 3,500 |
+| Partnership and Sales Executive | 3,300 |
+| Finance Executive | 3,000 |
+| Risk and Compliance Executive | 3,500 |
+| Accountant | 5,000 |
+| Legal Advisor | 3,400 |
+| **Total monthly salaries** | **74,300** |
+
+| Other fixed cost | Modelled RM per month |
+| --- | ---: |
+| Marketing and advertising | 2,000 |
+| Office rent (Petaling Jaya; modelled 1,500 sq. ft.) | 2,700 |
+| Cloud hosting / database | 300 |
+| Domain / SSL / basic tools | 100 |
+| Maintenance and bug fixes | 1,500 |
+| Security / third-party tools | 100 |
+| Regulatory and data-protection compliance | 420 |
+| **Other monthly fixed costs** | **7,120** |
+| **All fixed costs per month** | **81,420** |
+| **All fixed costs per year** | **977,040** |
+
+The pro forma groups office and technology expenses as **Operations RM4,700/month**, alongside Salaries RM74,300, Marketing RM2,000 and Licensing/Compliance RM420.
+
+### TAM, SAM, SOM and Year 1 Adoption
+
+The assignment's Figure B1 defines **TAM** as approximately **6.0 billion globally digitally reachable users**, **SAM** as approximately **34.9 million digitally reachable Malaysian users**, and **initial SOM** as **9.48 million people aged 18–35 in Klang Valley**. These are very broad population proxies, **not** confirmed rental customers or spend-based addressable market sizes.
+
+- Year 1 registration target: **4,740**, or **0.05%** of the stated 9.48 million SOM.
+- Monthly active-user assumption: **20%** of cumulative registered users.
+- Monthly conversion assumption: **50%** of active users each complete **one** rental.
+- Year 1 total forecast completed rentals: **2,795**; the reported first and final months have **27** and **474** rentals, respectively.
+- Blended acquisition-cost scenario: RM24,000 annual marketing / 4,740 registrations = approximately **RM5.06** per registration.
+
+### Year 1 Monthly Pro Forma (Excel Appendix)
+
+All figures below are **forecast RM**, not actual transactions or performance. Revenue combines commission, borrower fee, insurance referral, BNPL referral and listing boosts. Variable costs include processing, eKYC and SMS/OTP; monthly fixed costs are RM81,420.
+
+| Month | New users | Completed rentals | Total revenue (RM) | Variable cost (RM) | Loss before tax (RM) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 270 | 27 | 1,012.50 | 89.10 | (80,496.60) |
+| 2 | 300 | 57 | 2,137.50 | 134.10 | (79,416.60) |
+| 3 | 330 | 90 | 3,375.00 | 183.00 | (78,228.00) |
+| 4 | 350 | 125 | 4,687.50 | 232.50 | (76,965.00) |
+| 5 | 370 | 162 | 6,075.00 | 284.60 | (75,629.60) |
+| 6 | 390 | 201 | 7,537.50 | 339.30 | (74,221.80) |
+| 7 | 410 | 242 | 9,075.00 | 396.60 | (72,741.60) |
+| 8 | 430 | 285 | 10,687.50 | 456.50 | (71,189.00) |
+| 9 | 450 | 330 | 12,375.00 | 519.00 | (69,564.00) |
+| 10 | 470 | 377 | 14,137.50 | 584.10 | (67,866.60) |
+| 11 | 480 | 425 | 15,937.50 | 648.50 | (66,131.00) |
+| 12 | 490 | 474 | 17,775.00 | 714.20 | (64,359.20) |
+| **Year 1** | **4,740** | **2,795** | **104,812.50** | **4,581.50** | **(876,809.00)** |
+
+The annual pro forma also forecasts approximately **RM100,231 gross profit** before the **RM977,040 fixed-cost** deduction. Year 1 revenue by source is RM67,080 owner commission, RM27,950 service fees, RM5,590 insurance referral, RM1,397.50 BNPL referral and RM2,795 listing boosts.
+
+### Break-Even and Five-Year Scenario (Appendix C)
+
+Using RM977,040 annual fixed costs and RM36.20 contribution per rental, the worksheet calculates **26,990.06**, meaning at least **26,991 whole completed rentals** are required to fully exceed the mathematical break-even threshold. The original report and worksheet **state 26,990 rentals/year**, or about **2,249 per month**, by rounding the displayed result. Both the source figure and the rounding qualification are retained here.
+
+| Year | Target SOM penetration | End-of-year registered users | Projected completed rentals | Comparison with reported 26,990-rental target |
+| ---: | ---: | ---: | ---: | --- |
+| 1 | 0.05% | 4,740 | 2,795 | Below |
+| 2 | 0.10% | 9,480 | 8,532 | Below |
+| 3 | 0.18% | 17,064 | 15,926 | Below |
+| 4 | 0.30% | 28,440 | 27,302 | Above; proposed break-even year |
+| 5 | 0.45% | 42,660 | 42,660 | Above |
+
+Years 2–5 use average beginning/end user populations, 20% monthly activity, 50% rental conversion and 12 months. **Year 4 break-even is a projection contingent on these assumptions**, not proof of future profitability or available financing.
+
+### Source Consistency Notes
+
+The supplied assignment materials contain small differences that should be corrected in the source spreadsheets/report before using the model for funding or external decision-making:
+
+1. **Year 1 revenue:** PDF narrative states **RM104,813.50**; Excel Pro Forma Income Statement annual figure and the sum of its five revenue streams are **RM104,812.50**. This README uses the Excel pro forma amount.
+2. **Variable cost:** Excel **Variable Cost** worksheet shows a Year 1 total of **RM4,581.10**, whereas the twelve displayed monthly costs and the **Proforma Income Statement** total **RM4,581.50**. This README retains the pro forma/monthly-sum figure.
+3. **Boost pricing:** the Key Resources assumptions mention a **3% of listing price, max RM100** concept; the revenue model uses **RM10 per boost** at 10% uptake. Both are described but **not treated as the same model**.
+4. **Insurance:** the financial forecast assumes RM2 referral revenue on every rental; product screens describe optional RM5/day demo protection. A partner's premium economics, customer opt-in rate and actual coverage are unconfirmed.
+5. **Round-up:** the worksheet's 26,990.06 estimated break-even transactions are described as 26,990 in the assignment; whole-transaction break-even strictly requires rounding **up**, not down.
+
+### Document and Worksheet Coverage
+
+| Supplied source | Components documented in this README |
+| --- | --- |
+| PDF pp. 1–2 | Project identity, introduction, market environment and primary renter profile. |
+| PDF pp. 3–4 | Owner and secondary segments, competitor comparison, trust and item protection, SWOT-related positioning and retention ideas. |
+| PDF p. 5 | Unit pricing, user adoption, customer acquisition assumptions and financial feasibility. |
+| PDF pp. 6–7 | Original citations and source links for market and competitor claims. |
+| PDF p. 8 / Appendix A, Figure A1 & Table A1 | All seven interview topics and three interviewee findings. |
+| PDF p. 9 / Appendix B, Figures B1–B2 | TAM/SAM/SOM estimates and monthly user/rental projection. |
+| PDF p. 10 / Appendix B, Figures B3–B5 | CAC formula, five revenue components and three variable cost categories. |
+| PDF p. 11 / Appendix B, Figure B6 | Monthly and Year 1 pro forma income statement. |
+| PDF p. 12 / Appendix C, Figures C1–C2 | Break-even equation and five-year SOM projection. |
+| Excel 1. Market Research | Market overview, growth, fraud, BNPL and demographic evidence. |
+| Excel 2. Swot analysis | Competitor and CurRENT strengths, weaknesses, opportunities and threats. |
+| Excel 3. Market Segments | Primary renters/owners and secondary temporary residents/SMEs with age, location, products and needs. |
+| Excel 4. Value Proposition | Market gaps and distinct gains for each customer group. |
+| Excel 5. Channels to Reach | App, social platforms, marketing, core and distribution partnerships, referral programme. |
+| Excel 6. Key Resources | Technology, personnel, partners, risk, governance, data security and growth assumptions. |
+| Excel 7. Cost Structure | All 13 salary roles plus marketing, office, tech and compliance cost lines. |
+| Excel 8. Variable Cost | Monthly new users, payment processing, eKYC, SMS/OTP, cost per transaction and cost assumptions. |
+| Excel 9. Proforma income statement | Five revenue streams, month-by-month revenue/cost/loss, Year 1 forecast. |
+| Excel 10.Breakeven Analysis | Unit contribution margin, annual/monthly transaction threshold and five-year projections. |
+| Excel Summary | Business-model and financial feasibility overview. |
+
+### Research References
+
+Key primary sources cited in the assignment and Excel model (not independently fact-checked for this README update):
+
+- [Deloitte, Malaysia digital trust and sharing economy](https://www.deloitte.com/southeast-asia/en/about/press-room/malaysia-sets-new-benchmark-for-digital-trust-within-the-sharing-economy.html)
+- [Research and Markets / GlobeNewswire, global sharing-economy projection](https://www.globenewswire.com/news-release/2025/04/24/3067614/0/en/sharing-economy-industry-to-grow-by-us-1-trillion-reaching-us-1-4-trillion-by-2030-expansion-of-collaborative-consumption-models-drives-adoption-in-various-sectors.html)
+- [PDRM, reported e-commerce crime statistics](https://www.rmp.gov.my/news-detail/2026/01/11/besmartstayalert-letsfightscammertogether-scam-alert-statistik-jenayah-e-dagang-bagi-tahun-2024-hingga-2025-posting-pilihan)
+- [Bank Negara Malaysia, Financial Stability Review H2 2025](https://www.bnm.gov.my/documents/20124/21185035/fsr2025h2_en_ch1b.pdf)
+- [Reeracoen Malaysia, Gen Z lifestyle, work and spending](https://www.reeracoen.com.my/articles/how-gen-z-in-malaysia-thinks-trends-in-lifestyle-work--spending)
+- [Jobstreet Malaysia, B40/M40/T20 classifications](https://my.jobstreet.com/career-advice/article/what-is-b40-m40-t20)
+- [RentSmart Asia, comparator](https://rentsmartasia.com/how-it-works)
+- [Huurne et al. (2017), trust in the sharing economy](https://doi.org/10.1002/cb.1667)
+- [Kamal et al. (2020), student accommodation preferences](https://doi.org/10.1007/978-981-15-3859-9_13)
 
 ## Mobile Product Brief
 
