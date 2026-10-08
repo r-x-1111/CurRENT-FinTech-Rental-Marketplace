@@ -1,5 +1,9 @@
 # CurRENT
 
+**Published Canva website:** [Explore the CurRENT rental marketplace](https://sea-lion-wbptl0.my.canva.site/copy-of-current-rental-marketplace-website)
+
+**Project status:** Academic prototype. The published Canva website presents the marketplace concept and user experience; the React Native / Expo application in this repository is a separate, locally running interactive prototype. Neither is a live financial service.
+
 CurRENT is a Malaysia-based FinTech-integrated peer-to-peer rental marketplace. It allows users to rent items they only need temporarily, while owners can earn income from underused assets.
 
 The initial market focus is Klang Valley.
@@ -12,7 +16,50 @@ Alternative brand message: **Own less. Access more.** CurRENT combines temporary
 
 CurRENT is designed to make peer-to-peer renting safer and more practical by combining marketplace functions with payment, verification and rental-risk features.
 
-The project focuses on a realistic mobile application experience rather than a simple marketplace landing page.
+The project has two complementary demonstrations: a publicly accessible Canva website that introduces the product and its rental experience, and a React Native / Expo mobile app in this repository that simulates the renter and owner journeys. The Canva page is not deployed from this repository, and its screens should not be treated as proof of a connected production backend.
+
+## Published Website (Canva)
+
+**Visit:** https://sea-lion-wbptl0.my.canva.site/copy-of-current-rental-marketplace-website
+
+The published website is the public-facing showcase for CurRENT. It introduces a Malaysia-focused peer-to-peer marketplace where renters can access items temporarily and owners can earn from underused belongings. It also explains the FinTech features intended to make a rental clearer and safer. The initial market focus is **Klang Valley**.
+
+### Website Sections
+
+| Website area | Purpose and content |
+| --- | --- |
+| Home and marketplace | Introduces “Rent what you need. Earn from what you own,” search and rental discovery, popular items and featured listings. |
+| How renting works | Explains the intended journey from finding an item and selecting rental dates to handover, return and deposit release. |
+| Featured item and booking | Illustrates item information, daily prices, dates, rental fees, refundable deposits and optional item protection. |
+| FinTech and trust | Presents identity verification (eKYC), the Rental Risk Score, risk-based security deposits, digital payments and item protection as product concepts or prototype flows. |
+| Owners and listing | Shows how owners could list underused items, present their availability and manage incoming requests. |
+| Dashboard and community | Introduces renter/owner activity, rental tracking, reviews and trust information. |
+| BNPL, safety and FAQ | Explains optional buy now, pay later for eligible rental fees, security measures, dispute reporting and frequently asked questions. |
+| Connect with CurRENT | Provides a contact/enquiry interface after the FAQ section. |
+
+These sections describe the Canva website's presentation and design scope. **A screen, button or displayed status is not necessarily connected to a real account, booking, payment or support service.** Working functionality should be evaluated separately for the Canva website and for the Expo application.
+
+### Contact and Enquiries
+
+The website includes a **Connect with CurRENT** section with the introduction “Have a question about renting, listing an item, or using CurRENT?” Its form interface has the following fields:
+
+- **Name**
+- **Email**
+- **What can we help with?** (enquiry category)
+- **Message**
+- **Send message** action
+
+The form's appearance is confirmed in the Canva design, but submission delivery to an email inbox, form database or support system has **not been verified**. Do not enter sensitive personal or payment details.
+
+### How the Website Relates to This Repository
+
+| Component | Current scope |
+| --- | --- |
+| Published Canva website | Publicly accessible product showcase and clickable/visual prototype. Hosted by Canva, not by the Expo code in this repository. |
+| React Native / Expo app | Separate interactive local demo with renter and owner accounts, booking logic, risk/deposit estimates, simulated payments, messages, evidence and disputes. |
+| Live external services | No real eKYC, payment collection, BNPL financing, deposit custody, insurance coverage, messaging server or support-case resolution is established by the website. |
+
+For a hands-on end-to-end rental demonstration using the repository code, follow **Getting Started** and **Try a complete rental** below.
 
 ## Mobile Product Brief
 
@@ -48,7 +95,7 @@ All account, payment, verification, protection and deposit actions are **local s
 
 The intended audience includes students, young professionals, freelancers, creators, hobbyists and owners of underused equipment, with temporary residents and small businesses as secondary users. B40/M40/T20 groupings are internal market research labels and do not belong on customer screens. Normal screens show only information useful for a rental decision; internal acquisition costs, salaries, break-even targets and projections stay outside the app.
 
-The master prompt calls for realistic product photographs throughout the marketplace. Product images, names, prices, locations, ratings, verification badges, status labels, buttons and card backgrounds remain separate React Native elements. If this product is recreated in Canva, keep those elements individually editable and use replaceable image frames; do not flatten functional cards into pictures.
+The master prompt calls for realistic product photographs throughout the marketplace. Product images, names, prices, locations, ratings, verification badges, status labels, buttons and card backgrounds remain separate React Native elements. For further Canva website revisions, use individually editable elements and replaceable image frames where possible; do not flatten functional cards into pictures.
 
 Use the existing navy and blue identity with green reserved for positive states. Prioritise search, categories, listings and the current rental on Home. Vary product rows, gallery views and dashboard modules so the mobile app does not become a sequence of identical cards. BNPL, delivery, occasion discovery, listing boosts, referrals and bundles are secondary to booking, trust, payment, evidence and disputes.
 
@@ -298,12 +345,18 @@ The repository contains an interactive mobile application prototype with local p
 
 ### Stack
 
+**Used by the repository's local mobile/web prototype:**
+
 - React Native with Expo
 - TypeScript
 - Expo Router
-- Supabase PostgreSQL
+- AsyncStorage for device/browser-local state
+
+**Backend foundation and planned integrations (not active in the local prototype or the published Canva website):**
+
+- Supabase PostgreSQL schema and client scaffolding
 - Supabase Auth
-- Supabase Storage and Realtime planned for media and messaging
+- Supabase Storage and Realtime for media and cross-device messaging
 
 ### Working Prototype
 
@@ -460,7 +513,7 @@ docs/BUILD_PLAN.md       Detailed MVP development roadmap
 
 ## Development Status
 
-The repository is now a **working local academic prototype**, not a production marketplace. The core renter and owner journeys are implemented and tested in the browser. Native device runtime testing is still required.
+The **Canva website is published** as the public product showcase. The repository is a **working local academic app prototype**, not the backend or source code for that published site and not a production marketplace. The app's core renter and owner journeys are implemented and tested in the browser. Native device runtime testing is still required.
 
 Remaining live-service work: Supabase Auth and database/storage synchronisation, server-authoritative permissions and booking concurrency, Realtime messaging across devices, authorised provider integrations, push notifications, support/admin dispute resolution, real refund/payout processing and store-release preparation. The original SQL policies are scaffolding and must not be used as a production security boundary.
 
