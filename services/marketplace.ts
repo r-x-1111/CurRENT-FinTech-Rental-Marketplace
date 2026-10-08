@@ -180,8 +180,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       if (l.availableFrom) parseDate(l.availableFrom);
       if (l.availableTo) parseDate(l.availableTo);
       requireThat(
-        !l.availableFrom || !l.availableTo || l.availableTo > l.availableFrom,
-        "Availability end must be after the start.",
+        !l.availableFrom || !l.availableTo || l.availableTo >= l.availableFrom,
+        "Availability end must be on or after the start.",
       );
       l.verifiedOwner = user.verification === "verified";
       state.listings = existing

@@ -165,6 +165,26 @@ test("approval atomically rejects overlapping requests but permits adjacent rent
   j.operation("cancel");
   availability(j.state, j.state.listings[0], dateAfter(1), dateAfter(3));
 });
+test("the final available date can be rented with an exclusive next-day return", () => {
+  const state = createSeed();
+  const finalDay = dateAfter(2);
+  const listing = {
+    ...state.listings[0],
+    availableFrom: finalDay,
+    availableTo: finalDay,
+  };
+  const saved = transition(
+    { ...state, currentUserId: listing.ownerId },
+    { type: "saveListing", listing },
+  );
+  assert.equal(availabilityCalendar(saved, listing, 4)[2].status, "available");
+  assert.equal(availabilityCalendar(saved, listing, 4)[3].status, "unavailable");
+  availability(saved, listing, finalDay, dateAfter(3));
+  assert.throws(
+    () => availability(saved, listing, finalDay, dateAfter(4)),
+    /outside the owner/,
+  );
+});
 test("dispute preserves evidence and freezes deposit release", () => {
   const j = journey();
   j.request();

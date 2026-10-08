@@ -23,6 +23,9 @@ export function parseDate(value: string) {
     throw new Error("Enter a valid calendar date.");
   return time;
 }
+export function nextDate(value: string) {
+  return new Date(parseDate(value) + 86400000).toISOString().slice(0, 10);
+}
 export function rentalDays(start: string, end: string) {
   const days = (parseDate(end) - parseDate(start)) / 86400000;
   if (days < 1 || days > 90)
@@ -95,7 +98,7 @@ export function availability(
     throw new Error("This listing is not currently available.");
   if (
     (listing.availableFrom && start < listing.availableFrom) ||
-    (listing.availableTo && end > listing.availableTo)
+    (listing.availableTo && end > nextDate(listing.availableTo))
   )
     throw new Error("These dates are outside the owner’s availability.");
   if (
@@ -136,7 +139,7 @@ export function availabilityCalendar(
     const outsideWindow =
       listing.status !== "published" ||
       !!(listing.availableFrom && date < listing.availableFrom) ||
-      !!(listing.availableTo && date >= listing.availableTo);
+      !!(listing.availableTo && date > listing.availableTo);
     const reserved = state.bookings.some(
       (booking) =>
         booking.listingId === listing.id &&

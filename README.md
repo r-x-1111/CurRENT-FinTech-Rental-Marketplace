@@ -79,7 +79,7 @@ The main demo path is **browse → item → dates → cost preview → request �
 
 ### Product rules
 
-- Rentals last **1–90 days**. The return date is exclusive for charging, and confirmed or approved reservations block overlapping bookings. The item detail screen marks booked and closed days in its 21-day preview; date fields also support dates beyond that preview.
+- Rentals last **1–90 days**. The return date is exclusive for charging, while a listing's "available until" date is its final rentable day. Confirmed or approved reservations block overlapping bookings. The item detail screen marks booked and closed days in its 21-day preview; date fields also support dates beyond that preview.
 - The borrower service fee is **5% of rental value, with a RM5 minimum**. Owner commission is **12% of the rental fee**. Checkout separates rental fee, service fee, refundable deposit, optional protection and total payable.
 - The Rental Risk Score starts at 50 and uses demo identity status, completed rentals, ratings and disputes. Scores **75–100** are low risk, **50–74** standard risk and **0–49** higher risk. Corresponding demo deposits are **10%, 20% and 30%** of estimated item value. Late-return and transaction signals are planned inputs but are not automated in this prototype.
 - Payment methods are simulated **Card, FPX and eligible BNPL**. Demo BNPL requires a verified account and rental fees of at least RM200; only the rental fee is eligible. The deposit, service fee and protection remain separate. Failure and retry states are available.
