@@ -109,6 +109,8 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 12,
     backgroundColor: colors.paleBlue,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
     alignItems: "center",
     justifyContent: "center",
   },

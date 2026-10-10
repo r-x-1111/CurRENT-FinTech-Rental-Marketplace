@@ -97,6 +97,8 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: colors.paleBlue,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 2,
@@ -113,7 +115,7 @@ const styles = StyleSheet.create({
   },
   stepDivider: {
     height: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.border,
     marginVertical: 4,
   },
 });

@@ -16,18 +16,34 @@ export function FaqAccordion({ faqs }: { faqs: FaqItem[] }) {
       {faqs.map((faq, index) => {
         const isOpen = openIndex === index;
         return (
-          <View key={faq.question} style={styles.item}>
+          <View
+            key={faq.question}
+            style={[
+              styles.item,
+              isOpen && { borderColor: colors.softBlue },
+            ]}
+          >
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded: isOpen }}
               onPress={() => toggle(index)}
-              style={styles.header}
+              style={[
+                styles.header,
+                isOpen && { backgroundColor: colors.paleBlue },
+              ]}
             >
-              <Text style={styles.question}>{faq.question}</Text>
+              <Text
+                style={[
+                  styles.question,
+                  isOpen && { color: colors.blue },
+                ]}
+              >
+                {faq.question}
+              </Text>
               <Ionicons
                 name={isOpen ? "chevron-up" : "chevron-down"}
                 size={18}
-                color={colors.navy}
+                color={isOpen ? colors.blue : colors.navy}
               />
             </Pressable>
             {isOpen && (

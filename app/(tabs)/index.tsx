@@ -13,7 +13,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Footer } from "../../components/Footer";
 import { ListingGrid } from "../../components/ListingGrid";
 import { Empty } from "../../components/ui";
 import { colors } from "../../constants/theme";
@@ -213,29 +212,28 @@ export default function HomeScreen() {
                 </View>
               )}
 
-              {/* 8 Main Categories pills */}
-              <View style={styles.quickCatRow}>
-                <Text style={styles.quickCatLabel}>Categories:</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
-                >
+              {/* 8 Main Categories pills with responsive wrapping */}
+              <View style={styles.quickCatSection}>
+                <View style={styles.quickCatWrapper}>
+                  <Text style={styles.quickCatLabel}>Categories:</Text>
                   <Pressable
                     accessibilityRole="button"
+                    accessibilityLabel="Filter by All Items"
                     onPress={() => setSelectedCategory("All items")}
                     style={[
                       styles.quickCatPill,
-                      selectedCategory === "All items" && styles.quickCatPillActive,
+                      (selectedCategory === "All items" || selectedCategory === "All Items") &&
+                        styles.quickCatPillActive,
                     ]}
                   >
                     <Text
                       style={[
                         styles.quickCatText,
-                        selectedCategory === "All items" && styles.quickCatTextActive,
+                        (selectedCategory === "All items" || selectedCategory === "All Items") &&
+                          styles.quickCatTextActive,
                       ]}
                     >
-                      All items
+                      All Items
                     </Text>
                   </Pressable>
                   {MAIN_CATEGORIES.map((cat) => {
@@ -244,6 +242,7 @@ export default function HomeScreen() {
                       <Pressable
                         key={cat}
                         accessibilityRole="button"
+                        accessibilityLabel={`Filter by ${cat}`}
                         onPress={() => handleCategoryClick(cat)}
                         style={[
                           styles.quickCatPill,
@@ -261,7 +260,7 @@ export default function HomeScreen() {
                       </Pressable>
                     );
                   })}
-                </ScrollView>
+                </View>
               </View>
             </View>
 
@@ -324,6 +323,13 @@ export default function HomeScreen() {
             2. DISCOVERY CATALOGUE SECTION (Merged Explore Functionality)
            ========================================================================= */}
         <View style={styles.catalogueSection}>
+          <View style={styles.trustBanner}>
+            <Ionicons name="shield-checkmark" size={17} color={colors.blue} />
+            <Text style={styles.trustBannerText}>
+              Klang Valley Verified Rentals · Delivery Only · Risk-Based Security Deposits
+            </Text>
+          </View>
+
           <View style={styles.catalogueControlsRow}>
             {/* Left: Results count & active category indicator */}
             <View style={{ flex: 1 }}>
@@ -375,9 +381,6 @@ export default function HomeScreen() {
             />
           )}
         </View>
-
-        {/* Footer */}
-        <Footer />
       </ScrollView>
     </SafeAreaView>
   );
@@ -389,7 +392,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.offWhite,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 28,
   },
   // Hero Styles
   heroWrapper: {
@@ -515,16 +518,21 @@ const styles = StyleSheet.create({
     color: colors.navy,
     fontWeight: "500",
   },
-  quickCatRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+  quickCatSection: {
     marginTop: 8,
+  },
+  quickCatWrapper: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
   },
   quickCatLabel: {
     fontSize: 12,
     color: "#8FA3BF",
     fontWeight: "600",
+    marginRight: 2,
+    paddingVertical: 4,
   },
   quickCatPill: {
     backgroundColor: "#16335C",
@@ -641,6 +649,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.navy,
   },
+  trustBanner: {
+    backgroundColor: colors.paleBlue,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  trustBannerText: {
+    color: colors.navy,
+    fontSize: 13,
+    fontWeight: "700",
+    flex: 1,
+  },
   clearBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -648,11 +673,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.paleBlue,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
   },
   clearBtnText: {
     fontSize: 12,
-    color: colors.muted,
+    color: colors.blue,
     fontWeight: "600",
   },
 });

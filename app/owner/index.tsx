@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
@@ -27,17 +27,9 @@ export default function OwnerDashboard() {
   const [success, setSuccess] = useState("");
   const [deleting, setDeleting] = useState("");
 
-  if (!user)
-    return (
-      <Screen back title="Listing">
-        <Empty
-          title="Put your spare gear to work"
-          text="Sign in to list your items, track earnings, and manage rentals."
-          action="Sign in"
-          onPress={() => router.push("/auth")}
-        />
-      </Screen>
-    );
+  if (!user) {
+    return <Redirect href="/auth" />;
+  }
 
   const listings = state.listings.filter((l) => l.ownerId === user.id);
   const bookings = state.bookings.filter((b) => b.ownerId === user.id);
@@ -74,11 +66,11 @@ export default function OwnerDashboard() {
             key={label as string}
             disabled={!clickable}
             onPress={clickable ? () => router.push("/(tabs)/rentals") : undefined}
-            style={[s.card, { flex: 1, minWidth: 140 }]}
+            style={[styles.kpiCard, clickable && styles.kpiCardClickable]}
           >
-            <Text style={s.caption}>{label as string}</Text>
-            <Text style={[s.title, clickable ? { color: colors.blue } : {}]}>{value as string}</Text>
-            {clickable ? <Text style={[s.caption, { color: colors.blue, fontSize: 10 }]}>Tap to view →</Text> : null}
+            <Text style={styles.kpiLabel}>{label as string}</Text>
+            <Text style={[styles.kpiValue, clickable ? { color: colors.blue } : {}]}>{value as string}</Text>
+            {clickable ? <Text style={styles.kpiSub}>Tap to view →</Text> : null}
           </Pressable>
         ))}
       </View>
@@ -334,6 +326,36 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontWeight: "500",
   },
+  kpiCard: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: colors.paleBlue,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    borderRadius: 16,
+    padding: 16,
+    gap: 6,
+    marginBottom: 16,
+  },
+  kpiCardClickable: {
+    borderColor: colors.blue,
+  },
+  kpiLabel: {
+    fontSize: 13,
+    color: colors.slate,
+    fontWeight: "600",
+  },
+  kpiValue: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: colors.navy,
+    letterSpacing: -0.5,
+  },
+  kpiSub: {
+    fontSize: 11,
+    color: colors.linkBlue,
+    fontWeight: "700",
+  },
   actionBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -351,9 +373,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 8,
     borderRadius: 8,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   actionBtnActive: {
     backgroundColor: colors.paleBlue,
@@ -365,13 +387,13 @@ const styles = StyleSheet.create({
     color: colors.navy,
   },
   deleteActionBtn: {
-    backgroundColor: "#FEF2F2",
-    borderColor: "#FECACA",
+    backgroundColor: "#FFF0ED",
+    borderColor: "#FFCCC2",
   },
   deleteConfirmBox: {
     marginTop: 10,
     padding: 10,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: "#FFF0ED",
     borderRadius: 8,
   },
 });

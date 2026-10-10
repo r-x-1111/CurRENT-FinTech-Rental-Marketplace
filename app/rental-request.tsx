@@ -1,5 +1,5 @@
 import { Image, StyleSheet, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge, Button, Card, Empty, Screen } from "../components/ui";
 import { useMarketplace } from "../context/Marketplace";
@@ -22,6 +22,10 @@ export default function RentalRequestScreen() {
   }>();
 
   const { state, user } = useMarketplace();
+
+  if (!user) {
+    return <Redirect href="/auth" />;
+  }
 
   // Retrieve requested application by ID or fallback
   const req =
@@ -238,7 +242,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: colors.border,
     marginVertical: 14,
   },
   sectionHeading: {
@@ -248,11 +252,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   detailsCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.softBlue,
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     gap: 10,
   },
   detailRow: {
@@ -262,7 +266,7 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 12,
-    color: "#64748B",
+    color: colors.slate,
     fontWeight: "600",
   },
   detailValue: {
@@ -273,35 +277,35 @@ const styles = StyleSheet.create({
   indicativeBox: {
     flexDirection: "row",
     gap: 6,
-    backgroundColor: "#F0F9FF",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#BAE6FD",
+    borderColor: colors.softBlue,
     borderRadius: 8,
-    padding: 8,
+    padding: 10,
     marginTop: 10,
     alignItems: "center",
   },
   indicativeText: {
     flex: 1,
-    fontSize: 11,
-    color: "#0369A1",
-    lineHeight: 15,
+    fontSize: 12,
+    color: colors.navy,
+    lineHeight: 16,
   },
   infoBox: {
     flexDirection: "row",
     gap: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.softBlue,
     borderRadius: 10,
-    padding: 10,
+    padding: 12,
     marginTop: 10,
     alignItems: "flex-start",
   },
   infoText: {
     flex: 1,
-    fontSize: 11,
-    color: colors.muted,
+    fontSize: 12,
+    color: colors.slate,
     lineHeight: 16,
   },
 });

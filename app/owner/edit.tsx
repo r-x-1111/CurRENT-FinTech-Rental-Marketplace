@@ -1,62 +1,69 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Button,
   Card,
   Chips,
   Empty,
   Field,
+  MediaPicker,
   Notice,
-  PhotoPicker,
   Screen,
   s,
 } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
 import { categories } from "../../constants/categories";
 import { newId } from "../../services/marketplace";
-import type { CollectionMethod } from "../../types";
 import { colors } from "../../constants/theme";
-const methodOptions: CollectionMethod[] = [
-  "Meet Owner",
-  "Self-Pickup",
-  "Delivery Available",
-];
+
 export default function EditListing() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { state, user, act } = useMarketplace();
   const existing = state.listings.find(
     (l) => l.id === id && l.ownerId === user?.id,
   );
+
   const [title, setTitle] = useState(existing?.title || "");
   const [description, setDescription] = useState(existing?.description || "");
   const [category, setCategory] = useState(existing?.category || "Electronics");
   const [location, setLocation] = useState(existing?.location || "");
   const [price, setPrice] = useState(existing?.dailyPrice.toString() || "");
   const [value, setValue] = useState(existing?.estimatedValue.toString() || "");
-  const [photos, setPhotos] = useState(
-    existing?.images || (existing?.imageUrl ? [existing.imageUrl] : []),
+  const [photos, setPhotos] = useState<string[]>(
+    existing?.images && existing.images.length >= 6
+      ? existing.images
+      : existing?.images || (existing?.imageUrl ? [existing.imageUrl] : []),
+  );
+  const [videos, setVideos] = useState<string[]>(
+    existing?.videos && existing.videos.length >= 1
+      ? existing.videos
+      : existing ? ["/videos/listing-preview-sample.mp4"] : [],
   );
   const [start, setStart] = useState(existing?.availableFrom || "");
   const [end, setEnd] = useState(existing?.availableTo || "");
-  const [collectionMethods, setCollectionMethods] = useState<
-    CollectionMethod[]
-  >(existing?.collectionMethods || ["Meet Owner"]);
   const [pickupWindowsStr, setPickupWindowsStr] = useState(
     existing?.pickupTimeWindows
       ? existing.pickupTimeWindows.map((w) => `${w.start}-${w.end}`).join(", ")
       : "10:00-12:00, 14:00-18:00",
   );
   const [error, setError] = useState("");
-  if (!user || (id && !existing))
+
+  if (!user) {
+    return <Redirect href="/auth" />;
+  }
+
+  if (id && !existing)
     return (
       <Screen back>
         <Empty
           title="Listing unavailable"
-          text="Sign in as the owner to create or edit listings."
+          text="This listing could not be found."
         />
       </Screen>
     );
+
   function save(status: "draft" | "published") {
     try {
       const parsedWindows = pickupWindowsStr
@@ -80,10 +87,11 @@ export default function EditListing() {
           dailyPrice: Number(price),
           estimatedValue: Number(value),
           images: photos,
+          videos,
           imageUrl: photos[0] || "",
           availableFrom: start || undefined,
           availableTo: end || undefined,
-          collectionMethods,
+          collectionMethods: ["Delivery Only"],
           rating: existing?.rating || 0,
           verifiedOwner: user!.verification === "verified",
           status,
@@ -101,6 +109,7 @@ export default function EditListing() {
       setError((e as Error).message);
     }
   }
+
   return (
     <Screen
       back
@@ -110,12 +119,22 @@ export default function EditListing() {
       subtitle="A few details today. A little extra income tomorrow."
     >
       <Card>
-        <Text style={s.h2}>Item photos</Text>
-        <Text style={s.caption}>
-          Add up to six photos. The main photo appears in the marketplace. At
-          least one photo is required to publish.
-        </Text>
-        <PhotoPicker photos={photos} onChange={setPhotos} />
+        {/* Media Upload Section: Min 6 photos and 1 video required per V3.23 */}
+        <MediaPicker
+          title="Listing Media (Photos & Video)"
+          subtitle="Publishing requires at least 6 photos and 1 video. Upload clear pictures of your item, accessories, and a short functional video."
+          photos={photos}
+          onPhotosChange={setPhotos}
+          videos={videos}
+          onVideosChange={setVideos}
+          minPhotos={6}
+          maxPhotos={10}
+          minVideos={1}
+          maxVideos={3}
+          allowMainSelect
+          samplePrefix="listing"
+        />
+
         <Field
           label="Listing title"
           value={title}
@@ -136,7 +155,7 @@ export default function EditListing() {
           onSelect={setCategory}
         />
         <Field
-          label="Pickup location"
+          label="Service area / locality"
           value={location}
           onChangeText={setLocation}
           placeholder="e.g. Petaling Jaya"
@@ -164,46 +183,22 @@ export default function EditListing() {
           value={end}
           onChangeText={setEnd}
         />
-        <Text style={s.label}>Collection methods</Text>
-        <Text style={s.caption}>
-          Select at least one. Delivery uses an external logistics partner in a
-          live service; no delivery charge is calculated in this demo.
-        </Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {methodOptions.map((option) => (
-            <Pressable
-              key={option}
-              accessibilityRole="checkbox"
-              accessibilityState={{
-                checked: collectionMethods.includes(option),
-              }}
-              onPress={() =>
-                setCollectionMethods(
-                  collectionMethods.includes(option)
-                    ? collectionMethods.filter((method) => method !== option)
-                    : [...collectionMethods, option],
-                )
-              }
-              style={[
-                s.chip,
-                collectionMethods.includes(option) && {
-                  backgroundColor: colors.navy,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  s.label,
-                  collectionMethods.includes(option) && { color: "white" },
-                ]}
-              >
-                {option}
-              </Text>
-            </Pressable>
-          ))}
+
+        {/* Fixed Fulfilment Label: Delivery Only per V3.23 */}
+        <View style={{ marginTop: 6, marginBottom: 12 }}>
+          <Text style={s.label}>Fulfilment method</Text>
+          <View style={styles.deliveryOnlyBadge}>
+            <Ionicons name="car-outline" size={16} color={colors.blue} />
+            <Text style={styles.deliveryOnlyText}>Delivery Only</Text>
+          </View>
+          <Text style={s.caption}>
+            All CurRENT items use Delivery Only. Lenders arrange direct dispatch to the renter's private address upon booking confirmation.
+          </Text>
         </View>
+
         {!!error && <Notice text={error} error />}
-        <View style={{ gap: 10 }}>
+
+        <View style={{ gap: 10, marginTop: 8 }}>
           {existing && (
             <Button
               secondary
@@ -219,8 +214,8 @@ export default function EditListing() {
               !location.trim() ||
               !price ||
               !value ||
-              !photos.length ||
-              !collectionMethods.length
+              photos.length < 6 ||
+              videos.length < 1
             }
             onPress={() => save("published")}
           >
@@ -234,3 +229,25 @@ export default function EditListing() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  deliveryOnlyBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: "#EFF6FF",
+    borderColor: "#BFDBFE",
+    borderWidth: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  deliveryOnlyText: {
+    color: colors.blue,
+    fontWeight: "700",
+    fontSize: 13,
+  },
+});

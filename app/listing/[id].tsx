@@ -27,10 +27,13 @@ import {
   availability,
   availabilityCalendar,
   dateAfter,
+  formatMalaysiaDateTime,
   money,
+  parseMalaysiaTimestamp,
   quoteFor,
   rentalDays,
   riskFor,
+  toMalaysiaUtcTimestamp,
 } from "../../services/booking";
 import { colors } from "../../constants/theme";
 import type { CollectionMethod } from "../../types";
@@ -133,14 +136,11 @@ export default function ListingDetailScreen() {
   const emptyPads = Array.from({ length: firstDayOffset });
   const weekDays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-  const methods = listing.collectionMethods || ["Meet Owner"];
-  const selectedMethod = methods.includes(collectionMethod)
-    ? collectionMethod
-    : methods[0];
+  const selectedMethod = "Delivery Only";
   const renterRisk = user ? riskFor(state, user) : null;
 
-  const startTimestamp = `${start}T${pickupTime}:00Z`;
-  const endTimestamp = `${end}T${returnTime}:00Z`;
+  const startTimestamp = start ? toMalaysiaUtcTimestamp(start, pickupTime) : "";
+  const endTimestamp = end ? toMalaysiaUtcTimestamp(end, returnTime) : "";
 
   let quote: ReturnType<typeof quoteFor> | undefined;
   let dateError = "";
@@ -182,24 +182,22 @@ export default function ListingDetailScreen() {
     }
   }
 
-  // Dynamic cancellation cutoff calculation (24h before pickup)
+  // Dynamic cancellation cutoff calculation per README V3.23 Section 7.4
   let cancellationNotice = "";
-  if (start && end && !dateError) {
-    try {
-      const pickupEpoch = Date.parse(startTimestamp);
-      if (Number.isFinite(pickupEpoch)) {
-        const cutoffDate = new Date(pickupEpoch - 24 * 60 * 60 * 1000);
-        const cutoffFormatted = cutoffDate.toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        cancellationNotice = `Free cancellation until ${cutoffFormatted} (Demo)`;
+  if (start && end && !dateError && (renterRisk?.score ?? 75) >= 30) {
+    if (!pickupTime) {
+      cancellationNotice =
+        "Free cancellation until 24 hours before your chosen rental start time";
+    } else {
+      try {
+        const pickupEpoch = parseMalaysiaTimestamp(startTimestamp);
+        if (Number.isFinite(pickupEpoch)) {
+          const cutoffEpoch = pickupEpoch - 24 * 60 * 60 * 1000;
+          cancellationNotice = `Free cancellation until ${formatMalaysiaDateTime(cutoffEpoch)}`;
+        }
+      } catch {
+        cancellationNotice = "";
       }
-    } catch {
-      cancellationNotice = "";
     }
   }
 
@@ -222,7 +220,7 @@ export default function ListingDetailScreen() {
         pickupTime: formatTime(pickupTime),
         returnTime: `${formatTime(returnTime)} (Automatically matched)`,
         durationDays: quote ? quote.days : 1,
-        collectionMethod: "Delivery",
+        collectionMethod: "Delivery Only",
         deliveryAddress: fullDeliveryAddress,
         location: listing.location,
         lenderName: owner?.name || "Lender",
@@ -535,27 +533,27 @@ export default function ListingDetailScreen() {
 
               <Text style={styles.calendarHint}>
                 {!start
-                  ? "Click 1: Choose pickup date"
+                  ? "Click 1: Choose start date"
                   : !end
                   ? "Click 2: Choose return date"
                   : `Rental duration: ${start && end ? rentalDays(startTimestamp, endTimestamp) : 0} days`}
               </Text>
             </View>
 
-            {/* 3. Pickup Arrangement & Locked Return Time Section */}
+            {/* 3. Delivery Arrangement & Locked Return Time Section */}
             <View style={styles.arrangementSection}>
               <View style={styles.arrangementHeaderRow}>
                 <Ionicons name="time-outline" size={16} color={colors.navy} />
                 <Text style={styles.arrangementTitle}>
-                  Pickup & Return Arrangement
+                  Delivery & Return Arrangement
                 </Text>
               </View>
 
-              {/* Pickup Time Slots */}
+              {/* Scheduled Delivery Time Slots */}
               <View style={{ marginTop: 8 }}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={styles.fieldLabel}>Pickup time</Text>
-                  <Text style={styles.fieldSubtext}>Lender's available slots</Text>
+                  <Text style={styles.fieldLabel}>Scheduled Delivery Time</Text>
+                  <Text style={styles.fieldSubtext}>Available delivery time slots</Text>
                 </View>
                 <View style={styles.timeSlotsRow}>
                   {TIME_OPTIONS.map((opt) => {
@@ -564,7 +562,7 @@ export default function ListingDetailScreen() {
                       <Pressable
                         key={opt.value}
                         accessibilityRole="button"
-                        accessibilityLabel={`Pickup at ${opt.label}`}
+                        accessibilityLabel={`Delivery at ${opt.label}`}
                         onPress={() => setPickupTime(opt.value)}
                         style={[
                           styles.timeSlotBtn,
@@ -589,7 +587,7 @@ export default function ListingDetailScreen() {
               <View style={styles.returnTimeCard}>
                 <View style={styles.returnTimeRow}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                    <Ionicons name="time-outline" size={14} color="#0369A1" />
+                    <Ionicons name="time-outline" size={14} color={colors.navy} />
                     <Text style={styles.returnTimeLabel}>Return Time</Text>
                   </View>
                   <Text style={styles.returnTimeValue}>{formatHourAmPm(returnTime)}</Text>
@@ -599,10 +597,10 @@ export default function ListingDetailScreen() {
               {/* Collection: Delivery Only (fixed per V3.23 Section 7) */}
               <View style={{ marginTop: 8 }}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={styles.fieldLabel}>Collection</Text>
+                  <Text style={styles.fieldLabel}>Fulfilment</Text>
                 </View>
                 <View style={styles.deliveryOnlyPill}>
-                  <Ionicons name="car-outline" size={14} color="#0369A1" />
+                  <Ionicons name="car-outline" size={14} color={colors.blue} />
                   <Text style={styles.deliveryOnlyText}>Delivery Only</Text>
                 </View>
               </View>
@@ -1128,20 +1126,20 @@ const styles = StyleSheet.create({
   cancellationNoticeText: {
     flex: 1,
     fontSize: 11,
-    color: "#0369A1",
+    color: colors.linkBlue,
     lineHeight: 15,
     fontWeight: "600",
   },
   summaryContainer: {
-    backgroundColor: "white",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 10,
-    padding: 12,
+    borderColor: colors.softBlue,
+    borderRadius: 12,
+    padding: 14,
     marginTop: 12,
   },
   summaryTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "800",
     color: colors.navy,
     marginBottom: 8,
@@ -1162,15 +1160,15 @@ const styles = StyleSheet.create({
     color: colors.navy,
   },
   depositNote: {
-    fontSize: 10,
-    color: colors.muted,
-    lineHeight: 14,
+    fontSize: 11,
+    color: colors.slate,
+    lineHeight: 15,
     marginTop: 4,
     marginBottom: 6,
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: colors.border,
     marginVertical: 6,
   },
   summaryRowTotal: {
@@ -1190,11 +1188,11 @@ const styles = StyleSheet.create({
     color: colors.blue,
   },
   reviewApplicationCard: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.softBlue,
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     marginTop: 12,
     gap: 8,
   },
@@ -1209,14 +1207,14 @@ const styles = StyleSheet.create({
     color: colors.navy,
   },
   reviewApplicationText: {
-    fontSize: 11,
-    color: colors.muted,
-    lineHeight: 15,
+    fontSize: 12,
+    color: colors.slate,
+    lineHeight: 16,
   },
   reviewApplicationMeta: {
     backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.softBlue,
     borderRadius: 8,
     padding: 10,
     gap: 4,
@@ -1227,9 +1225,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   checkoutPanel: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.softBlue,
     borderRadius: 12,
     padding: 14,
     marginTop: 14,
@@ -1242,16 +1240,16 @@ const styles = StyleSheet.create({
   },
   checkoutSubtitle: {
     fontSize: 12,
-    color: colors.muted,
+    color: colors.slate,
     lineHeight: 16,
   },
   fpxBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: colors.softBlue,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1259,16 +1257,16 @@ const styles = StyleSheet.create({
   fpxBadgeText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#1D4ED8",
+    color: colors.linkBlue,
     letterSpacing: 1,
   },
   deliveryOnlyPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: colors.softBlue,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -1277,12 +1275,12 @@ const styles = StyleSheet.create({
   deliveryOnlyText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0369A1",
+    color: colors.blue,
   },
   returnTimeCard: {
-    backgroundColor: "#F0F9FF",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#BAE6FD",
+    borderColor: colors.softBlue,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1296,17 +1294,17 @@ const styles = StyleSheet.create({
   returnTimeLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0369A1",
+    color: colors.navy,
   },
   returnTimeValue: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0C4A6E",
+    color: colors.blue,
   },
   deliveryAddressSection: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 12,
     marginTop: 12,

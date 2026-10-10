@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import * as Crypto from "expo-crypto";
@@ -26,6 +26,17 @@ export default function Auth() {
   const [error, setError] = useState("");
   const [infoNotice, setInfoNotice] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!state.currentUserId) {
+      setEmail("");
+      setPassword("");
+      setName("");
+      setMode("Sign in");
+      setError("");
+      setInfoNotice("");
+    }
+  }, [state.currentUserId]);
 
   async function submit() {
     setBusy(true);
@@ -71,7 +82,7 @@ export default function Auth() {
         if (address === "democurrent@gmail.com" || address === "alex@demo.current") {
           const demoUser = state.profiles.find((p) => p.id === "demo-renter") || state.profiles[0];
           if (demoUser) {
-            act({ type: "login", userId: demoUser.id });
+            act({ type: "resetDemoState" });
             router.replace("/(tabs)");
             return;
           }
@@ -124,6 +135,13 @@ export default function Auth() {
             <Text style={styles.tagline}>Rent Smarter. Own Less. Live More.</Text>
           </View>
 
+          <View style={styles.demoCallout}>
+            <Ionicons name="information-circle-outline" size={18} color={colors.blue} />
+            <Text style={styles.demoCalloutText}>
+              Classroom Demo · Sign in with your account or <Text style={{ fontWeight: "700" }}>DemoCurRENT@gmail.com</Text>
+            </Text>
+          </View>
+
           <Chips
             options={["Sign in", "Create account"]}
             selected={mode}
@@ -156,7 +174,7 @@ export default function Auth() {
 
           <View style={styles.passwordContainer}>
             <Field
-              label="Demo password"
+              label="Password"
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -244,6 +262,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
   },
+  demoCallout: {
+    backgroundColor: colors.paleBlue,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  demoCalloutText: {
+    fontSize: 12,
+    color: colors.navy,
+    flex: 1,
+    lineHeight: 16,
+  },
   passwordContainer: {
     position: "relative",
   },
@@ -260,8 +295,8 @@ const styles = StyleSheet.create({
   },
   forgotPasswordText: {
     fontSize: 12,
-    color: colors.blue,
-    fontWeight: "600",
+    color: colors.linkBlue,
+    fontWeight: "700",
   },
   switchPromptWrap: {
     flexDirection: "row",
@@ -276,6 +311,6 @@ const styles = StyleSheet.create({
   switchPromptLink: {
     fontSize: 13,
     fontWeight: "700",
-    color: colors.blue,
+    color: colors.linkBlue,
   },
 });

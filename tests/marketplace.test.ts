@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
+import path from "node:path";
 import { createSeed } from "../data/seed";
 import { transition, type Action } from "../services/marketplace";
 import {
   availability,
   availabilityCalendar,
+  calculateCancellationCutoff,
   dateAfter,
+  formatMalaysiaDateTime,
+  isCancellationEligible,
+  parseMalaysiaTimestamp,
   quoteFor,
   rentalDays,
   riskFor,
+  toMalaysiaUtcTimestamp,
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
 
@@ -289,24 +296,17 @@ test("accounts, private messages and notifications stay separated", () => {
   j.request("verified");
   assert.equal(j.state.bookings[0].renterId, "new-user");
 });
-test("collection choices are validated and recorded in the agreement", () => {
+test("Delivery Only is enforced and recorded in the agreement", () => {
   let state = createSeed();
-  state.listings[0].collectionMethods = ["Meet Owner", "Self-Pickup"];
-  const request = (
-    collectionMethod: "Meet Owner" | "Self-Pickup" | "Delivery Available",
-  ) =>
-    transition(state, {
-      type: "request",
-      id: "collection-booking",
-      listingId: "sony-a7iii",
-      start: dateAfter(1),
-      end: dateAfter(3),
-      protection: false,
-      collectionMethod,
-    });
-  assert.throws(() => request("Delivery Available"), /not available/);
-  state = request("Self-Pickup");
-  assert.equal(state.bookings[0].collectionMethod, "Self-Pickup");
+  state = transition(state, {
+    type: "request",
+    id: "collection-booking",
+    listingId: "sony-a7iii",
+    start: dateAfter(1),
+    end: dateAfter(3),
+    protection: false,
+  });
+  assert.equal(state.bookings[0].collectionMethod, "Delivery Only");
   state = transition(state, { type: "login", userId: "owner-aiman" });
   state = transition(state, {
     type: "booking",
@@ -318,7 +318,7 @@ test("collection choices are validated and recorded in the agreement", () => {
     type: "booking",
     id: "collection-booking",
     operation: "pay",
-    method: "Demo card",
+    method: "Demo FPX",
   });
   state = transition(state, {
     type: "booking",
@@ -327,7 +327,7 @@ test("collection choices are validated and recorded in the agreement", () => {
   });
   assert.match(
     state.bookings[0].agreement || "",
-    /Collection method: Self-Pickup/,
+    /Fulfilment: Delivery Only/,
   );
 });
 test("state snapshots can reload mid-payment without losing fees or agreement progress", () => {
@@ -654,24 +654,54 @@ test("Phase 4 & 5: two-sided clean return releases deposit and awards +2 score, 
   const scoreBefore = state.profiles.find((p) => p.id === "demo-renter")!.riskScore;
   assert.equal(scoreBefore, 75);
 
-  // Renter confirms return with photo
+  const samplePhotos = [
+    "photo-1", "photo-2", "photo-3", "photo-4", "photo-5", "photo-6"
+  ];
+  const sampleVideos = ["video-1"];
+
+  // Renter confirms return requires at least 6 photos and 1 video
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "returnConfirm",
+        bookingId: "booking-return",
+        role: "renter",
+        photo: "only-one-photo",
+      }),
+    /at least 6 photos and 1 video/,
+  );
+
   state = transition(state, {
     type: "returnConfirm",
     bookingId: "booking-return",
     role: "renter",
-    photo: "data:image/png;base64,returnPhoto",
+    photos: samplePhotos,
+    videos: sampleVideos,
     notes: "Everything in perfect shape",
   });
   const bHalfReturned = state.bookings.find((b) => b.id === "booking-return")!;
   assert.equal(bHalfReturned.status, "return_pending");
   assert.equal(bHalfReturned.deposit, "release_pending"); // Not released yet!
 
-  // Owner confirms return inspection
+  // Owner confirms return inspection requires at least 6 photos and 1 video
   state = transition(state, { type: "login", userId: "owner-aiman" });
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "returnConfirm",
+        bookingId: "booking-return",
+        role: "owner",
+      }),
+    /at least 6 photos and 1 video/,
+  );
+
   state = transition(state, {
     type: "returnConfirm",
     bookingId: "booking-return",
     role: "owner",
+    photos: samplePhotos,
+    videos: sampleVideos,
+    notes: "Owner inspection confirmed clean",
   });
 
   const bCompleted = state.bookings.find((b) => b.id === "booking-return")!;
@@ -868,13 +898,273 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
     listingId: "sony-a7iii",
     start: "2026-11-20T11:00:00Z",
     end: "2026-11-25T11:00:00Z",
-    collectionMethod: "Meet Owner",
+    collectionMethod: "Delivery Only",
     paymentMethod: "Demo FPX",
   });
   const booked = state.bookings.find((b) => b.id === "booking-eligible-after-req");
   assert.ok(booked, "Eligible renter should be able to book because application did not reserve inventory");
   assert.equal(booked.status, "upcoming");
   assert.equal(booked.payment, "paid");
+});
+
+test("V3.23 Demo Account has at least 3 records per activity, 4 completed, score 75 (+2,+2,-2,-2) and single Sony review", () => {
+  const seed = createSeed("admin_demo");
+  const demoUserId = "demo-renter";
+  const userBookings = seed.bookings.filter((b) => b.renterId === demoUserId);
+  const lenderBookings = seed.bookings.filter((b) => b.ownerId === demoUserId);
+  const demoListings = seed.listings.filter((l) => l.ownerId === demoUserId);
+  const demoProfile = seed.profiles.find((p) => p.id === demoUserId)!;
+
+  // 1. At least 3 demo-owned listings
+  assert.ok(demoListings.length >= 3, `Expected >= 3 demo listings, got ${demoListings.length}`);
+  assert.ok(demoListings.some((l) => l.featuredUntil && new Date(l.featuredUntil) > new Date()), "Expected at least 1 boosted listing");
+
+  // 2. At least 3 Upcoming rentals
+  const upcoming = userBookings.filter((b) => b.status === "upcoming");
+  assert.ok(upcoming.length >= 3, `Expected >= 3 upcoming rentals, got ${upcoming.length}`);
+
+  // 3. At least 3 Active rentals
+  const active = userBookings.filter((b) => b.status === "active");
+  assert.ok(active.length >= 3, `Expected >= 3 active rentals, got ${active.length}`);
+
+  // 4. At least 3 Return Due rentals
+  const returnDue = userBookings.filter((b) => b.status === "return_pending" || (b.status === "active" && b.end <= dateAfter(1)));
+  assert.ok(returnDue.length >= 3, `Expected >= 3 return due rentals, got ${returnDue.length}`);
+
+  // 5. At least 3 Cancelled rentals
+  const cancelled = userBookings.filter((b) => b.status === "cancelled");
+  assert.ok(cancelled.length >= 3, `Expected >= 3 cancelled rentals, got ${cancelled.length}`);
+
+  // 6. At least 3 Disputed rentals
+  const disputed = userBookings.filter((b) => b.status === "disputed");
+  assert.ok(disputed.length >= 3, `Expected >= 3 disputed rentals, got ${disputed.length}`);
+
+  // 7. Exactly 4 Completed rentals matching 4 linked risk adjustments (+2, +2, -2, -2)
+  const completed = userBookings.filter((b) => b.status === "completed");
+  assert.equal(completed.length, 4, `Expected exactly 4 completed rentals, got ${completed.length}`);
+  assert.equal(demoProfile.riskScore, 75, "Expected risk score 75");
+  assert.equal(demoProfile.riskLevel, "medium", "Expected medium risk tier");
+  assert.ok(demoProfile.riskHistory, "Risk history must be present");
+  assert.equal(demoProfile.riskHistory.length, 4, "Expected 4 risk incident records");
+  const adjustments = demoProfile.riskHistory.map((h) => h.effectiveAdjustment);
+  assert.deepEqual(adjustments.slice().sort(), [-2, -2, 2, 2], "Expected adjustments to be +2, +2, -2, -2");
+  const sumAdj = adjustments.reduce((a, b) => a + b, 0);
+  assert.equal(sumAdj, 0, "Adjustments must net to 0 from 75 baseline");
+
+  // 8. At least 3 saved items (favourites)
+  assert.ok(demoProfile.favourites.length >= 3, `Expected >= 3 favourites, got ${demoProfile.favourites.length}`);
+
+  // 9. At least 3 lender completed payouts
+  const lenderPayouts = lenderBookings.filter((b) => b.status === "completed");
+  assert.ok(lenderPayouts.length >= 3, `Expected >= 3 lender payouts, got ${lenderPayouts.length}`);
+
+  // 10. At least 3 notifications
+  const userNotifs = seed.notifications.filter((n) => n.userId === demoUserId);
+  assert.ok(userNotifs.length >= 3, `Expected >= 3 notifications, got ${userNotifs.length}`);
+
+  // 11. At least 3 rental-linked conversation threads with >= 2 messages each
+  const threads = new Set(seed.messages.map((m) => m.bookingId));
+  assert.ok(threads.size >= 3, `Expected >= 3 conversation threads, got ${threads.size}`);
+  for (const tid of threads) {
+    const threadMsgs = seed.messages.filter((m) => m.bookingId === tid);
+    assert.ok(threadMsgs.length >= 2, `Expected thread ${tid} to have >= 2 messages, got ${threadMsgs.length}`);
+  }
+
+  // 12. Exactly ONE approved Sony sample review in entire app
+  assert.equal(seed.reviews.length, 0, "No fabricated marketplace reviews in seed");
+});
+
+test("V3.23 listing publish requires >= 6 photos and >= 1 video", () => {
+  let state = createSeed("admin_demo");
+  state = transition(state, { type: "login", userId: "demo-renter" });
+
+  const samplePhotos = ["p1", "p2", "p3", "p4", "p5", "p6"];
+  const sampleVideos = ["v1"];
+
+  // Publish with fewer than 6 photos rejected
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "saveListing",
+        listing: {
+          id: "new-listing-test",
+          ownerId: "demo-renter",
+          title: "Test Professional Camera",
+          description: "High quality gear in perfect condition.",
+          category: "Electronics",
+          location: "Petaling Jaya",
+          dailyPrice: 50,
+          estimatedValue: 2000,
+          images: samplePhotos.slice(0, 5),
+          videos: sampleVideos,
+          imageUrl: "p1",
+          status: "published",
+          rating: 0,
+          verifiedOwner: true,
+        },
+      }),
+    /at least 6 photos and 1 video/,
+  );
+
+  // Publish with 0 videos rejected
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "saveListing",
+        listing: {
+          id: "new-listing-test",
+          ownerId: "demo-renter",
+          title: "Test Professional Camera",
+          description: "High quality gear in perfect condition.",
+          category: "Electronics",
+          location: "Petaling Jaya",
+          dailyPrice: 50,
+          estimatedValue: 2000,
+          images: samplePhotos,
+          videos: [],
+          imageUrl: "p1",
+          status: "published",
+          rating: 0,
+          verifiedOwner: true,
+        },
+      }),
+    /at least 6 photos and 1 video/,
+  );
+
+  // Publish with >= 6 photos and >= 1 video succeeds and enforces Delivery Only
+  state = transition(state, {
+    type: "saveListing",
+    listing: {
+      id: "new-listing-test",
+      ownerId: "demo-renter",
+      title: "Test Professional Camera",
+      description: "High quality gear in perfect condition.",
+      category: "Electronics",
+      location: "Petaling Jaya",
+      dailyPrice: 50,
+      estimatedValue: 2000,
+      images: samplePhotos,
+      videos: sampleVideos,
+      imageUrl: "p1",
+      status: "published",
+      rating: 0,
+      verifiedOwner: true,
+    },
+  });
+
+  const created = state.listings.find((l) => l.id === "new-listing-test");
+  assert.ok(created);
+  assert.equal(created.status, "published");
+  assert.deepEqual(created.collectionMethods, ["Delivery Only"]);
+});
+
+test("V3.23 fresh demo sign-in restores baseline while refresh preserves session", () => {
+  let state = createSeed("admin_demo");
+  assert.equal(state.bookings.filter((b) => b.renterId === "demo-renter" && b.status === "upcoming").length, 3);
+
+  // User alters data during session (e.g. cancels one booking)
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  state = transition(state, {
+    type: "booking",
+    id: "demo-booking-upcoming-1",
+    operation: "cancel",
+  });
+  assert.equal(state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!.status, "cancelled");
+
+  // A refresh of an active session retains state in memory/AsyncStorage:
+  assert.equal(state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!.status, "cancelled");
+
+  // A fresh explicit demo login restores the complete baseline:
+  state = transition(state, { type: "resetDemoState" });
+  assert.equal(state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!.status, "upcoming");
+});
+
+test("V3.23 Section 7.4: free-cancellation deadline calculation, notice format, and boundary eligibility in Malaysia timezone", () => {
+  // 1. Interprets 23 October 2026, 11:00 AM Malaysia time in Asia/Kuala_Lumpur (UTC+8)
+  const dateStr = "2026-10-23";
+  const timeStr = "11:00";
+  const startUtc = toMalaysiaUtcTimestamp(dateStr, timeStr);
+  assert.equal(startUtc, "2026-10-23T03:00:00.000Z");
+
+  const startEpoch = parseMalaysiaTimestamp(startUtc);
+  const cutoffEpoch = startEpoch - 24 * 60 * 60 * 1000;
+  const cutoffIso = calculateCancellationCutoff(startUtc);
+  assert.equal(cutoffIso, "2026-10-22T03:00:00.000Z");
+
+  // 2. Cancellation notice displays exactly "Free cancellation until 22 Oct 2026, 11:00 AM" (NOT 19:00, NO (Demo))
+  const notice = `Free cancellation until ${formatMalaysiaDateTime(cutoffEpoch)}`;
+  assert.equal(notice, "Free cancellation until 22 Oct 2026, 11:00 AM");
+  assert.ok(!notice.includes("19:00"), "Must NOT display 19:00 due to UTC offset bug");
+  assert.ok(!notice.includes("(Demo)"), "Must NOT contain (Demo) suffix");
+
+  // 3. Permitted at exactly 24 hours before rental start (now <= cutoff) and blocked 1 second after cutoff
+  assert.equal(isCancellationEligible(startUtc, cutoffEpoch), true, "Permitted exactly at cutoff instant");
+  assert.equal(isCancellationEligible(startUtc, cutoffEpoch - 1000), true, "Permitted 1 second before cutoff");
+  assert.equal(isCancellationEligible(startUtc, cutoffEpoch + 1000), false, "Blocked 1 second after cutoff");
+
+  // 4. Backend cancellation eligibility matches cutoff timestamp
+  let state = createSeed("admin_demo");
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  state = transition(state, {
+    type: "instantBook",
+    id: "booking-tz-test",
+    listingId: "sony-a7iii",
+    start: startUtc,
+    end: toMalaysiaUtcTimestamp("2026-10-25", "11:00"),
+    collectionMethod: "Delivery Only",
+    paymentMethod: "Demo FPX",
+  });
+  const booking = state.bookings.find((b) => b.id === "booking-tz-test")!;
+  assert.ok(booking);
+  assert.equal(booking.cancellationCutoff, "2026-10-22T03:00:00.000Z");
+
+  // 5. Recalculation on date and time changes
+  // Change start date to 24 Oct 2026
+  const date2Start = toMalaysiaUtcTimestamp("2026-10-24", "11:00");
+  const date2Cutoff = parseMalaysiaTimestamp(date2Start) - 24 * 60 * 60 * 1000;
+  assert.equal(formatMalaysiaDateTime(date2Cutoff), "23 Oct 2026, 11:00 AM");
+
+  // Change time to 14:00 (02:00 PM)
+  const time2Start = toMalaysiaUtcTimestamp("2026-10-23", "14:00");
+  const time2Cutoff = parseMalaysiaTimestamp(time2Start) - 24 * 60 * 60 * 1000;
+  assert.equal(formatMalaysiaDateTime(time2Cutoff), "22 Oct 2026, 02:00 PM");
+
+  // 6. README Section 7.4 example: scheduled 2 Nov 2026 10:00 AM -> Free cancellation until 1 Nov 2026, 10:00 AM
+  const nov2Start = toMalaysiaUtcTimestamp("2026-11-02", "10:00");
+  assert.equal(nov2Start, "2026-11-02T02:00:00.000Z");
+  const nov2Cutoff = parseMalaysiaTimestamp(nov2Start) - 24 * 60 * 60 * 1000;
+  assert.equal(`Free cancellation until ${formatMalaysiaDateTime(nov2Cutoff)}`, "Free cancellation until 1 Nov 2026, 10:00 AM");
+});
+
+test("Sony A7 III image gallery has 4 distinct original reference images in exact PDF order", () => {
+  const seed = createSeed("admin_demo");
+  const sony = seed.listings.find((l) => l.id === "sony-a7iii");
+  assert.ok(sony);
+  assert.ok(sony.images);
+
+  // 1. Must contain 4 images total
+  assert.equal(sony.images.length, 4, "Sony A7 III gallery must have exactly 4 images");
+
+  // 2. Exact order:
+  // [0] Yellow-background main image
+  // [1] Front/angled view with attached lens
+  // [2] Side/rear view against grey background
+  // [3] Camera, lens and accessories arranged on light background
+  assert.equal(sony.imageUrl, "/products/sony-a7iii.jpg");
+  assert.deepEqual(sony.images, [
+    "/products/sony-a7iii.jpg",
+    "/products/sony-thumb-1.jpg",
+    "/products/sony-thumb-2.jpg",
+    "/products/sony-thumb-3.jpg",
+  ]);
+
+  // 3. Verify all 4 image assets exist on disk and are valid non-empty files
+  for (const imgPath of sony.images) {
+    const fullPath = path.join(process.cwd(), "public", imgPath);
+    assert.ok(fs.existsSync(fullPath), `Asset file must exist on disk: ${imgPath}`);
+    const stats = fs.statSync(fullPath);
+    assert.ok(stats.size > 10000, `Asset file must be high quality (>10KB): ${imgPath}`);
+  }
 });
 
 

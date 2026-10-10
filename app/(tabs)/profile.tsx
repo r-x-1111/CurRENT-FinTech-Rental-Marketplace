@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Image, Text, View } from "react-native";
-import { router } from "expo-router";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Redirect, router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
   Button,
@@ -27,17 +28,9 @@ export default function ProfileScreen() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  if (!user)
-    return (
-      <Screen title="Make yourself at home">
-        <Empty
-          title="Join the CurRENT community"
-          text="Create a demo account, or try a ready-made renter or owner profile."
-          action="Sign in or create account"
-          onPress={() => router.push("/auth")}
-        />
-      </Screen>
-    );
+  if (!user) {
+    return <Redirect href="/auth" />;
+  }
 
   const risk = riskFor(state, user);
   const reviews = state.reviews.filter((r) => r.recipientId === user.id);
@@ -262,20 +255,22 @@ export default function ProfileScreen() {
           label={`${completed} completed rentals`}
           value={`+${completed * 2} points`}
         />
-        <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border }}>
-          <Text style={[s.bold, { fontSize: 13, marginBottom: 4 }]}>What You Should Know</Text>
-          <Text style={[s.bold, { fontSize: 12, marginBottom: 2, marginTop: 6 }]}>Deposit & Booking Rules</Text>
-          <Text style={s.caption}>• Low Risk (80–100): 5% deposit, capped at RM500 (Direct checkout)</Text>
-          <Text style={s.caption}>• Medium Risk (40–79): 10% deposit, capped at RM1,000 (Direct checkout)</Text>
-          <Text style={s.caption}>• High Risk (30–39): 15% deposit, capped at RM1,500 (Direct checkout)</Text>
-          <Text style={s.caption}>• Very High Risk (0–29): CurRENT Platform Review request (Pending only, no checkout)</Text>
-          <Text style={[s.bold, { fontSize: 12, marginBottom: 2, marginTop: 10 }]}>How Your Score Changes</Text>
-          <Text style={s.caption}>• Initial score after first eKYC: 75 (Medium Risk)</Text>
-          <Text style={s.caption}>• Clean on-time return: +2 points</Text>
-          <Text style={s.caption}>• Late return (beyond 2h grace): −2 points per incident</Text>
-          <Text style={s.caption}>• Confirmed minor damage: −10 points</Text>
-          <Text style={s.caption}>• Confirmed serious damage or loss: −30 points</Text>
-          <Text style={s.caption}>• Only the single most serious penalty applies per rental chain</Text>
+        <View style={styles.rulesContainer}>
+          <Text style={styles.rulesHeading}>What You Should Know</Text>
+          <Text style={styles.rulesSubheading}>Deposit & Booking Rules</Text>
+          <Text style={styles.rulesBullet}>• Low Risk (80–100): 5% deposit, capped at RM500 (Direct checkout)</Text>
+          <Text style={styles.rulesBullet}>• Medium Risk (40–79): 10% deposit, capped at RM1,000 (Direct checkout)</Text>
+          <Text style={styles.rulesBullet}>• High Risk (30–39): 15% deposit, capped at RM1,500 (Direct checkout)</Text>
+          <Text style={styles.rulesBullet}>• Very High Risk (0–29): CurRENT Platform Review request (Pending only, no checkout)</Text>
+          <Text style={styles.rulesSubheading}>How Your Score Changes</Text>
+          <Text style={styles.rulesBullet}>• +2 points: Complete a rental on time with no issues.</Text>
+          <Text style={styles.rulesBullet}>• Late return: More than 2 hours late: −1 point for each additional hour or part of an hour, maximum −5, only when actual lateness is supported by return-time evidence.</Text>
+          <Text style={styles.rulesBullet}>• −10 points: Confirmed minor damage.</Text>
+          <Text style={styles.rulesBullet}>• −30 points: Confirmed serious damage or accidental loss.</Text>
+          <Text style={styles.rulesBullet}>• Confirmed intentional theft or fraud: Permanent ban, not an additional numerical penalty.</Text>
+          <Text style={styles.rulesNote}>
+            Only one final outcome applies per rental. If multiple issues occur, the most serious confirmed outcome applies; pending reports do not change your score. Successful appeals correct the original outcome.
+          </Text>
         </View>
       </Card>
 
@@ -292,6 +287,8 @@ export default function ProfileScreen() {
               key={item.id}
               style={{
                 backgroundColor: colors.paleBlue,
+                borderWidth: 1,
+                borderColor: colors.softBlue,
                 padding: 12,
                 borderRadius: 10,
                 marginTop: 8,
@@ -327,69 +324,61 @@ export default function ProfileScreen() {
 
       {/* Trust and Support */}
       <Section title="Trust and Support" />
-      <View style={{ gap: 10 }}>
-        <Button secondary onPress={() => router.push("/how-it-works")}>
-          How CurRENT Works →
-        </Button>
-        <Button secondary onPress={() => router.push("/trust")}>
-          Trust →
-        </Button>
-        <Button secondary onPress={() => router.push("/faq")}>
-          FAQ →
-        </Button>
-      </View>
+      <View style={{ gap: 10, marginBottom: 16 }}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/how-it-works")}
+          style={styles.supportNavCard}
+        >
+          <View style={styles.supportNavIconWrap}>
+            <Ionicons name="bulb-outline" size={20} color={colors.blue} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.supportNavTitle}>How CurRENT Works</Text>
+            <Text style={styles.supportNavDesc}>A simple 4-step way to rent peer-to-peer</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </Pressable>
 
-      {/* Demo Controls (only in admin_demo mode) */}
-      {state.mode === "admin_demo" && (
-        <>
-          <Section title="Demo controls" />
-          <Card>
-            <Text style={s.caption}>
-              Admin Demo mode is ACTIVE. Switch fictional customer personas or reset demo fixtures to initial state.
-            </Text>
-            {state.profiles
-              .filter((p) => !p.passwordHash)
-              .map((p) => (
-                <Button
-                  secondary
-                  key={p.id}
-                  disabled={user.id === p.id}
-                  onPress={() => {
-                    act({ type: "login", userId: p.id });
-                    setEditing(false);
-                    setError("");
-                    setSuccess("");
-                  }}
-                >{`${p.name} (${p.verification === "verified" ? `Score ${p.riskScore ?? "75"}` : "Unverified"})${user.id === p.id ? " · active" : ""}`}</Button>
-              ))}
-            <Button
-              secondary
-              danger
-              onPress={() => {
-                act({ type: "resetDemoState" });
-                setSuccess("All classroom mock data and fixtures reset to initial seed state!");
-              }}
-            >
-              ↺ Reset Admin Demo Data
-            </Button>
-            <Button
-              onPress={() => {
-                act({ type: "setMode", mode: "normal" });
-                setSuccess("Returned to Normal Mode.");
-              }}
-            >
-              Exit Demo Mode
-            </Button>
-          </Card>
-        </>
-      )}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/trust")}
+          style={styles.supportNavCard}
+        >
+          <View style={styles.supportNavIconWrap}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={colors.blue} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.supportNavTitle}>Trust</Text>
+            <Text style={styles.supportNavDesc}>Confidence and protection built into the journey</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/faq")}
+          style={styles.supportNavCard}
+        >
+          <View style={styles.supportNavIconWrap}>
+            <Ionicons name="help-circle-outline" size={20} color={colors.blue} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.supportNavTitle}>FAQ</Text>
+            <Text style={styles.supportNavDesc}>Frequently asked questions and answers</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </Pressable>
+      </View>
 
       {/* Sign Out */}
       <Button
         secondary
         danger
+        accessibilityLabel="Sign out"
         onPress={() => {
           act({ type: "login", userId: null });
+          router.replace("/auth");
         }}
       >
         Sign Out
@@ -397,3 +386,68 @@ export default function ProfileScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  rulesContainer: {
+    marginTop: 14,
+    padding: 14,
+    backgroundColor: colors.paleBlue,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    gap: 6,
+  },
+  rulesHeading: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.navy,
+  },
+  rulesSubheading: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.navy,
+    marginTop: 4,
+  },
+  rulesBullet: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.slate,
+  },
+  rulesNote: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.slate,
+    fontStyle: "italic",
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderColor: colors.softBlue,
+  },
+  supportNavCard: {
+    backgroundColor: "white",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  supportNavIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: colors.paleBlue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  supportNavTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  supportNavDesc: {
+    fontSize: 12,
+    color: colors.slate,
+  },
+});

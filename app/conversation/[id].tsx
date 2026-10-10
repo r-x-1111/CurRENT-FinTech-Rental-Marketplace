@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Button, Empty, Field, Notice, Screen, s } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
 import { colors } from "../../constants/theme";
@@ -9,6 +9,11 @@ export default function Conversation() {
   const { state, user, act } = useMarketplace();
   const [text, setText] = useState("");
   const [error, setError] = useState("");
+
+  if (!user) {
+    return <Redirect href="/auth" />;
+  }
+
   const b = state.bookings.find(
     (b) => b.id === id && [b.ownerId, b.renterId].includes(user?.id || ""),
   );
@@ -59,13 +64,30 @@ export default function Conversation() {
                 alignSelf: m.authorId === user?.id ? "flex-end" : "flex-start",
                 maxWidth: "85%",
                 backgroundColor:
-                  m.authorId === user?.id ? colors.softBlue : "white",
-                padding: 16,
+                  m.authorId === user?.id ? colors.blue : "white",
+                borderWidth: m.authorId === user?.id ? 0 : 1,
+                borderColor: colors.border,
+                padding: 14,
                 borderRadius: 16,
               }}
             >
-              <Text style={s.body}>{m.text}</Text>
-              <Text style={[s.caption, { fontSize: 10 }]}>
+              <Text
+                style={[
+                  s.body,
+                  m.authorId === user?.id && { color: "white" },
+                ]}
+              >
+                {m.text}
+              </Text>
+              <Text
+                style={[
+                  s.caption,
+                  { fontSize: 11, marginTop: 4 },
+                  m.authorId === user?.id
+                    ? { color: "#DDEAFF" }
+                    : { color: colors.muted },
+                ]}
+              >
                 {state.profiles.find((p) => p.id === m.authorId)?.name} ·{" "}
                 {new Date(m.createdAt).toLocaleTimeString([], {
                   hour: "2-digit",

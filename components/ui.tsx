@@ -15,6 +15,8 @@ import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { colors } from "../constants/theme";
 import { useMarketplace } from "../context/Marketplace";
+export { colors } from "../constants/theme";
+export { MediaPicker } from "./MediaPicker";
 
 export function Screen({
   children,
@@ -152,8 +154,13 @@ export function Badge({
   green?: boolean;
 }) {
   return (
-    <View style={[s.badge, green && { backgroundColor: "#E7F6EC" }]}>
-      <Text style={[s.badgeText, green && { color: "#197640" }]}>
+    <View
+      style={[
+        s.badge,
+        green && { backgroundColor: "#E7F6EC", borderColor: "#A7F3D0" },
+      ]}
+    >
+      <Text style={[s.badgeText, green && { color: colors.green }]}>
         {text.replaceAll("_", " ")}
       </Text>
     </View>
@@ -169,10 +176,17 @@ export function Notice({
   return (
     <View
       accessibilityRole={error ? "alert" : undefined}
-      style={[s.notice, error && { backgroundColor: "#FFF0ED" }]}
+      style={[
+        s.notice,
+        error && { backgroundColor: "#FFF0ED", borderColor: "#FFCCC2" },
+      ]}
     >
       <Text
-        style={[s.caption, { marginTop: 0 }, error && { color: "#AD2D20" }]}
+        style={[
+          s.caption,
+          { marginTop: 0 },
+          error ? { color: colors.danger } : { color: colors.navy },
+        ]}
       >
         {text}
       </Text>
@@ -239,8 +253,8 @@ export function Chips({
           style={[
             s.chip,
             option === selected && {
-              backgroundColor: colors.navy,
-              borderColor: colors.navy,
+              backgroundColor: colors.blue,
+              borderColor: colors.blue,
             },
           ]}
         >
@@ -376,27 +390,27 @@ export const s = StyleSheet.create({
     color: colors.navy,
     letterSpacing: -0.4,
   },
-  caption: { fontSize: 14, lineHeight: 22, color: colors.muted, marginTop: 5 },
-  body: { fontSize: 14, lineHeight: 22, color: colors.text },
+  caption: { fontSize: 14, lineHeight: 22, color: colors.muted, marginTop: 4 },
+  body: { fontSize: 15, lineHeight: 22, color: colors.text },
   bold: { fontWeight: "800", color: colors.navy },
-  link: { fontSize: 13, color: colors.blue, fontWeight: "700" },
+  link: { fontSize: 13, color: colors.linkBlue, fontWeight: "700" },
   button: {
     minHeight: 48,
     backgroundColor: colors.blue,
     borderColor: colors.blue,
     borderWidth: 1,
-    borderRadius: 13,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
-  secondary: { backgroundColor: colors.white, borderColor: colors.border },
+  secondary: { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1 },
   buttonText: { fontSize: 14, color: "white", fontWeight: "700" },
   card: {
     backgroundColor: "white",
     padding: 20,
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     gap: 10,
@@ -410,11 +424,11 @@ export const s = StyleSheet.create({
     marginTop: 24,
     marginBottom: 16,
   },
-  label: { fontSize: 13, fontWeight: "600", color: colors.navy },
+  label: { fontSize: 14, fontWeight: "600", color: colors.navy },
   input: {
     backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#D9DFE8",
+    borderColor: colors.border,
     borderRadius: 12,
     minHeight: 48,
     paddingHorizontal: 14,
@@ -424,19 +438,23 @@ export const s = StyleSheet.create({
   },
   badge: {
     backgroundColor: colors.paleBlue,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 5,
     alignSelf: "flex-start",
   },
   badgeText: {
     color: colors.blue,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     textTransform: "capitalize",
   },
   notice: {
     backgroundColor: colors.paleBlue,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
     borderRadius: 12,
     padding: 15,
     marginBottom: 16,
@@ -453,12 +471,14 @@ export const s = StyleSheet.create({
     gap: 12,
     alignItems: "center",
     backgroundColor: "white",
-    borderRadius: 18,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
     marginVertical: 16,
   },
   chip: {
-    paddingHorizontal: 17,
-    paddingVertical: 11,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 24,
     borderColor: colors.border,
     borderWidth: 1,

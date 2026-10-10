@@ -129,7 +129,7 @@ export const listings: Listing[] = [
     ],
     description:
       "Full-frame 24.2MP mirrorless camera with 4K HDR recording. Includes 28-70mm lens, 2x batteries, high-speed 128GB SD card, dual charger and padded neck strap.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -152,7 +152,7 @@ export const listings: Listing[] = [
     images: ["/products/portable-projector.jpg"],
     description:
       "Compact Full HD 1080p smart projector with built-in Harman/Kardon speaker, HDMI/Bluetooth inputs and tripod. Perfect for movie nights, gaming, and presentations.",
-    collectionMethods: ["Meet Owner", "Delivery Available"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -175,7 +175,7 @@ export const listings: Listing[] = [
     images: ["/products/ps5-console.jpg"],
     description:
       "PlayStation 5 disc edition console with two DualSense wireless controllers, HDMI 2.1 cable, power cord and 3 pre-installed games. Ideal for weekend gatherings.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -198,14 +198,14 @@ export const listings: Listing[] = [
     images: ["/products/monitor-27.jpg"],
     description:
       "27-inch 4K IPS productivity monitor with USB-C 65W power delivery, HDMI and DisplayPort. Ergonomic height-adjustable stand.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
   },
   {
     id: "office-chair",
-    ownerId: "owner-sarah",
+    ownerId: "demo-renter",
     title: "Ergonomic Office Chair",
     category: "Work & Office",
     dailyPrice: 15,
@@ -221,7 +221,7 @@ export const listings: Listing[] = [
     images: ["/products/office-chair.jpg"],
     description:
       "High-grade breathable mesh ergonomic desk chair with 3D armrests, dynamic lumbar support and smooth-glide casters.",
-    collectionMethods: ["Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -244,7 +244,7 @@ export const listings: Listing[] = [
     images: ["/products/pressure-washer.jpg"],
     description:
       "High-pressure electric washer (140 bar) with 8m hose, foam lance attachment, and adjustable fan nozzle. Perfect for patios and car wash.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -267,14 +267,14 @@ export const listings: Listing[] = [
     images: ["/products/gopro-camera.jpg"],
     description:
       "Waterproof 4K action camera with HyperSmooth stabilization, floating hand grip, chest mount, 2 extra batteries and protective casing.",
-    collectionMethods: ["Meet Owner", "Self-Pickup", "Delivery Available"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
   },
   {
     id: "party-speaker",
-    ownerId: "owner-daniel",
+    ownerId: "demo-renter",
     title: "Portable Party Speaker",
     category: "Electronics",
     dailyPrice: 40,
@@ -290,8 +290,9 @@ export const listings: Listing[] = [
     images: ["/products/party-speaker.jpg"],
     description:
       "100W wireless outdoor party speaker with dynamic LED lights, bass boost, IPX4 splashproof rating and up to 12 hours playtime.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
+    featuredUntil: "2026-11-01T00:00:00Z",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
   },
@@ -313,7 +314,7 @@ export const listings: Listing[] = [
     images: ["/products/drone.jpg"],
     description:
       "Foldable 4K HDR camera drone with 3-axis gimbal, 31-min flight time, obstacle sensing, remote controller and 2 intelligent flight batteries.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -336,7 +337,7 @@ export const listings: Listing[] = [
     images: ["/products/luxury-handbag.jpg"],
     description:
       "Authentic quilted caviar leather handbag with gold-tone metal hardware, chain strap and certificate of authenticity card.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -359,7 +360,7 @@ export const listings: Listing[] = [
     images: ["/products/luxury-watch.jpg"],
     description:
       "Swiss-made automatic chronograph with stainless steel oyster bracelet, black ceramic bezel, sapphire crystal and presentation box.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -382,7 +383,7 @@ export const listings: Listing[] = [
     images: ["/products/luxury-necklace.jpg"],
     description:
       "18K gold pendant necklace with brilliant-cut diamond accents, adjustable delicate cable chain and velvet travel pouch.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -405,7 +406,7 @@ export const listings: Listing[] = [
     images: ["/products/standing-air-cooler.jpg"],
     description:
       "Heavy-duty 45L evaporative air cooler with 3 fan speeds, auto oscillation, ice compartment and 4 smooth rolling wheels.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -428,7 +429,7 @@ export const listings: Listing[] = [
     images: ["/products/microwave.jpg"],
     description:
       "23L countertop solo microwave oven with quick defrost function, ceramic enamel interior, and LED touch controls.",
-    collectionMethods: ["Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -451,7 +452,7 @@ export const listings: Listing[] = [
     images: ["/products/tabletop-oven.jpg"],
     description:
       "38L convection toaster oven with rotisserie spit, baking tray, wire rack, crumb tray and 6 heating mode dials.",
-    collectionMethods: ["Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -474,14 +475,14 @@ export const listings: Listing[] = [
     images: ["/products/fishing-rod-set.jpg"],
     description:
       "2-piece carbon fiber spinning rod with smooth reel, braided line, tackle box with hooks and lures, and carry rod bag.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
   },
   {
     id: "camping-tent",
-    ownerId: "owner-sarah",
+    ownerId: "demo-renter",
     title: "Camping Tent",
     category: "Outdoors",
     dailyPrice: 35,
@@ -497,7 +498,7 @@ export const listings: Listing[] = [
     images: ["/products/camping-tent.jpg"],
     description:
       "Spacious 4-person waterproof dome tent with double rainfly, ground sheet, peg set, and 2 folding camp chairs. Quick 10-minute setup.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -520,7 +521,7 @@ export const listings: Listing[] = [
     images: ["/products/power-station.jpg"],
     description:
       "512Wh LiFePO4 portable battery power station with 500W pure sine wave AC outlets, 65W USB-C PD, and car charging cable.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -543,7 +544,7 @@ export const listings: Listing[] = [
     images: ["/products/wedding-arch.jpg"],
     description:
       "Heavy-duty gold hexagonal wedding ceremony arch frame with weighted base plates and drapery clips. Disassembles for easy transport in sedan car.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -566,7 +567,7 @@ export const listings: Listing[] = [
     images: ["/products/led-lighting-kit.jpg"],
     description:
       "Set of 4 RGB wireless uplights with infrared remote, DMX cables, battery-powered and adjustable color temperatures for weddings and gigs.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -589,7 +590,7 @@ export const listings: Listing[] = [
     images: ["/products/photo-booth.jpg"],
     description:
       "Ring light tablet booth stand with adjustable height, wireless dye-sublimation mini printer, fun party prop set and tension fabric backdrop.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,
@@ -615,7 +616,7 @@ export const listings: Listing[] = [
     ],
     description:
       "Lightweight hybrid city commuter bicycle with 8-speed Shimano gears, front basket, rear pannier rack, integrated U-lock and safety helmet.",
-    collectionMethods: ["Meet Owner", "Self-Pickup"],
+    collectionMethods: ["Delivery Only"],
     status: "published",
     availabilityPeriods: defaultAvailability,
     pickupTimeWindows: defaultPickupWindows,

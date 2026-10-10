@@ -1,16 +1,20 @@
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge, Chips, Empty, Screen, s } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
-import { dateAfter, money } from "../../services/booking";
+import { dateAfter, formatMalaysiaDateTime, money } from "../../services/booking";
 import { colors } from "../../constants/theme";
 import type { Booking } from "../../types/marketplace";
 
 export default function RentalsScreen() {
   const { state, user } = useMarketplace();
+
+  if (!user) {
+    return <Redirect href="/auth" />;
+  }
 
   // In Admin Demo, show classroom presentation fixtures or user's requests; in Normal mode, show only user's own requests
   const visiblePlatformRequests = state.platformReviewRequests.filter((r) =>
@@ -103,7 +107,7 @@ export default function RentalsScreen() {
               <Text style={styles.previewItemTitle}>{booking.title}</Text>
               <Text style={styles.previewDue}>
                 {isUpcoming
-                  ? `Scheduled pickup: ${booking.scheduledPickup ? new Date(booking.scheduledPickup).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : booking.start}`
+                  ? `Scheduled rental start: ${formatMalaysiaDateTime(booking.scheduledPickup || booking.start)}`
                   : `Return due: ${returnDueStr}`}
               </Text>
             </View>
@@ -348,6 +352,18 @@ export default function RentalsScreen() {
       title="Your rentals"
       subtitle="From your first request to your next adventure."
     >
+      <View style={styles.headerBanner}>
+        <View style={styles.headerBannerIcon}>
+          <Ionicons name="shield-checkmark" size={20} color={colors.blue} />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.headerBannerTitle}>Rental Protection & Escrow</Text>
+          <Text style={styles.headerBannerSubtitle}>
+            Security deposits held in simulated escrow · Released automatically upon clean two-sided return confirmation
+          </Text>
+        </View>
+      </View>
+
       <Chips
         options={tabs}
         selected={activeTab}
@@ -391,6 +407,37 @@ export default function RentalsScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerBanner: {
+    backgroundColor: colors.paleBlue,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  headerBannerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "white",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+  },
+  headerBannerTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  headerBannerSubtitle: {
+    fontSize: 12,
+    color: colors.slate,
+    lineHeight: 18,
+  },
   summaryCardWrapper: {
     marginBottom: 6,
   },
@@ -399,10 +446,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    borderColor: colors.border,
+    shadowColor: "#0B1F3A",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
     gap: 14,

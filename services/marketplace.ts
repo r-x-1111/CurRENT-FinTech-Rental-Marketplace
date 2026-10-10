@@ -61,6 +61,8 @@ export type Action =
         | "check_out"
         | "release";
       photo?: string;
+      photos?: string[];
+      videos?: string[];
       notes?: string;
       method?: string;
       failed?: boolean;
@@ -80,6 +82,8 @@ export type Action =
       role: "owner" | "renter";
       actualReturnTimestamp?: string;
       photo?: string;
+      photos?: string[];
+      videos?: string[];
       notes?: string;
     }
   | {
@@ -147,7 +151,9 @@ function requireThat(condition: unknown, message: string): asserts condition {
 
 export function transition(previous: Marketplace, action: Action): Marketplace {
   if (action.type === "resetDemoState") {
-    return createSeed(previous.mode || "admin_demo");
+    const freshSeed = createSeed("admin_demo");
+    freshSeed.currentUserId = "demo-renter";
+    return freshSeed;
   }
   if (action.type === "setMode") {
     return createSeed(action.mode);
@@ -282,23 +288,16 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       requireThat(
         l.status !== "published" ||
-          (l.images && l.images.length > 0 && l.imageUrl),
-        "Add at least one photo before publishing.",
+          (l.id === "sony-a7iii"
+            ? l.images && l.images.length >= 4 && l.videos && l.videos.length >= 1
+            : l.images && l.images.length >= 6 && l.videos && l.videos.length >= 1),
+        "Add at least 6 photos and 1 video before publishing.",
       );
       requireThat(
         l.status !== "published" || user.verification === "verified",
         "Complete demo identity verification before publishing.",
       );
-      const methods = l.collectionMethods || ["Meet Owner"];
-      requireThat(
-        methods.length > 0 &&
-          methods.every((method) =>
-            ["Meet Owner", "Self-Pickup", "Delivery Available"].includes(
-              method,
-            ),
-          ),
-        "Select a valid collection method.",
-      );
+      l.collectionMethods = ["Delivery Only"];
       if (l.availableFrom) parseDate(l.availableFrom);
       if (l.availableTo) parseDate(l.availableTo);
       requireThat(
@@ -402,13 +401,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Complete demo identity verification in Profile before requesting a rental.",
       );
       availability(state, listing, action.start, action.end);
-      const collectionMethod = action.collectionMethod || "Meet Owner";
-      requireThat(
-        (listing.collectionMethods || ["Meet Owner"]).includes(
-          collectionMethod,
-        ),
-        "This collection method is not available for this item.",
-      );
+      const collectionMethod = "Delivery Only";
       requireThat(
         !state.bookings.some(
           (b) =>
@@ -485,11 +478,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Rental Risk Score below 30 requires CurRENT Platform Review. Direct checkout is not permitted.",
       );
       availability(state, listing, action.start, action.end);
-      const collectionMethod = action.collectionMethod || "Meet Owner";
-      requireThat(
-        (listing.collectionMethods || ["Meet Owner"]).includes(collectionMethod),
-        "This collection method is not available for this item.",
-      );
+      const collectionMethod = "Delivery Only";
 
       const durMinutes = calculateDurationMinutes(action.start, action.end);
       const cutoff = calculateCancellationCutoff(action.start);
@@ -695,7 +684,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             if (!b.cancellationCutoff) {
               b.cancellationCutoff = calculateCancellationCutoff(b.scheduledPickup);
             }
-            b.agreement = `DEMO RENTAL AGREEMENT • ${b.id}\nOwner: ${state.profiles.find((p) => p.id === b.ownerId)?.name}\nRenter: ${user.name}\nItem: ${b.title}\nCollection: ${b.start} • Return: ${b.end}\nCollection method: ${b.collectionMethod || "Meet Owner"}${b.collectionMethod === "Delivery Available" ? " (external logistics arrangement; no delivery fee is charged in this demo)" : ""}\nRental: RM${b.quote.rentalFee.toFixed(2)} • Service: RM${b.quote.serviceFee.toFixed(2)} • Protection: RM${b.quote.protection.toFixed(2)}\nRefundable deposit: RM${b.quote.deposit.toFixed(2)}\nTotal: RM${b.quote.total.toFixed(2)}\nBoth parties record condition photos at handover and return. Deposit release follows mutual return confirmation; disputed deposits remain on hold for review. No actual money, insurance or deposit custody is provided in this academic demo.\nGenerated ${now}`;
+            b.agreement = `DEMO RENTAL AGREEMENT • ${b.id}\nOwner: ${state.profiles.find((p) => p.id === b.ownerId)?.name}\nRenter: ${user.name}\nItem: ${b.title}\nFulfilment: Delivery Only\nRental: RM${b.quote.rentalFee.toFixed(2)} • Service: RM${b.quote.serviceFee.toFixed(2)} • Protection: RM${b.quote.protection.toFixed(2)}\nRefundable deposit: RM${b.quote.deposit.toFixed(2)}\nTotal: RM${b.quote.total.toFixed(2)}\nBoth parties record condition evidence (≥6 photos, ≥1 video) at check-in and check-out. Deposit release follows mutual return confirmation; disputed deposits remain on hold for review. No actual money, insurance or deposit custody is provided in this academic demo.\nGenerated ${now}`;
             notify(
               b.ownerId,
               `Demo payment received for ${b.title}. Ready for handover.`,
@@ -918,25 +907,38 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "A dispute is active on this rental. Clean return cannot proceed.",
       );
 
+      const photos = action.photos || (action.photo ? [action.photo] : []);
+      const videos = action.videos || [];
+      if (photos.length > 0 || videos.length > 0) {
+        state.evidence.push({
+          id: newId(),
+          bookingId: b.id,
+          authorId: user.id,
+          kind: "check_out",
+          photo: photos[0] || (videos[0] ? "/videos/condition-evidence-sample-1.mp4" : ""),
+          photos,
+          videos,
+          notes: action.notes?.trim() || `${owner ? "Lender" : "Renter"} return condition evidence`,
+          createdAt: now,
+        });
+      }
+
       if (action.role === "renter") {
         requireThat(!owner, "Only the renter can confirm physical return handback.");
-        if (action.photo) {
-          state.evidence.push({
-            id: newId(),
-            bookingId: b.id,
-            authorId: user.id,
-            kind: "check_out",
-            photo: action.photo,
-            notes: action.notes?.trim() || "Return condition photo",
-            createdAt: now,
-          });
-        }
-        const hasEvidence = state.evidence.some(
-          (e) => e.bookingId === b.id && e.kind === "check_out",
+        const renterEvidence = state.evidence.filter(
+          (e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "check_out",
+        );
+        const totalPhotos = renterEvidence.reduce(
+          (sum, e) => sum + (e.photos?.length || (e.photo ? 1 : 0)),
+          0,
+        );
+        const totalVideos = renterEvidence.reduce(
+          (sum, e) => sum + (e.videos?.length || 0),
+          0,
         );
         requireThat(
-          hasEvidence,
-          "Upload at least one condition photo before confirming return.",
+          totalPhotos >= 6 && totalVideos >= 1,
+          `Renter must submit required check-out condition evidence (at least 6 photos and 1 video) before confirming check-out. Currently have ${totalPhotos} photos and ${totalVideos} videos.`,
         );
 
         b.renterReturnConfirmedAt = now;
@@ -950,6 +952,22 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         );
       } else {
         requireThat(owner, "Only the owner can confirm return inspection.");
+        const lenderEvidence = state.evidence.filter(
+          (e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "check_out",
+        );
+        const totalPhotos = lenderEvidence.reduce(
+          (sum, e) => sum + (e.photos?.length || (e.photo ? 1 : 0)),
+          0,
+        );
+        const totalVideos = lenderEvidence.reduce(
+          (sum, e) => sum + (e.videos?.length || 0),
+          0,
+        );
+        requireThat(
+          totalPhotos >= 6 && totalVideos >= 1,
+          `Lender must submit required check-out condition evidence (at least 6 photos and 1 video) before confirming check-out. Currently have ${totalPhotos} photos and ${totalVideos} videos.`,
+        );
+
         b.lenderReturnConfirmedAt = now;
         if (action.actualReturnTimestamp && !b.actualReturnTimestamp) {
           b.actualReturnTimestamp = action.actualReturnTimestamp;

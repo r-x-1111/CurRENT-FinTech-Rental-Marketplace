@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { Image, Share, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
   Button,
   Card,
   Chips,
+  colors,
   Empty,
   Field,
+  MediaPicker,
   Notice,
-  PhotoPicker,
   Row,
   Screen,
   Section,
@@ -20,7 +22,12 @@ import {
   calculateBorrowerServiceFee,
   calculateOwnerPayout,
 } from "../../services/deposit";
-import { isCancellationEligible, money, riskFor } from "../../services/booking";
+import {
+  formatMalaysiaDateTime,
+  isCancellationEligible,
+  money,
+  riskFor,
+} from "../../services/booking";
 import type { Action } from "../../services/marketplace";
 
 export default function RentalDetail() {
@@ -28,6 +35,7 @@ export default function RentalDetail() {
   const { state, user, act } = useMarketplace();
   const [error, setError] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [videos, setVideos] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [method, setMethod] = useState("Demo card");
   const [rating, setRating] = useState("5");
@@ -40,14 +48,18 @@ export default function RentalDetail() {
     (b) => b.id === id && [b.renterId, b.ownerId].includes(user?.id || ""),
   );
 
-  if (!b || !user)
+  if (!user) {
+    return <Redirect href="/auth" />;
+  }
+
+  if (!b)
     return (
       <Screen back>
         <Empty
           title="Rental not found"
-          text="Sign in as a participant to view this rental."
-          action="Sign in"
-          onPress={() => router.push("/auth")}
+          text="This rental record could not be loaded or you are not a participant."
+          action="Back to Rentals"
+          onPress={() => router.push("/(tabs)/rentals")}
         />
       </Screen>
     );
@@ -97,7 +109,7 @@ export default function RentalDetail() {
   function operation(
     operation: Extract<Action, { type: "booking" }>["operation"],
   ) {
-    run({ type: "booking", id, operation, photo: photos[0], notes, method });
+    run({ type: "booking", id, operation, photo: photos[0], photos, videos, notes, method });
   }
 
   const cancelEligible = b.scheduledPickup
@@ -261,12 +273,12 @@ export default function RentalDetail() {
           <View style={{ marginVertical: 12, gap: 8 }}>
             <Row
               label="Scheduled Rental Start"
-              value={b.scheduledPickup || b.start}
+              value={formatMalaysiaDateTime(b.scheduledPickup || b.start) || (b.scheduledPickup || b.start)}
               strong
             />
             <Row
               label="Scheduled Return"
-              value={b.scheduledReturn || b.end}
+              value={formatMalaysiaDateTime(b.scheduledReturn || b.end) || (b.scheduledReturn || b.end)}
             />
             <Row
               label="Delivery Receipt"
@@ -334,7 +346,7 @@ export default function RentalDetail() {
           {/* Cancellation Window */}
           <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: "#EEE", paddingTop: 12 }}>
             <Text style={s.caption}>
-              Cancellation Cutoff: Free cancellation until at least 24 hours before scheduled start ({b.scheduledPickup || b.start}).
+              Cancellation Cutoff: Free cancellation until at least 24 hours before scheduled start ({formatMalaysiaDateTime(b.scheduledPickup || b.start) || (b.scheduledPickup || b.start)}).
             </Text>
             {cancelEligible ? (
               <Button
@@ -465,8 +477,17 @@ export default function RentalDetail() {
 
           {!owner && !b.renterReturnConfirmedAt && (
             <>
-              <Text style={[s.bold, { marginTop: 8 }]}>Upload Return Condition Photo (Required):</Text>
-              <PhotoPicker photos={photos} onChange={setPhotos} single />
+              <MediaPicker
+                title="Renter Return Condition Media"
+                subtitle="Upload return condition media. You must submit at least 6 photos and 1 video before confirming check-out."
+                photos={photos}
+                onPhotosChange={setPhotos}
+                videos={videos}
+                onVideosChange={setVideos}
+                minPhotos={6}
+                minVideos={1}
+                samplePrefix="renter-return"
+              />
               <Field
                 label="Return condition notes"
                 value={notes}
@@ -475,13 +496,14 @@ export default function RentalDetail() {
                 placeholder="Confirm all accessories are included and condition is clean."
               />
               <Button
-                disabled={photos.length === 0}
+                disabled={photos.length < 6 || videos.length < 1}
                 onPress={() =>
                   run({
                     type: "returnConfirm",
                     bookingId: id,
                     role: "renter",
-                    photo: photos[0],
+                    photos,
+                    videos,
                     notes,
                   })
                 }
@@ -494,17 +516,41 @@ export default function RentalDetail() {
           {owner && !b.lenderReturnConfirmedAt && (
             <>
               {b.renterReturnConfirmedAt ? (
-                <Button
-                  onPress={() =>
-                    run({
-                      type: "returnConfirm",
-                      bookingId: id,
-                      role: "owner",
-                    })
-                  }
-                >
-                  Confirm Check-out — No Issues (Release Deposit)
-                </Button>
+                <>
+                  <MediaPicker
+                    title="Lender Return Inspection Media"
+                    subtitle="Upload return inspection media. You must submit at least 6 photos and 1 video before confirming return inspection and releasing the deposit."
+                    photos={photos}
+                    onPhotosChange={setPhotos}
+                    videos={videos}
+                    onVideosChange={setVideos}
+                    minPhotos={6}
+                    minVideos={1}
+                    samplePrefix="lender-return"
+                  />
+                  <Field
+                    label="Return inspection notes"
+                    value={notes}
+                    onChangeText={setNotes}
+                    multiline
+                    placeholder="Confirm returned item inspected with no damage or missing parts."
+                  />
+                  <Button
+                    disabled={photos.length < 6 || videos.length < 1}
+                    onPress={() =>
+                      run({
+                        type: "returnConfirm",
+                        bookingId: id,
+                        role: "owner",
+                        photos,
+                        videos,
+                        notes,
+                      })
+                    }
+                  >
+                    Confirm Check-out — No Issues (Release Deposit)
+                  </Button>
+                </>
               ) : (
                 <Notice text="Waiting for renter to upload return condition evidence and submit check-out confirmation." />
               )}
@@ -522,6 +568,7 @@ export default function RentalDetail() {
             onPress={() => {
               setDispute(!dispute);
               setPhotos([]);
+              setVideos([]);
               setNotes("");
             }}
           >
@@ -553,7 +600,17 @@ export default function RentalDetail() {
                 multiline
                 placeholder="Provide specific details of damage or missing items."
               />
-              <PhotoPicker photos={photos} onChange={setPhotos} single />
+              <MediaPicker
+                title="Dispute Evidence Media"
+                subtitle="Attach photos and/or videos documenting damage, defect or missing accessories."
+                photos={photos}
+                onPhotosChange={setPhotos}
+                videos={videos}
+                onVideosChange={setVideos}
+                minPhotos={1}
+                minVideos={0}
+                samplePrefix="dispute"
+              />
               <Button
                 danger
                 disabled={notes.trim().length < 10 || photos.length === 0}
@@ -699,12 +756,30 @@ export default function RentalDetail() {
         .filter((e) => e.bookingId === id)
         .map((e) => (
           <Card key={e.id}>
-            <Badge text={e.kind.replace("_", " ")} />
-            <Image
-              source={{ uri: e.photo }}
-              style={{ width: "100%", height: 200, borderRadius: 12 }}
-            />
-            <Text style={s.body}>{e.notes || "Condition photo recorded."}</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Badge text={e.kind.replace("_", " ")} green={e.kind === "check_out"} />
+              <Text style={s.caption}>
+                {(e.photos?.length || (e.photo ? 1 : 0))} photos · {(e.videos?.length || 0)} videos
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginVertical: 8 }}>
+              {(e.photos && e.photos.length > 0 ? e.photos : (e.photo ? [e.photo] : [])).map((uri, pIdx) => (
+                <Image
+                  key={pIdx}
+                  source={{ uri }}
+                  style={{ width: 90, height: 80, borderRadius: 8, backgroundColor: "#F1F5F9" }}
+                />
+              ))}
+            </View>
+            {e.videos && e.videos.length > 0 && (
+              <View style={{ backgroundColor: colors.paleBlue, borderWidth: 1, borderColor: colors.softBlue, padding: 8, borderRadius: 8, marginBottom: 8, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="videocam" size={16} color={colors.blue} />
+                <Text style={[s.caption, { fontWeight: "700", color: colors.navy }]}>
+                  {e.videos.length} video recording(s) recorded
+                </Text>
+              </View>
+            )}
+            <Text style={s.body}>{e.notes || "Condition evidence recorded."}</Text>
             <Text style={s.caption}>
               {state.profiles.find((p) => p.id === e.authorId)?.name} ·{" "}
               {new Date(e.createdAt).toLocaleString()}

@@ -56,6 +56,7 @@ export interface Listing {
   description: string;
   status: ListingStatus;
   images?: string[];
+  videos?: string[];
   availableFrom?: string;
   availableTo?: string;
   availabilityPeriods?: AvailabilityPeriod[];

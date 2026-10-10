@@ -132,6 +132,8 @@ export interface Evidence {
   authorId: string;
   kind: "check_in" | "check_out" | "dispute";
   photo: string;
+  photos?: string[];
+  videos?: string[];
   notes: string;
   createdAt: string;
 }
