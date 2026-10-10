@@ -95,19 +95,12 @@ export function ListingCard({
           <Text style={styles.locationText}>{listing.location}</Text>
         </View>
 
-        {/* Price and Action Button Row */}
+        {/* Price Row */}
         <View style={styles.bottomRow}>
           <Text style={styles.priceText}>
             RM{listing.dailyPrice}
             <Text style={styles.perDayText}>/day</Text>
           </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onPress}
-            style={styles.detailsBtn}
-          >
-            <Text style={styles.detailsBtnText}>View Details</Text>
-          </Pressable>
         </View>
       </View>
     </View>

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Image, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
   Button,
@@ -28,7 +29,7 @@ export default function OwnerDashboard() {
 
   if (!user)
     return (
-      <Screen back title="Lender Workspace">
+      <Screen back title="Listing">
         <Empty
           title="Put your spare gear to work"
           text="Sign in to list your items, track earnings, and manage rentals."
@@ -52,25 +53,33 @@ export default function OwnerDashboard() {
   return (
     <Screen
       back
-      title="Lender Dashboard"
+      title="Listing"
       subtitle={`Owner Mode · Welcome back, ${user.name}`}
     >
       <View style={s.split}>
         {[
-          ["Net Demo Earnings (88%)", money(earnings)],
+          ["Net Demo Earnings (88%)", money(earnings), false],
           [
             "Live Listings",
             `${listings.filter((l) => l.status === "published").length}`,
+            false,
           ],
           [
             "Active / Upcoming Rentals",
             `${activeRentalsCount}`,
+            true,
           ],
-        ].map(([label, value]) => (
-          <View key={label} style={[s.card, { flex: 1, minWidth: 140 }]}>
-            <Text style={s.caption}>{label}</Text>
-            <Text style={s.title}>{value}</Text>
-          </View>
+        ].map(([label, value, clickable]) => (
+          <Pressable
+            key={label as string}
+            disabled={!clickable}
+            onPress={clickable ? () => router.push("/(tabs)/rentals") : undefined}
+            style={[s.card, { flex: 1, minWidth: 140 }]}
+          >
+            <Text style={s.caption}>{label as string}</Text>
+            <Text style={[s.title, clickable ? { color: colors.blue } : {}]}>{value as string}</Text>
+            {clickable ? <Text style={[s.caption, { color: colors.blue, fontSize: 10 }]}>Tap to view →</Text> : null}
+          </Pressable>
         ))}
       </View>
 
@@ -80,13 +89,10 @@ export default function OwnerDashboard() {
       <Button secondary onPress={() => router.push("/(tabs)/profile")}>
         ← Return to Renter Dashboard
       </Button>
-      <Button secondary onPress={() => router.push("/(tabs)/messages")}>
-        Rental Messages
-      </Button>
 
-      <Section title="Lender Workspace" />
+      <Section title="Listing" />
       <Chips
-        options={["Listings", "Rentals", "Payouts & Commission", "Reviews"]}
+        options={["Listings", "Rentals", "Payouts & Commission"]}
         selected={tab}
         onSelect={setTab}
       />
@@ -113,116 +119,154 @@ export default function OwnerDashboard() {
 
             return (
               <Card key={l.id}>
+                {/* Header: Thumbnail, Title, Price, Status */}
                 <View style={{ flexDirection: "row", gap: 14 }}>
                   <Image
                     source={{ uri: l.imageUrl }}
                     style={{ width: 80, height: 80, borderRadius: 12 }}
                   />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.h2}>{l.title}</Text>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={s.h2} numberOfLines={1}>{l.title}</Text>
                     <Text style={s.caption}>{money(l.dailyPrice)} / day</Text>
                     <View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
                       <Badge text={l.status} />
                       {isBoosted && (
-                        <Badge text="★ Featured (Demo)" green />
+                        <Badge text="★ Featured" green />
                       )}
                     </View>
                   </View>
                 </View>
 
-                {/* 7-Day Featured Boost section */}
-                {isBoosted ? (
-                  <View
-                    style={{
-                      backgroundColor: colors.paleBlue,
-                      padding: 10,
-                      borderRadius: 8,
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginVertical: 4,
-                    }}
-                  >
-                    <Text style={[s.bold, { fontSize: 12, color: colors.blue }]}>
-                      ★ Featured Boost Active
-                    </Text>
-                    <Text style={[s.caption, { color: colors.navy }]}>
-                      Expires: {new Date(l.featuredUntil!).toLocaleDateString()}
+                {/* Listing Stats Row: Views, Saves, Completed */}
+                <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                    <Ionicons name="eye-outline" size={13} color={colors.muted} />
+                    <Text style={styles.statText}>Views: —</Text>
+                  </View>
+                  <View style={styles.statItem}>
+                    <Ionicons name="heart-outline" size={13} color={colors.muted} />
+                    <Text style={styles.statText}>
+                      Saves: {state.profiles.filter((p) => p.favourites?.includes(l.id)).length}
                     </Text>
                   </View>
-                ) : (
-                  <Button
-                    secondary
+                  <View style={styles.statItem}>
+                    <Ionicons name="bag-check-outline" size={13} color={colors.muted} />
+                    <Text style={styles.statText}>
+                      Completed: {state.bookings.filter((b) => b.listingId === l.id && b.status === "completed").length}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Option-2 Compact Action Bar: Boost, Edit, Pause/Resume, Delete */}
+                <View style={styles.actionBar}>
+                  {/* Action 1: Boost (RM10 · 7 days) */}
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={Boolean(isBoosted)}
                     onPress={() => {
                       try {
                         act({ type: "boostListing", listingId: l.id });
                         setError("");
-                        setSuccess(`Boost activated! "${l.title}" is now Featured for 7 days.`);
+                        setSuccess(`Boost activated! "${l.title}" is featured for 7 days.`);
                       } catch (e) {
                         setError((e as Error).message);
                       }
                     }}
+                    style={[styles.actionBtn, isBoosted && styles.actionBtnActive]}
                   >
-                    ★ Boost Listing (RM10 · 7 Days Featured)
-                  </Button>
-                )}
-
-                <Button
-                  secondary
-                  onPress={() =>
-                    router.push({ pathname: "/owner/edit", params: { id: l.id } })
-                  }
-                >
-                  Edit Listing & Photos
-                </Button>
-
-                <Button
-                  secondary
-                  onPress={() => {
-                    try {
-                      act({
-                        type: "saveListing",
-                        listing: {
-                          ...l,
-                          images: l.images || [l.imageUrl],
-                          status:
-                            l.status === "published" ? "paused" : "published",
-                        },
-                      });
-                      setError("");
-                    } catch (e) {
-                      setError((e as Error).message);
-                    }
-                  }}
-                >
-                  {l.status === "published" ? "Pause Listing" : "Publish Listing"}
-                </Button>
-
-                {deleting === l.id ? (
-                  <>
-                    <Notice text="Delete this listing? Existing rental records will remain in your history." />
-                    <Button
-                      danger
-                      onPress={() => {
-                        try {
-                          act({ type: "deleteListing", id: l.id });
-                          setDeleting("");
-                          setError("");
-                        } catch (e) {
-                          setError((e as Error).message);
-                        }
-                      }}
+                    <Ionicons
+                      name="rocket-outline"
+                      size={14}
+                      color={isBoosted ? colors.blue : colors.navy}
+                    />
+                    <Text
+                      style={[styles.actionBtnText, isBoosted && { color: colors.blue, fontWeight: "700" }]}
+                      numberOfLines={1}
                     >
-                      Confirm Deletion
-                    </Button>
-                    <Button secondary onPress={() => setDeleting("")}>
-                      Keep Listing
-                    </Button>
-                  </>
-                ) : (
-                  <Button danger onPress={() => setDeleting(l.id)}>
-                    Delete Listing
-                  </Button>
+                      {isBoosted ? "Boosted" : "Boost (RM10)"}
+                    </Text>
+                  </Pressable>
+
+                  {/* Action 2: Edit */}
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() =>
+                      router.push({ pathname: "/owner/edit", params: { id: l.id } })
+                    }
+                    style={styles.actionBtn}
+                  >
+                    <Ionicons name="create-outline" size={14} color={colors.navy} />
+                    <Text style={styles.actionBtnText}>Edit</Text>
+                  </Pressable>
+
+                  {/* Action 3: Pause / Resume */}
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      try {
+                        act({
+                          type: "saveListing",
+                          listing: {
+                            ...l,
+                            images: l.images || [l.imageUrl],
+                            status:
+                              l.status === "published" ? "paused" : "published",
+                          },
+                        });
+                        setError("");
+                      } catch (e) {
+                        setError((e as Error).message);
+                      }
+                    }}
+                    style={styles.actionBtn}
+                  >
+                    <Ionicons
+                      name={l.status === "published" ? "pause-circle-outline" : "play-circle-outline"}
+                      size={14}
+                      color={colors.navy}
+                    />
+                    <Text style={styles.actionBtnText}>
+                      {l.status === "published" ? "Pause" : "Resume"}
+                    </Text>
+                  </Pressable>
+
+                  {/* Action 4: Delete */}
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setDeleting(l.id)}
+                    style={[styles.actionBtn, styles.deleteActionBtn]}
+                  >
+                    <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                    <Text style={[styles.actionBtnText, { color: "#DC2626" }]}>
+                      Delete
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* Confirm Delete prompt */}
+                {deleting === l.id && (
+                  <View style={styles.deleteConfirmBox}>
+                    <Notice text="Delete this listing? Existing rental records will remain in your history." />
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                      <Button
+                        danger
+                        onPress={() => {
+                          try {
+                            act({ type: "deleteListing", id: l.id });
+                            setDeleting("");
+                            setError("");
+                          } catch (e) {
+                            setError((e as Error).message);
+                          }
+                        }}
+                      >
+                        Confirm Delete
+                      </Button>
+                      <Button secondary onPress={() => setDeleting("")}>
+                        Cancel
+                      </Button>
+                    </View>
+                  </View>
                 )}
               </Card>
             );
@@ -266,31 +310,69 @@ export default function OwnerDashboard() {
           )}
         </>
       )}
-
-      {tab === "Reviews" &&
-        (state.reviews.filter((review) => review.recipientId === user.id)
-          .length ? (
-          state.reviews
-            .filter((review) => review.recipientId === user.id)
-            .map((review) => (
-              <Card key={review.id}>
-                <Text style={s.bold}>
-                  {"★".repeat(review.rating)} ·{" "}
-                  {
-                    state.profiles.find(
-                      (profile) => profile.id === review.authorId,
-                    )?.name
-                  }
-                </Text>
-                <Text style={s.body}>{review.text || "Review submitted."}</Text>
-              </Card>
-            ))
-        ) : (
-          <Empty
-            title="No owner reviews yet"
-            text="Reviews from completed rentals will appear here."
-          />
-        ))}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  statsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: 8,
+  },
+  statItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  statText: {
+    fontSize: 12,
+    color: colors.muted,
+    fontWeight: "500",
+  },
+  actionBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+    flexWrap: "wrap",
+  },
+  actionBtn: {
+    flex: 1,
+    minWidth: 80,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  actionBtnActive: {
+    backgroundColor: colors.paleBlue,
+    borderColor: colors.blue,
+  },
+  actionBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.navy,
+  },
+  deleteActionBtn: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#FECACA",
+  },
+  deleteConfirmBox: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 8,
+  },
+});
+

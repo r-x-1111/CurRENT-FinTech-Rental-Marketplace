@@ -38,26 +38,26 @@ export function Footer() {
             </Text>
           </View>
 
-          {/* Links column: Marketplace */}
+          {/* Links column: Trust and Support */}
           <View style={styles.linkCol}>
-            <Text style={styles.colTitle}>Marketplace</Text>
+            <Text style={styles.colTitle}>Trust & Support</Text>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/(tabs)/explore")}
+              onPress={() => router.push("/how-it-works")}
             >
-              <Text style={styles.linkText}>Browse rentals</Text>
+              <Text style={styles.linkText}>How CurRENT Works</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/owner")}
+              onPress={() => router.push("/trust")}
             >
-              <Text style={styles.linkText}>List an item</Text>
+              <Text style={styles.linkText}>Trust</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/help")}
+              onPress={() => router.push("/faq")}
             >
-              <Text style={styles.linkText}>Safety & Trust</Text>
+              <Text style={styles.linkText}>FAQ</Text>
             </Pressable>
           </View>
 
@@ -66,15 +66,15 @@ export function Footer() {
             <Text style={styles.colTitle}>Account</Text>
             <Pressable
               accessibilityRole="button"
-              onPress={() => router.push("/(tabs)/messages")}
-            >
-              <Text style={styles.linkText}>Messages</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
               onPress={() => router.push("/(tabs)/rentals")}
             >
               <Text style={styles.linkText}>Your rentals</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/owner")}
+            >
+              <Text style={styles.linkText}>Lender Listing</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"

@@ -22,76 +22,76 @@ export const sampleReviews: SampleReview[] = [
     authorName: "Alex Tan (Fictional Demo Renter)",
     location: "Petaling Jaya",
     rating: 5,
-    text: "The camera matched the listing and pickup was smooth. Everything was clear from booking to return.",
+    text: "The camera matched the listing and delivery was smooth. Everything was clear from booking to return.",
   },
 ];
 
-// Section 14: Canonical 13 FAQs on Help & Trust page
+// Section 14: Canonical 13 FAQs on FAQ page
 export const sampleFaqs: FaqItem[] = [
   {
     question: "How does CurRENT verify users?",
     answer:
-      "CurRENT demonstrates simulated eKYC verification before a renter can book; no real identity documents or external eKYC checks are performed. A newly demo-verified renter starts with a 75/100 Rental Risk Score (Medium Risk). Shared-app login is real authentication, but verification badges are explicitly demo-only.",
+      "Sign Up demonstrates choosing MyKad or Passport, previewing sample identity-document photos locally, and a simulated facial-scan animation; these do not check actual documents, capture real faces or use a live eKYC service. Demo-only verified status is server controlled; initial verified renter score is 75 Medium. Genuine account sign-in is separate from this fictional eKYC process.",
   },
   {
     question: "How is the security deposit handled?",
     answer:
-      "The app calculates and displays a simulated refundable deposit at checkout; no real money is collected or held in escrow. It remains marked Held (Demo) during the rental. After physical return and both renter and lender confirm “No Issues”, the full amount is marked Released (Demo). If either party raises a dispute first, release is paused pending review; the demo never promises actual transfers.",
+      "Calculated, held and refunded as Demo only; two-party documented Check-out No Issues releases the full amount once; disputes hold it; not actual escrow.",
   },
   {
     question: "How is the security deposit calculated?",
     answer:
-      "Based on the item's internal illustrative replacement value, not its daily rental price, and the renter's score: Low 80–100: 5%, max RM500; Medium 40–79: 10%, max RM1,000; High 30–39: 15%, max RM1,500. Very High 0–29 must request CurRENT platform review and cannot check out in this demo; such requests remain Pending. A first-time verified renter starts at 75/Medium, therefore normally owes a 10% deposit subject to the cap. A consecutive booking by the same renter for the same item keeps the existing deposit; it does not charge another.",
+      "From internal illustrative replacement value, not rental/day price: Low 80–100 5% cap RM500, Medium 40–79 10% cap RM1,000, High 30–39 15% cap RM1,500; 0–29 restricted request has no quote/deposit; a contiguous extension does not create a second deposit.",
   },
   {
     question: "Can I rent out my own items?",
     answer:
-      "Yes. A demo-verified lender can publish and edit their own listings, prices, future availability, pickup times and location. CurRENT confirms eligible bookings automatically after simulated checkout; lenders cannot accept/reject bookings, overturn confirmed reservations, review platform eligibility, assign risk scores or decide claims. They still coordinate real handover/return and can raise a dispute. A user cannot rent their own listing.",
+      "Yes, after demo verification and submitting required six photos, one video, private dispatch address, schedule with ≥2 windows; listings use Delivery Only. Lenders control unreserved listing availability, not renter booking approval, score or platform claims; owner cannot rent their own listing.",
   },
   {
-    question: "How much does CurRENT charge borrowers and lenders?",
+    question: "How much does CurRENT charge renters and lenders?",
     answer:
-      "Renters pay the quoted rental fee plus a service fee of 5% of rental fee (minimum RM5), plus a separately shown refundable demo deposit. The lender pays a 12% commission deducted from rental revenue, receiving 88% of the rental fee as an illustrative payout. Optional lender Listing Boost costs RM10 for seven days of demo featured placement. No other real fees or payments are processed.",
+      "Rental fee + 5% renter service fee (minimum RM5) + refundable demo deposit. Lender commission 12% deducted from rent, illustrative payout 88%. Optional RM10/7-day demo Listing Boost is lender-side; no real payment.",
   },
   {
     question: "Is Buy Now Pay Later (BNPL) available?",
     answer:
-      "BNPL is a future concept only, not a working payment or credit facility in this classroom demo. It must not issue credit, ask for financial credentials or imply a live BNPL provider.",
+      "BNPL is a future concept only. In this demo the only payment-method button is FPX, with a separate demo disclosure, which does not connect to real online banking; no real credit offered.",
   },
   {
-    question: "How do I book a rental, and does the owner have to approve it?",
+    question: "How do I book; does the owner approve?",
     answer:
-      "Pick an available start/end date and time using the two-click calendar; the rate uses every started 24 hours. Click Rent to review the payment-information page, then Simulate Payment & Confirm Booking to reserve immediately if eligible and still available. No owner approval is required, including for High Risk 30–39 renters otherwise eligible. Only Very High Risk 0–29 may submit an item/date CurRENT Platform Review request that stays Pending (Demo) without checkout; it appears only in their Platform Review Requests history and is never sent to an owner for approval. A confirmed booking becomes Active only after the lender and renter both confirm actual handover.",
+      "On Home choose listing; product calendar date range, clock time, delivery address → Rent → select FPX (only payment method) → Pay (simulated, no money charged) → immediately Confirmed if the slot remains available, no lender approval; automatic Active at chosen timestamp. For 0–29: Submit Request to CurRENT → read-only Request to Rent pending status, no payment/held interval.",
   },
   {
-    question: "How does the Rental Risk Score work?",
+    question: "How does Rental Risk Score work?",
     answer:
-      "A demo-verified renter starts at 75/100 (Medium Risk). 80–100 Low, 40–79 Medium, 30–39 High, 0–29 Very High; unverified = N/A. An on-time issue-free rental earns +2; lateness beyond the 2-hour grace period earns −1 per additional hour or part, maximum −5; confirmed minor damage −10, serious damage/accidental loss −30, and confirmed intentional theft/fraud can lead to a permanent ban. Only one final score adjustment applies per rental/continuous rental chain, after confirmation or dispute resolution. This is a demo rental-reliability score, not a credit score or real fraud-detection service.",
+      "Initially 75 Medium; Low 80–100, Medium 40–79, High 30–39, Very High 0–29; +2 clean, >2h late −min(5,ceil(hoursLate−2)), minor damage −10, serious damage/loss −30, confirmed intentional fraud ban; one final outcome per chain and no invented 4h-late penalty based on button click alone. Only the renter sees their private Risk Score History; Completed Rentals counts distinct finalised rental chains and +N points denotes effective clean-completion awards, synchronised with that same record history.",
   },
   {
-    question: "What happens if an item is damaged or not returned?",
+    question: "What if something is damaged or missing?",
     answer:
-      "The parties upload photos/videos and choose Raise Dispute / Report a Problem, not the No-Issues completion action. This remains a dispute attached to the rental, not an entry in Platform Review Requests (which is reserved for Very High Risk 0–29 renter eligibility). The simulated deposit remains held during review; only confirmed liability can be applied after an outcome. New disputes stay Under Review (Demo), while clearly labelled predefined fictional examples may demonstrate approved/rejected outcomes and appeals. Loss/non-return must be investigated rather than automatically labelled theft. Any possible insurance coverage is illustrative and conditional, not guaranteed or live.",
+      "Either party can report a dispute immediately, even if photo/video bundle incomplete; demo deposit held, factual evidence saved and scripted fictional platform claim/appeal path separate from the 0–29 Platform Review Requests tab. Coverage conditional and not live.",
   },
   {
-    question: "When and how is the item returned?",
+    question: "How do delivery receipt, item condition and return work?",
     answer:
-      "The renter uploads clear condition photos/videos, physically hands back the item, and both parties independently press their No-Issues return-confirmation buttons only if they agree there is no item or deposit dispute. Both confirmations complete a clean return and release the simulated deposit; either party can instead raise a dispute to stop ordinary settlement. A later click must not falsely count as a late physical return.",
+      "Delivery Only. Renter's Confirm Received means item was delivered successfully but does not activate rental; the clock is scheduled. For each actor/stage Check-in/Check-out, submit ≥6 photos and ≥1 video for completed evidence. At final delivery-based return, both parties independently Confirm Check-out — No Issues after their own media; any dispute holds deposit. Check-out tap time is not automatic proof of late return.",
   },
   {
     question: "Can I cancel a confirmed booking?",
     answer:
-      "Cancellation is available only at least 24 hours before the originally scheduled pickup time. An eligible cancellation generates a full simulated refund of the rental fee and renter service fee, plus full simulated deposit release, with no cancellation charge; dates become available again. After the cutoff, the normal self-service Cancel option is unavailable. Actual refunds are not processed.",
+      "At least 24h before original scheduled start, inclusive; full simulated rent/service refund and deposit release, RM0 fee; after cutoff no regular self-service cancel. Pending platform requests aren't paid booked rentals.",
   },
   {
-    question: "Can an item be delivered?",
+    question: "How does delivery work, and who sees addresses?",
     answer:
-      "Collection methods depend on what the lender offers. The demo supports arranging available collection/pickup options and discussing details in messages; no real delivery partner or automatic delivery payment is integrated. Do not promise logistics coverage or introduce an unsupported delivery fee.",
+      "Delivery Only, no real tracking or extra fee. Renter provides private destination address visible only to the renter and relevant confirmed-booking lender; lender's own complete dispatch address stays private, while a general service area shows publicly. Lender delivers under this classroom concept, not a guaranteed real courier service.",
   },
   {
     question: "Can I extend my rental?",
     answer:
-      "A renter can book new, immediately consecutive available time for the same item, subject to the app's availability checks and another simulated rental/service payment; the owner does not approve the new eligible booking. The original simulated deposit remains held, no second deposit is charged, and no physical return or repeat handover is needed at the join. If the next period is booked by somebody else, the extension is unavailable.",
+      "Immediately contiguous available period for same item/renter, simulate extra rent/service only, RM0 second deposit, no second delivery or lender approval; blocked by later reservations, one final chain-level risk outcome.",
   },
 ];
 

@@ -296,7 +296,16 @@ export default function RentalsScreen() {
         </View>
 
         {visiblePlatformRequests.map((req) => (
-          <View key={req.id} style={styles.platformCard}>
+          <Pressable
+            key={req.id}
+            style={styles.platformCard}
+            onPress={() =>
+              router.push({
+                pathname: "/rental-request",
+                params: { id: req.id },
+              })
+            }
+          >
             <Image source={{ uri: req.image }} style={styles.platformThumb} />
             <View style={{ flex: 1, gap: 4 }}>
               <View
@@ -313,7 +322,7 @@ export default function RentalsScreen() {
                 Ref: {req.id}
               </Text>
               <Text style={s.caption}>
-                Pickup: {req.start}{req.pickupTime ? `, ${req.pickupTime}` : ""}
+                Start: {req.start}{req.pickupTime ? `, ${req.pickupTime}` : ""}
               </Text>
               <Text style={s.caption}>
                 Return: {req.end}{req.returnTime ? `, ${req.returnTime}` : ""}
@@ -321,16 +330,14 @@ export default function RentalsScreen() {
               {req.lenderName && (
                 <Text style={s.caption}>Lender: {req.lenderName}</Text>
               )}
-              {req.collectionMethod && (
-                <Text style={s.caption}>
-                  Collection: {req.collectionMethod} {req.location ? `· ${req.location}` : ""}
-                </Text>
-              )}
+              <Text style={s.caption}>
+                Fulfilment: Delivery Only {req.location ? `· 📍 ${req.location}` : ""}
+              </Text>
               <Text style={[s.caption, { color: colors.muted, marginTop: 2 }]}>
-                Submitted {new Date(req.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · No deposit or payment charged
+                Submitted {new Date(req.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · No deposit or payment charged · Tap to view details →
               </Text>
             </View>
-          </View>
+          </Pressable>
         ))}
       </View>
     );

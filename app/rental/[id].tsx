@@ -62,10 +62,9 @@ export default function RentalDetail() {
   const listing = state.listings.find((l) => l.id === b.listingId);
 
   const steps = [
-    "Request",
-    "Approval",
-    "Payment",
-    "Handover",
+    "Confirmed",
+    "Delivery",
+    "Active",
     "Return",
     "Complete",
   ];
@@ -73,12 +72,12 @@ export default function RentalDetail() {
     (
       {
         pending: 0,
-        approved: 1,
-        upcoming: 2,
-        active: 3,
-        return_pending: 4,
-        completed: 5,
-        disputed: 4,
+        approved: 0,
+        upcoming: 0,
+        active: 2,
+        return_pending: 3,
+        completed: 4,
+        disputed: 3,
         cancelled: -1,
       } as Record<string, number>
     )[b.status] ?? -1;
@@ -137,7 +136,7 @@ export default function RentalDetail() {
           {other?.verification.replace("_", " ")}
         </Text>
         <Text style={s.caption}>
-          Collection: {b.collectionMethod || "Meet Owner"}
+          Fulfilment: Delivery Only
         </Text>
         <Button secondary onPress={() => router.push(`/conversation/${b.id}`)}>
           Message {other?.name.split(" ")[0] || "participant"}
@@ -204,21 +203,14 @@ export default function RentalDetail() {
       {b.status === "approved" && !owner && (
         <Card>
           <Text style={s.h2}>Your item is reserved</Text>
-          <Notice text="Simulated Checkout (Demo). No real funds or usable cards required. Booking will be confirmed, but rental clock does NOT start until physical handover." />
+          <Notice text="Simulated FPX Checkout (Demo). No real funds or banking credentials required. Booking will be confirmed automatically." />
           <Chips
             options={[
-              "Demo card",
               "Demo FPX",
-              ...(b.quote.rentalFee >= 200 ? ["Demo BNPL"] : []),
             ]}
-            selected={method}
-            onSelect={setMethod}
+            selected="Demo FPX"
+            onSelect={() => {}}
           />
-          {method === "Demo BNPL" && (
-            <Notice
-              text={`Demo BNPL covers rental fees only (${money(b.quote.rentalFee)}). Deposit and service fee (${money(b.quote.total - b.quote.rentalFee)}) remain payable separately.`}
-            />
-          )}
           {b.payment === "processing" ? (
             <>
               <Badge text="Payment processing · awaiting simulated provider" />
@@ -258,35 +250,43 @@ export default function RentalDetail() {
         <Notice text="Approved. Waiting for renter to complete demo checkout." />
       )}
 
-      {/* UPCOMING / TWO-SIDED HANDOVER (PHASE 3) */}
+      {/* UPCOMING / DELIVERY FULFILMENT */}
       {b.status === "upcoming" && (
         <Card>
-          <Text style={s.h2}>Two-Sided Physical Handover</Text>
+          <Text style={s.h2}>Upcoming Rental (Confirmed)</Text>
           <Text style={s.caption}>
-            The rental clock starts ONLY when BOTH participants confirm physical meetup and item inspection.
+            Fulfilment is delivery-only. Rental automatically activates at scheduled start time ({b.scheduledPickup || b.start}).
           </Text>
 
           <View style={{ marginVertical: 12, gap: 8 }}>
             <Row
-              label="Lender Handover"
-              value={b.lenderHandoverAt ? `✓ Confirmed (${new Date(b.lenderHandoverAt).toLocaleTimeString()})` : "Awaiting Lender"}
-              strong={!!b.lenderHandoverAt}
+              label="Scheduled Rental Start"
+              value={b.scheduledPickup || b.start}
+              strong
             />
             <Row
-              label="Renter Receipt"
-              value={b.renterReceivedAt ? `✓ Confirmed (${new Date(b.renterReceivedAt).toLocaleTimeString()})` : "Awaiting Renter"}
+              label="Scheduled Return"
+              value={b.scheduledReturn || b.end}
+            />
+            <Row
+              label="Delivery Receipt"
+              value={
+                b.renterReceivedAt
+                  ? `✓ Delivery Received (${new Date(b.renterReceivedAt).toLocaleTimeString()})`
+                  : "Awaiting Delivery Receipt"
+              }
               strong={!!b.renterReceivedAt}
             />
           </View>
 
-          {/* Option A Delayed Handover Conflict Card */}
+          {/* Option A Delayed Schedule Conflict Card (if applicable) */}
           {b.conflictOffer && (
             <View style={{ backgroundColor: "#FFF8E7", borderColor: "#FFE08A", borderWidth: 1, borderRadius: 10, padding: 14, marginVertical: 10 }}>
               <Text style={[s.bold, { color: "#975A16" }]}>
                 ⚠️ Scheduling Conflict — Revised Rental Offer Required (Demo)
               </Text>
               <Text style={[s.caption, { color: "#744210", marginTop: 4 }]}>
-                Delayed physical pickup created an overlap with a subsequent confirmed booking. In accordance with Founder Option A, the next booking is protected. Review your revised rental terms below:
+                A schedule overlap was detected with a subsequent confirmed booking. In accordance with Founder Option A, the next booking is protected. Review your revised rental terms below:
               </Text>
               <View style={{ marginTop: 8, gap: 4 }}>
                 <Row label="Revised Return Deadline" value={new Date(b.conflictOffer.revisedEnd).toLocaleString()} />
@@ -308,30 +308,33 @@ export default function RentalDetail() {
             </View>
           )}
 
-          {/* Handover Buttons */}
-          {owner && !b.lenderHandoverAt && !b.conflictOffer && (
-            <Button
-              onPress={() =>
-                run({ type: "handoverConfirm", bookingId: id, role: "owner" })
-              }
-            >
-              Confirm Item Handed Over
-            </Button>
-          )}
+          {/* Renter Delivery Receipt Button */}
           {!owner && !b.renterReceivedAt && !b.conflictOffer && (
             <Button
               onPress={() =>
                 run({ type: "handoverConfirm", bookingId: id, role: "renter" })
               }
             >
-              Confirm Item Received
+              Confirm Received — Delivered item successfully received
+            </Button>
+          )}
+
+          {/* Admin Demo Helper for Lender dispatch */}
+          {owner && !b.lenderHandoverAt && !b.conflictOffer && state.mode === "admin_demo" && (
+            <Button
+              secondary
+              onPress={() =>
+                run({ type: "handoverConfirm", bookingId: id, role: "owner" })
+              }
+            >
+              Confirm Dispatch for Delivery (Admin Demo)
             </Button>
           )}
 
           {/* Cancellation Window */}
           <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: "#EEE", paddingTop: 12 }}>
             <Text style={s.caption}>
-              Cancellation Cutoff: At least 24 hours before scheduled pickup ({b.scheduledPickup || b.start}).
+              Cancellation Cutoff: Free cancellation until at least 24 hours before scheduled start ({b.scheduledPickup || b.start}).
             </Text>
             {cancelEligible ? (
               <Button
@@ -341,7 +344,7 @@ export default function RentalDetail() {
                 Cancel Booking (100% Refund & RM0 Fee)
               </Button>
             ) : (
-              <Notice text="Cancellation window closed. Free cancellation is only available at least 24 hours before pickup." />
+              <Notice text="Cancellation window closed. Free cancellation is only available at least 24 hours before scheduled start." />
             )}
           </View>
         </Card>
@@ -353,20 +356,42 @@ export default function RentalDetail() {
           <Card>
             <Text style={s.h2}>Rental is Active</Text>
             <Text style={s.body}>
-              Item is currently in renter's possession. Return deadline is dynamically calculated from actual pickup time.
+              Item is currently in renter's possession. The rental clock runs toward the scheduled return deadline.
             </Text>
             <View style={{ marginVertical: 10, gap: 6 }}>
               <Row
-                label="Activation Timestamp"
-                value={b.activationTimestamp ? new Date(b.activationTimestamp).toLocaleString() : "Active"}
+                label="Scheduled Rental Start"
+                value={b.start}
               />
               <Row
                 label="Effective Return Deadline"
                 value={b.effectiveReturnDeadline ? new Date(b.effectiveReturnDeadline).toLocaleString() : b.end}
                 strong
               />
-              <Row label="Refundable Deposit" value={money(b.quote.deposit)} />
+              <Row label="Refundable Deposit" value={`${money(b.quote.deposit)} (Held)`} />
+              <Row
+                label="Delivery Receipt"
+                value={
+                  b.renterReceivedAt
+                    ? `✓ Delivery Received (${new Date(b.renterReceivedAt).toLocaleTimeString()})`
+                    : "Awaiting acknowledgement"
+                }
+                strong={!!b.renterReceivedAt}
+              />
             </View>
+
+            {/* Renter Delivery Receipt Button if not yet clicked */}
+            {!owner && !b.renterReceivedAt && (
+              <View style={{ marginTop: 8 }}>
+                <Button
+                  onPress={() =>
+                    run({ type: "handoverConfirm", bookingId: id, role: "renter" })
+                  }
+                >
+                  Confirm Received — Delivered item successfully received
+                </Button>
+              </View>
+            )}
 
             {/* Consecutive Chain Extension (Phase 4) */}
             {!owner && (
@@ -422,17 +447,17 @@ export default function RentalDetail() {
         <Card>
           <Text style={s.h2}>Two-Sided Clean Return</Text>
           <Text style={s.caption}>
-            At the end of your rental, both participants must confirm the physical item return. Renter must provide condition photos. Full deposit is released only when BOTH confirm no issues.
+            At the end of your rental, both participants submit condition documentation and independent check-out confirmation. Full deposit is released only when BOTH confirm no item issues.
           </Text>
 
           <View style={{ marginVertical: 10, gap: 6 }}>
             <Row
-              label="Renter Condition & Return"
+              label="Renter Check-out"
               value={b.renterReturnConfirmedAt ? `✓ Confirmed (${new Date(b.renterReturnConfirmedAt).toLocaleTimeString()})` : "Pending Renter"}
               strong={!!b.renterReturnConfirmedAt}
             />
             <Row
-              label="Lender Receipt & Inspection"
+              label="Lender Return Inspection"
               value={b.lenderReturnConfirmedAt ? `✓ Confirmed (${new Date(b.lenderReturnConfirmedAt).toLocaleTimeString()})` : "Pending Lender"}
               strong={!!b.lenderReturnConfirmedAt}
             />
@@ -461,7 +486,7 @@ export default function RentalDetail() {
                   })
                 }
               >
-                Confirm Return — No Issues
+                Confirm Check-out — No Issues
               </Button>
             </>
           )}
@@ -478,10 +503,10 @@ export default function RentalDetail() {
                     })
                   }
                 >
-                  Confirm Item Received — No Issues (Release Deposit)
+                  Confirm Check-out — No Issues (Release Deposit)
                 </Button>
               ) : (
-                <Notice text="Waiting for renter to upload return condition evidence and submit handback confirmation." />
+                <Notice text="Waiting for renter to upload return condition evidence and submit check-out confirmation." />
               )}
             </>
           )}
@@ -664,18 +689,6 @@ export default function RentalDetail() {
             <Text selectable style={s.body}>
               {b.agreement}
             </Text>
-            <Button
-              secondary
-              onPress={() => {
-                Share.share({ message: b.agreement! }).catch(() =>
-                  setError(
-                    "Sharing is unavailable here. You can select and copy the agreement above.",
-                  ),
-                );
-              }}
-            >
-              Share agreement
-            </Button>
           </Card>
         </>
       )}

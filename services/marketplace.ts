@@ -119,6 +119,7 @@ export type Action =
       returnTime?: string;
       durationDays?: number;
       collectionMethod?: CollectionMethod;
+      deliveryAddress?: string;
       location?: string;
       lenderName?: string;
       dailyPrice?: number;
@@ -546,6 +547,9 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       if (!state.platformReviewRequests) state.platformReviewRequests = [];
       const reqId = action.id || `REQ-${newId().slice(0, 8).toUpperCase()}`;
+      if (state.platformReviewRequests.some((r) => r.id === reqId)) {
+        break;
+      }
       state.platformReviewRequests.unshift({
         id: reqId,
         renterId: user.id,
@@ -561,7 +565,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         pickupTime: action.pickupTime,
         returnTime: action.returnTime,
         durationDays: action.durationDays,
-        collectionMethod: action.collectionMethod || "Meet Owner",
+        collectionMethod: action.collectionMethod || "Delivery",
+        deliveryAddress: action.deliveryAddress,
         location: action.location || listing.location,
         dailyPrice: action.dailyPrice || listing.dailyPrice,
         estimatedRentalFee: action.estimatedRentalFee,

@@ -825,7 +825,8 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
     pickupTime: "11:00 AM",
     returnTime: "11:00 AM (Automatically matched)",
     durationDays: 5,
-    collectionMethod: "Meet Owner",
+    collectionMethod: "Delivery",
+    deliveryAddress: "Kenji Sato, +60 12 999 8888, 12 Jalan Universiti, 46200 Petaling Jaya, Selangor",
     location: "Petaling Jaya",
     lenderName: "Aiman Rahman",
     dailyPrice: 45,
@@ -843,6 +844,18 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
   assert.equal(app.returnTime, "11:00 AM (Automatically matched)");
   assert.equal(app.durationDays, 5);
   assert.equal(app.estimatedRentalFee, 225);
+  assert.equal(app.deliveryAddress, "Kenji Sato, +60 12 999 8888, 12 Jalan Universiti, 46200 Petaling Jaya, Selangor");
+
+  // Verify idempotency: duplicate submission does not duplicate requests
+  const initialCount = state.platformReviewRequests.length;
+  state = transition(state, {
+    type: "requestPlatformReview",
+    id: "REQ-TEST-1234",
+    listingId: "sony-a7iii",
+    start: "2026-11-20",
+    end: "2026-11-25",
+  });
+  assert.equal(state.platformReviewRequests.length, initialCount, "Duplicate submission with same ID must be idempotent");
 
   // Crucial rule: No booking created, no payment charged, no deposit held, inventory NOT reserved
   assert.ok(!state.bookings.some((b) => b.renterId === "high-risk-renter"));

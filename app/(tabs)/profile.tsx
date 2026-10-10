@@ -263,19 +263,27 @@ export default function ProfileScreen() {
           value={`+${completed * 2} points`}
         />
         <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border }}>
-          <Text style={[s.bold, { fontSize: 13, marginBottom: 4 }]}>V3.15 Rules-Based Deposit Schedule:</Text>
+          <Text style={[s.bold, { fontSize: 13, marginBottom: 4 }]}>What You Should Know</Text>
+          <Text style={[s.bold, { fontSize: 12, marginBottom: 2, marginTop: 6 }]}>Deposit & Booking Rules</Text>
           <Text style={s.caption}>• Low Risk (80–100): 5% deposit, capped at RM500 (Direct checkout)</Text>
           <Text style={s.caption}>• Medium Risk (40–79): 10% deposit, capped at RM1,000 (Direct checkout)</Text>
           <Text style={s.caption}>• High Risk (30–39): 15% deposit, capped at RM1,500 (Direct checkout)</Text>
           <Text style={s.caption}>• Very High Risk (0–29): CurRENT Platform Review request (Pending only, no checkout)</Text>
+          <Text style={[s.bold, { fontSize: 12, marginBottom: 2, marginTop: 10 }]}>How Your Score Changes</Text>
+          <Text style={s.caption}>• Initial score after first eKYC: 75 (Medium Risk)</Text>
+          <Text style={s.caption}>• Clean on-time return: +2 points</Text>
+          <Text style={s.caption}>• Late return (beyond 2h grace): −2 points per incident</Text>
+          <Text style={s.caption}>• Confirmed minor damage: −10 points</Text>
+          <Text style={s.caption}>• Confirmed serious damage or loss: −30 points</Text>
+          <Text style={s.caption}>• Only the single most serious penalty applies per rental chain</Text>
         </View>
       </Card>
 
-      {/* Renter Reliability & Incident History */}
-      <Section title="Renter Reliability & Incident History" />
+      {/* Risk Score History */}
+      <Section title="Risk Score History" />
       <Card>
         <Text style={s.caption}>
-          V3.15 Single Winning Incident Rule: When multiple violations occur on the same physical rental chain, only the single most serious
+          Single Winning Incident Rule: When multiple violations occur on the same physical rental chain, only the single most serious
           penalty is applied. Secondary incidents are recorded in audit history but not stacked.
         </Text>
         {user.riskHistory && user.riskHistory.length > 0 ? (
@@ -315,97 +323,27 @@ export default function ProfileScreen() {
             No incident records. Clean rental history established with initial verified score of 75.
           </Text>
         )}
-
-        {/* Live Scoring Simulator only in Admin Demo mode */}
-        {state.mode === "admin_demo" && (
-          <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border, gap: 8 }}>
-            <Text style={[s.bold, { fontSize: 13 }]}>Classroom Demo — Live Scoring Simulator:</Text>
-            <Button
-              secondary
-              onPress={() =>
-                simulateOutcome("Sony A7 III Rental", [
-                  { type: "on_time_success", confirmed: true },
-                ])
-              }
-            >
-              +2 Clean On-Time Return (No issues)
-            </Button>
-            <Button
-              secondary
-              onPress={() =>
-                simulateOutcome("PS5 Console Rental (4h Late)", [
-                  { type: "late_return", hoursLate: 4, confirmed: true },
-                ])
-              }
-            >
-              −2 Late Return (4h late beyond 2h grace)
-            </Button>
-            <Button
-              secondary
-              onPress={() =>
-                simulateOutcome("DJI Mini Drone Rental", [
-                  { type: "minor_damage", confirmed: true },
-                ])
-              }
-            >
-              −10 Confirmed Minor Damage
-            </Button>
-            <Button
-              secondary
-              onPress={() =>
-                simulateOutcome("GoPro Hero 12 Rental", [
-                  { type: "serious_damage", confirmed: true },
-                ])
-              }
-            >
-              −30 Confirmed Serious Damage / Loss
-            </Button>
-            <Button
-              secondary
-              onPress={() =>
-                simulateOutcome("Projector Rental (Late + Minor Damage)", [
-                  { type: "late_return", hoursLate: 4, confirmed: true },
-                  { type: "minor_damage", confirmed: true },
-                ])
-              }
-            >
-              Winning Rule Test: 4h Late (−2) + Minor Damage (−10) → −10 Only
-            </Button>
-          </View>
-        )}
       </Card>
 
-      {/* Safety & Trust */}
-      <Section title="Safety & Support" />
+      {/* Trust and Support */}
+      <Section title="Trust and Support" />
       <View style={{ gap: 10 }}>
-        <Button secondary onPress={() => router.push("/help")}>
-          Help & Trust and Safety →
+        <Button secondary onPress={() => router.push("/how-it-works")}>
+          How CurRENT Works →
+        </Button>
+        <Button secondary onPress={() => router.push("/trust")}>
+          Trust →
+        </Button>
+        <Button secondary onPress={() => router.push("/faq")}>
+          FAQ →
         </Button>
       </View>
 
-      {/* Community Reviews */}
-      <Section title="Community reviews" />
-      {reviews.length ? (
-        reviews.map((r) => (
-          <Card key={r.id}>
-            <Text style={s.bold}>
-              {"★".repeat(r.rating)} ·{" "}
-              {state.profiles.find((p) => p.id === r.authorId)?.name}
-            </Text>
-            <Text style={s.body}>{r.text || "Review submitted."}</Text>
-          </Card>
-        ))
-      ) : (
-        <Text style={s.caption}>
-          Complete a rental to receive your first review.
-        </Text>
-      )}
-
-      {/* Demo Mode / Accounts Controls */}
-      <Section title="Demo controls" />
-      <Card>
-        {state.mode === "admin_demo" ? (
-          <>
+      {/* Demo Controls (only in admin_demo mode) */}
+      {state.mode === "admin_demo" && (
+        <>
+          <Section title="Demo controls" />
+          <Card>
             <Text style={s.caption}>
               Admin Demo mode is ACTIVE. Switch fictional customer personas or reset demo fixtures to initial state.
             </Text>
@@ -442,23 +380,20 @@ export default function ProfileScreen() {
             >
               Exit Demo Mode
             </Button>
-          </>
-        ) : (
-          <>
-            <Text style={s.caption}>
-              Currently in Normal Mode (clean new-user experience). You can switch into Admin Demo mode to inspect populated fixtures.
-            </Text>
-            <Button
-              onPress={() => {
-                act({ type: "setMode", mode: "admin_demo" });
-                setSuccess("Switched to Admin Demo mode.");
-              }}
-            >
-              Switch to Admin Demo Mode
-            </Button>
-          </>
-        )}
-      </Card>
+          </Card>
+        </>
+      )}
+
+      {/* Sign Out */}
+      <Button
+        secondary
+        danger
+        onPress={() => {
+          act({ type: "login", userId: null });
+        }}
+      >
+        Sign Out
+      </Button>
     </Screen>
   );
 }

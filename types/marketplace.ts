@@ -64,6 +64,7 @@ export interface PlatformReviewRequest {
   returnTime?: string;
   durationDays?: number;
   collectionMethod?: CollectionMethod;
+  deliveryAddress?: string;
   location?: string;
   dailyPrice?: number;
   estimatedRentalFee?: number;

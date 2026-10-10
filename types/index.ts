@@ -8,7 +8,11 @@ export type RiskLevel =
   | "unverified";
 export type ListingStatus = "draft" | "published" | "paused" | "unavailable";
 export type CollectionMethod =
-  "Meet Owner" | "Self-Pickup" | "Delivery Available";
+  | "Meet Owner"
+  | "Self-Pickup"
+  | "Delivery Available"
+  | "Delivery Only"
+  | "Delivery";
 export type RentalStatus =
   | "pending"
   | "approved"

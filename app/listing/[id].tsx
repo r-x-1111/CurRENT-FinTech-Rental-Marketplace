@@ -4,6 +4,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -55,6 +56,15 @@ function formatTime(timeStr: string) {
   return `${displayHour < 10 ? `0${displayHour}` : displayHour}:${displayMin} ${ampm}`;
 }
 
+function formatHourAmPm(timeStr: string) {
+  const [h] = (timeStr || "11:00").split(":");
+  const hour = parseInt(h, 10);
+  if (isNaN(hour)) return timeStr;
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${displayHour} ${ampm}`;
+}
+
 function formatDate(dateStr: string) {
   if (!dateStr) return "";
   const parts = dateStr.split("-");
@@ -75,12 +85,23 @@ export default function ListingDetailScreen() {
   // Return time is strictly auto-matched and locked to pickup time per 24-hour rental rules
   const returnTime = pickupTime;
   const [collectionMethod, setCollectionMethod] =
-    useState<CollectionMethod>("Meet Owner");
+    useState<CollectionMethod>("Delivery");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
   const [showCheckout, setShowCheckout] = useState(false);
   const [error, setError] = useState("");
   const [successNotice, setSuccessNotice] = useState("");
   const [photo, setPhoto] = useState("");
+
+  // Delivery Address state per README V3.23 Section 7.2
+  const [recipientName, setRecipientName] = useState(user?.name || "");
+  const [deliveryPhone, setDeliveryPhone] = useState("+60 12 345 6789");
+  const [streetAddress, setStreetAddress] = useState("Jalan SS 15/4");
+  const [unit, setUnit] = useState("");
+  const [postcode, setPostcode] = useState("47500");
+  const [city, setCity] = useState("Subang Jaya");
+  const [stateName, setStateName] = useState("Selangor");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
+
   const { width } = useWindowDimensions();
 
   if (
@@ -121,7 +142,7 @@ export default function ListingDetailScreen() {
   const startTimestamp = `${start}T${pickupTime}:00Z`;
   const endTimestamp = `${end}T${returnTime}:00Z`;
 
-  let quote;
+  let quote: ReturnType<typeof quoteFor> | undefined;
   let dateError = "";
   if (start && end) {
     try {
@@ -169,38 +190,53 @@ export default function ListingDetailScreen() {
       if (Number.isFinite(pickupEpoch)) {
         const cutoffDate = new Date(pickupEpoch - 24 * 60 * 60 * 1000);
         const cutoffFormatted = cutoffDate.toLocaleDateString("en-GB", {
-          weekday: "short",
           day: "numeric",
           month: "short",
           year: "numeric",
           hour: "2-digit",
           minute: "2-digit",
         });
-        cancellationNotice = `Free cancellation until ${cutoffFormatted} (24 hours before pickup). After this cutoff, cancellations are non-refundable.`;
+        cancellationNotice = `Free cancellation until ${cutoffFormatted} (Demo)`;
       }
     } catch {
       cancellationNotice = "";
     }
   }
 
-  // Handle Request to Rent navigation for Very High Risk renters (scores 0–29)
+  // Handle Request to Rent submission for Very High Risk renters (scores 0–29)
   function handleNavigateToRequest() {
     if (!user) {
       router.push("/auth");
       return;
     }
     if (!listing) return;
-    router.push({
-      pathname: "/rental-request",
-      params: {
+    try {
+      const refId = `REQ-${newId().slice(0, 8).toUpperCase()}`;
+      const fullDeliveryAddress = `${recipientName.trim()}${deliveryPhone.trim() ? `, ${deliveryPhone.trim()}` : ""}, ${streetAddress.trim()}${unit.trim() ? `, ${unit.trim()}` : ""}, ${postcode.trim()} ${city.trim()}, ${stateName.trim()}${deliveryNotes.trim() ? ` (Notes: ${deliveryNotes.trim()})` : ""}`;
+      act({
+        type: "requestPlatformReview",
+        id: refId,
         listingId: listing.id,
         start,
         end,
-        pickupTime,
-        returnTime,
-        collectionMethod: selectedMethod,
-      },
-    });
+        pickupTime: formatTime(pickupTime),
+        returnTime: `${formatTime(returnTime)} (Automatically matched)`,
+        durationDays: quote ? quote.days : 1,
+        collectionMethod: "Delivery",
+        deliveryAddress: fullDeliveryAddress,
+        location: listing.location,
+        lenderName: owner?.name || "Lender",
+        dailyPrice: listing.dailyPrice,
+        estimatedRentalFee: quote ? quote.rentalFee : listing.dailyPrice,
+        notes: "Pending CurRENT Review (Demo). Application submitted to CurRENT platform.",
+      });
+      router.push({
+        pathname: "/rental-request",
+        params: { id: refId },
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   // Handle Instant Booking checkout confirmation
@@ -283,7 +319,7 @@ export default function ListingDetailScreen() {
 
           {/* Owner info card */}
           <Card>
-            <Text style={s.h2}>Meet {owner?.name || "the owner"}</Text>
+            <Text style={s.h2}>Owner: {owner?.name || "the owner"}</Text>
             <Badge
               text={
                 owner?.verification === "verified"
@@ -549,48 +585,91 @@ export default function ListingDetailScreen() {
                 </View>
               </View>
 
-              {/* Return Time: Strictly Locked & Auto-matched to Pickup Time */}
-              <View style={styles.lockedReturnCard}>
-                <View style={styles.lockedReturnHeader}>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 5,
-                    }}
-                  >
-                    <Ionicons name="lock-closed" size={13} color="#0369A1" />
-                    <Text style={styles.lockedReturnTitle}>
-                      Return time (auto-matched to pickup time)
-                    </Text>
+              {/* Return Time: Compact read-only per README V3.23 Section 7.1 */}
+              <View style={styles.returnTimeCard}>
+                <View style={styles.returnTimeRow}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <Ionicons name="time-outline" size={14} color="#0369A1" />
+                    <Text style={styles.returnTimeLabel}>Return Time</Text>
                   </View>
-                  <View style={styles.lockedPill}>
-                    <Text style={styles.lockedPillText}>Locked · 24h cycle</Text>
-                  </View>
-                </View>
-                <View style={styles.lockedReturnBody}>
-                  <Text style={styles.lockedReturnTimeText}>
-                    {formatTime(returnTime)}
-                  </Text>
-                  <Text style={styles.lockedReturnExplanation}>
-                    Scheduled return time is frozen to match your pickup time per
-                    CurRENT 24-hour rental rules.
-                  </Text>
+                  <Text style={styles.returnTimeValue}>{formatHourAmPm(returnTime)}</Text>
                 </View>
               </View>
 
-              {/* Collection Method */}
+              {/* Collection: Delivery Only (fixed per V3.23 Section 7) */}
               <View style={{ marginTop: 8 }}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={styles.fieldLabel}>Collection method</Text>
+                  <Text style={styles.fieldLabel}>Collection</Text>
                 </View>
-                <Chips
-                  options={methods}
-                  selected={selectedMethod}
-                  onSelect={(value) =>
-                    setCollectionMethod(value as CollectionMethod)
-                  }
-                />
+                <View style={styles.deliveryOnlyPill}>
+                  <Ionicons name="car-outline" size={14} color="#0369A1" />
+                  <Text style={styles.deliveryOnlyText}>Delivery Only</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* 4. Structured Delivery Address Form (Section 7.2) */}
+            <View style={styles.deliveryAddressSection}>
+              <View style={styles.arrangementHeaderRow}>
+                <Ionicons name="location-outline" size={15} color={colors.navy} />
+                <Text style={styles.arrangementTitle}>Delivery Address</Text>
+              </View>
+              <Text style={styles.deliveryAddressSubtext}>
+                Private destination address in Klang Valley.
+              </Text>
+
+              <View style={{ gap: 8, marginTop: 8 }}>
+                <View style={styles.addressFieldRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>Recipient Name</Text>
+                    <TextInput
+                      style={styles.addressInput}
+                      value={recipientName}
+                      onChangeText={setRecipientName}
+                      placeholder="Full Name"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>Mobile (+60)</Text>
+                    <TextInput
+                      style={styles.addressInput}
+                      value={deliveryPhone}
+                      onChangeText={setDeliveryPhone}
+                      placeholder="+60 12 345 6789"
+                    />
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={styles.inputLabel}>Street Address</Text>
+                  <TextInput
+                    style={styles.addressInput}
+                    value={streetAddress}
+                    onChangeText={setStreetAddress}
+                    placeholder="Street name & number"
+                  />
+                </View>
+
+                <View style={styles.addressFieldRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>Postcode</Text>
+                    <TextInput
+                      style={styles.addressInput}
+                      value={postcode}
+                      onChangeText={setPostcode}
+                      placeholder="47500"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>City</Text>
+                    <TextInput
+                      style={styles.addressInput}
+                      value={city}
+                      onChangeText={setCity}
+                      placeholder="Subang Jaya"
+                    />
+                  </View>
+                </View>
               </View>
             </View>
 
@@ -696,18 +775,16 @@ export default function ListingDetailScreen() {
             {/* Simulated Checkout Panel */}
             {showCheckout && quote && (
               <View style={styles.checkoutPanel}>
-                <Text style={styles.checkoutTitle}>Simulated Checkout</Text>
+                <Text style={styles.checkoutTitle}>Secure Checkout</Text>
                 <Text style={styles.checkoutSubtitle}>
-                  Choose a demo payment method. No real bank or card details are
-                  charged.
+                  Payment via FPX (simulated — no real bank details collected).
                 </Text>
-                <Chips
-                  options={["Demo FPX", "Demo Card"]}
-                  selected={selectedPaymentMethod}
-                  onSelect={setSelectedPaymentMethod}
-                />
+                <View style={styles.fpxBadgeRow}>
+                  <Ionicons name="card-outline" size={16} color="#0369A1" />
+                  <Text style={styles.fpxBadgeText}>FPX</Text>
+                </View>
                 <Button onPress={handleConfirmInstantBook}>
-                  Simulate Payment & Confirm Booking ({money(quote.total)})
+                  Pay
                 </Button>
                 <Button secondary onPress={() => setShowCheckout(false)}>
                   Back
@@ -728,10 +805,10 @@ export default function ListingDetailScreen() {
                   </Button>
                 ) : renterRisk?.level === "very_high" ? (
                   <Button
-                    disabled={!start || !end || !!dateError}
+                    disabled={!start || !end || !!dateError || !recipientName.trim() || !streetAddress.trim()}
                     onPress={handleNavigateToRequest}
                   >
-                    Request to Rent
+                    Submit Request to CurRENT
                   </Button>
                 ) : (
                   <Button
@@ -739,7 +816,9 @@ export default function ListingDetailScreen() {
                       !start ||
                       !end ||
                       !!dateError ||
-                      listing.ownerId === user?.id
+                      listing.ownerId === user?.id ||
+                      !recipientName.trim() ||
+                      !streetAddress.trim()
                     }
                     onPress={() => setShowCheckout(true)}
                   >
@@ -1165,5 +1244,97 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
     lineHeight: 16,
+  },
+  fpxBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  fpxBadgeText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1D4ED8",
+    letterSpacing: 1,
+  },
+  deliveryOnlyPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+  },
+  deliveryOnlyText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0369A1",
+  },
+  returnTimeCard: {
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 4,
+  },
+  returnTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  returnTimeLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0369A1",
+  },
+  returnTimeValue: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0C4A6E",
+  },
+  deliveryAddressSection: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    gap: 4,
+  },
+  deliveryAddressSubtext: {
+    fontSize: 11,
+    color: colors.muted,
+    lineHeight: 15,
+  },
+  addressFieldRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  inputLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.navy,
+    marginBottom: 2,
+  },
+  addressInput: {
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 12,
+    color: colors.navy,
   },
 });

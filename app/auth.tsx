@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import * as Crypto from "expo-crypto";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Button,
   Card,
@@ -13,22 +14,36 @@ import {
 } from "../components/ui";
 import { useMarketplace } from "../context/Marketplace";
 import { newId } from "../services/marketplace";
+import { colors } from "../constants/theme";
+
 export default function Auth() {
   const { state, act } = useMarketplace();
   const [mode, setMode] = useState("Sign in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [infoNotice, setInfoNotice] = useState("");
   const [busy, setBusy] = useState(false);
+
   async function submit() {
     setBusy(true);
     setError("");
+    setInfoNotice("");
     try {
       const address = email.trim().toLowerCase();
+      if (!address) {
+        throw new Error("Enter your email address to continue.");
+      }
+
       if (mode === "Create account") {
-        if (password.length < 8)
-          throw new Error("Choose a demo password of at least 8 characters.");
+        if (!name.trim()) {
+          throw new Error("Enter your full name.");
+        }
+        if (password.length < 8) {
+          throw new Error("Choose a password of at least 8 characters.");
+        }
         const salt = Crypto.randomUUID();
         const passwordHash = await Crypto.digestStringAsync(
           Crypto.CryptoDigestAlgorithm.SHA256,
@@ -47,8 +62,24 @@ export default function Auth() {
           },
         });
       } else {
+        // Sign In
+        if (!password) {
+          throw new Error("Enter your password.");
+        }
+
+        // Check for DemoCurRENT@gmail.com or alex@demo.current demo account
+        if (address === "democurrent@gmail.com" || address === "alex@demo.current") {
+          const demoUser = state.profiles.find((p) => p.id === "demo-renter") || state.profiles[0];
+          if (demoUser) {
+            act({ type: "login", userId: demoUser.id });
+            router.replace("/(tabs)");
+            return;
+          }
+        }
+
+        // Check ordinary hashed accounts
         const profile = state.profiles.find(
-          (p) => p.email === address && p.passwordHash,
+          (p) => p.email.toLowerCase() === address && p.passwordHash,
         );
         if (
           !profile ||
@@ -56,10 +87,11 @@ export default function Auth() {
             Crypto.CryptoDigestAlgorithm.SHA256,
             `${profile.salt}:${password}`,
           )) !== profile.passwordHash
-        )
+        ) {
           throw new Error(
-            "Email or password is incorrect. Built-in demo accounts use the buttons below.",
+            "Email or password is incorrect. For demo access, sign in with DemoCurRENT@gmail.com.",
           );
+        }
         act({ type: "login", userId: profile.id });
       }
       router.replace("/(tabs)/profile");
@@ -69,28 +101,49 @@ export default function Auth() {
       setBusy(false);
     }
   }
+
+  function handleForgotPassword() {
+    setInfoNotice(
+      "Password reset link simulated. In production, an expiring reset email is dispatched to your registered address.",
+    );
+  }
+
   return (
     <Screen
       back
-      title="Welcome to CurRENT"
-      subtitle="A community for more possibilities and less ownership."
+      title="CurRENT"
+      subtitle="Rent Smarter. Own Less. Live More."
     >
-      <View style={{ width: "100%", maxWidth: 520, alignSelf: "center" }}>
+      <View style={styles.authContainer}>
         <Card>
+          <View style={styles.headerArea}>
+            <Text style={styles.wordmark}>CurRENT</Text>
+            <Text style={styles.heading}>
+              {mode === "Sign in" ? "Welcome back" : "Create your account"}
+            </Text>
+            <Text style={styles.tagline}>Rent Smarter. Own Less. Live More.</Text>
+          </View>
+
           <Chips
             options={["Sign in", "Create account"]}
             selected={mode}
-            onSelect={setMode}
+            onSelect={(m) => {
+              setMode(m);
+              setError("");
+              setInfoNotice("");
+            }}
           />
-          <Notice text="Local academic demo accounts only. Use a made-up email and a unique test password. Accounts and data stay on this device; this is not production authentication." />
+
           {mode === "Create account" && (
             <Field
               label="Full name"
               value={name}
               onChangeText={setName}
               autoComplete="name"
+              placeholder="Enter your full name"
             />
           )}
+
           <Field
             label="Email"
             value={email}
@@ -98,39 +151,131 @@ export default function Auth() {
             autoCapitalize="none"
             keyboardType="email-address"
             autoComplete="email"
+            placeholder="Enter your email address"
           />
-          <Field
-            label="Demo password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-          />
+
+          <View style={styles.passwordContainer}>
+            <Field
+              label="Demo password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              placeholder="Enter your password"
+            />
+            <TouchableOpacity
+              style={styles.eyeToggle}
+              onPress={() => setShowPassword(!showPassword)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color={colors.muted}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {mode === "Sign in" && (
+            <TouchableOpacity
+              style={styles.forgotPasswordWrap}
+              onPress={handleForgotPassword}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          )}
+
           {!!error && <Notice text={error} error />}
-          <Button disabled={busy} onPress={submit}>
-            {busy ? "Please wait…" : mode}
-          </Button>
-        </Card>
-        <Card>
-          <Text style={s.h2}>Try a demo account</Text>
-          <Text style={s.caption}>
-            Switch between renter and owner to experience both sides of the same
-            booking.
-          </Text>
-          {state.profiles
-            .filter((p) => !p.passwordHash)
-            .map((p) => (
-              <Button
-                key={p.id}
-                secondary
-                onPress={() => {
-                  act({ type: "login", userId: p.id });
-                  router.replace("/(tabs)/profile");
-                }}
-              >{`${p.name}${p.id === "demo-renter" ? " · renter" : " · owner"}`}</Button>
-            ))}
+          {!!infoNotice && <Notice text={infoNotice} />}
+
+          <View style={{ marginTop: 8 }}>
+            <Button disabled={busy} onPress={submit}>
+              {busy ? "Please wait…" : mode}
+            </Button>
+          </View>
+
+          <View style={styles.switchPromptWrap}>
+            <Text style={styles.switchPromptText}>
+              {mode === "Sign in"
+                ? "Don't have an account? "
+                : "Already have an account? "}
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setMode(mode === "Sign in" ? "Create account" : "Sign in");
+                setError("");
+                setInfoNotice("");
+              }}
+            >
+              <Text style={styles.switchPromptLink}>
+                {mode === "Sign in" ? "Sign Up" : "Sign In"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </Card>
       </View>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  authContainer: {
+    width: "100%",
+    maxWidth: 520,
+    alignSelf: "center",
+  },
+  headerArea: {
+    alignItems: "center",
+    marginBottom: 16,
+    gap: 4,
+  },
+  wordmark: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: colors.navy,
+    letterSpacing: -0.5,
+  },
+  heading: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: colors.navy,
+  },
+  tagline: {
+    fontSize: 13,
+    color: colors.muted,
+  },
+  passwordContainer: {
+    position: "relative",
+  },
+  eyeToggle: {
+    position: "absolute",
+    right: 14,
+    top: 38,
+    zIndex: 2,
+  },
+  forgotPasswordWrap: {
+    alignSelf: "flex-end",
+    marginTop: -4,
+    marginBottom: 8,
+  },
+  forgotPasswordText: {
+    fontSize: 12,
+    color: colors.blue,
+    fontWeight: "600",
+  },
+  switchPromptWrap: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 14,
+  },
+  switchPromptText: {
+    fontSize: 13,
+    color: colors.muted,
+  },
+  switchPromptLink: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.blue,
+  },
+});
