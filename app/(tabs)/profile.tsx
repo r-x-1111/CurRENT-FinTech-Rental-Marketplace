@@ -17,12 +17,16 @@ import {
 import { useMarketplace } from "../../context/Marketplace";
 import { riskFor } from "../../services/booking";
 import { colors } from "../../constants/theme";
+import { RiskGauge } from "../../components/RiskGauge";
+
 export default function ProfileScreen() {
   const { state, user, act } = useMarketplace();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
   if (!user)
     return (
       <Screen title="Make yourself at home">
@@ -34,24 +38,69 @@ export default function ProfileScreen() {
         />
       </Screen>
     );
+
   const risk = riskFor(state, user);
   const reviews = state.reviews.filter((r) => r.recipientId === user.id);
   const completed = state.bookings.filter(
     (b) => b.renterId === user.id && b.status === "completed",
   ).length;
+
   function verify(status: "pending" | "verified" | "failed") {
     try {
       act({ type: "verify", status });
       setError("");
+      setSuccess(`Verification updated to ${status}.`);
     } catch (e) {
       setError((e as Error).message);
     }
   }
+
+  function simulateOutcome(
+    itemTitle: string,
+    rawIncidents: {
+      type: "on_time_success" | "late_return" | "minor_damage" | "serious_damage" | "theft_fraud";
+      hoursLate?: number;
+      confirmed?: boolean;
+      description?: string;
+    }[],
+  ) {
+    if (!user) return;
+    try {
+      act({
+        type: "recordRentalOutcome",
+        renterId: user.id,
+        itemTitle,
+        rawIncidents,
+      });
+      setError("");
+      setSuccess(`Simulated outcome recorded for ${itemTitle}.`);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   return (
     <Screen
-      title="Your corner of CurRENT"
-      subtitle="A little trust goes a long way."
+      title="Renter Dashboard"
+      subtitle={`Welcome back, ${user.name} · CurRENT Renter Mode`}
     >
+      {/* Account warnings */}
+      {user.isBanned && (
+        <Notice
+          text="Account Banned: This account is restricted from booking or publishing due to confirmed fraudulent activity."
+          error
+        />
+      )}
+      {user.hasOverdueObligation && (
+        <Notice
+          text="Overdue Damage Settlement: A confirmed damage obligation is overdue by more than 7 days. Direct rental checkout is restricted."
+          error
+        />
+      )}
+      {!!error && <Notice text={error} error />}
+      {!!success && <Notice text={success} />}
+
+      {/* Profile Overview Card */}
       <Card>
         <View style={{ flexDirection: "row", gap: 16, alignItems: "center" }}>
           {user.avatar ? (
@@ -109,70 +158,40 @@ export default function ProfileScreen() {
           </>
         )}
       </Card>
-      {!!error && <Notice text={error} error />}
-      <Button onPress={() => router.push("/owner")}>Open Owner Mode →</Button>
-      <Section title="Rental Risk Score" />
-      <Card>
-        <View style={s.row}>
-          <Text style={[s.title, { fontSize: 46 }]}>
-            {risk.score}
-            <Text style={s.caption}> / 100</Text>
+
+      {user.hasOverdueObligation && (
+        <Card>
+          <Text style={[s.bold, { color: "#C53030", fontSize: 15 }]}>
+            ⚠️ Confirmed Damage Obligation (Overdue 7+ Days)
           </Text>
-          <Badge text={`${risk.level} risk`} green={risk.level === "low"} />
-        </View>
-        <View
-          style={{
-            height: 8,
-            backgroundColor: colors.paleBlue,
-            borderRadius: 6,
-          }}
-        >
-          <View
-            style={{
-              height: 8,
-              backgroundColor: colors.blue,
-              width: `${risk.score}%`,
-              borderRadius: 6,
+          <Text style={[s.caption, { color: "#9B2C2C", marginTop: 4 }]}>
+            In accordance with Section 15, renters with an outstanding confirmed damage liability unpaid after 7 days are restricted from creating new rentals, regardless of risk score.
+          </Text>
+          <Button
+            onPress={() => {
+              act({ type: "settleOverdueObligation", userId: user.id });
+              setSuccess("Simulated damage obligation settled in full! Booking privileges restored.");
             }}
-          />
-        </View>
-        <Text style={s.caption}>
-          Transparent prototype rules, not a credit score. Higher scores mean
-          lower estimated security deposits.
-        </Text>
-        <Row label="Starting score" value="50" />
-        <Row
-          label="Identity verified"
-          value={user.verification === "verified" ? "+15" : "+0"}
-        />
-        <Row
-          label={`${completed} completed rentals`}
-          value={`+${Math.min(20, completed * 2)}`}
-        />
-        <Row
-          label="Community rating"
-          value={
-            reviews.length
-              ? `${(reviews.reduce((n, r) => n + r.rating, 0) / reviews.length).toFixed(1)} / 5`
-              : "No reviews yet"
-          }
-        />
-        <Text style={s.caption}>
-          Ratings of 4.5+ add 10 points. Open disputes subtract 20; resolved
-          disputes subtract 5. Deposit rates: low risk 10%, standard 20%, higher
-          30% of item value. Late-return and transaction-provider signals are
-          not automated in this demo.
-        </Text>
-      </Card>
-      <Section title="Identity verification" />
+          >
+            Simulate Full Settlement (Clear Obligation & Lift Restriction)
+          </Button>
+        </Card>
+      )}
+
+      <Button onPress={() => router.push("/owner")}>
+        Open Owner Mode (Lender Workspace) →
+      </Button>
+
+      {/* Identity Verification (Demo eKYC) */}
+      <Section title="Identity Verification (Demo eKYC)" />
       <Card>
         <Badge
-          text={user.verification}
+          text={user.verification === "verified" ? "✓ Verified Renter (Demo eKYC Passed)" : `${user.verification} · demo`}
           green={user.verification === "verified"}
         />
         <Text style={s.caption}>
-          Simulate an external eKYC provider. No identity documents are
-          collected.
+          Simulate an external eKYC identity provider. In this classroom demo, no real identity documents or biometrics are collected.
+          Upon successful verification, every newly verified renter begins at strictly 70/100 (Low Risk).
         </Text>
         {["not_verified", "failed"].includes(user.verification) && (
           <Button onPress={() => verify("pending")}>
@@ -183,9 +202,9 @@ export default function ProfileScreen() {
         )}
         {user.verification === "pending" && (
           <>
-            <Notice text="Verification pending. Choose a provider response to test either outcome." />
+            <Notice text="Verification pending. Choose a simulated provider response to test either outcome." />
             <Button onPress={() => verify("verified")}>
-              Simulate verified result
+              Simulate verified result (Score 70)
             </Button>
             <Button secondary onPress={() => verify("failed")}>
               Simulate failed result
@@ -193,6 +212,166 @@ export default function ProfileScreen() {
           </>
         )}
       </Card>
+
+      {/* Rental Risk Score Section */}
+      <Section title="Rental Risk Score" />
+      <Card>
+        <View style={{ alignItems: "center", paddingVertical: 8 }}>
+          <RiskGauge score={risk.score} label={risk.label} />
+        </View>
+        <View style={s.row}>
+          <Text style={[s.title, { fontSize: 32 }]}>
+            {risk.score !== null ? `${risk.score} / 100` : "N/A"}
+          </Text>
+          <Badge text={risk.label} green={risk.level === "low"} />
+        </View>
+        <Text style={s.caption}>
+          CurRENT Rental Risk Score is a platform reliability metric, NOT a consumer credit score.
+          It transparently determines your refundable security deposit tier and booking permissions.
+        </Text>
+        <Row label="Initial verified score" value="70 (Low Risk)" />
+        <Row
+          label="Verification status"
+          value={user.verification === "verified" ? "Verified (Demo eKYC)" : "Not verified (N/A)"}
+        />
+        <Row
+          label="Booking route"
+          value={
+            risk.score === null
+              ? "Blocked (eKYC Required)"
+              : risk.score >= 30
+              ? "Direct Demo Checkout"
+              : "Pending Platform Review Only"
+          }
+        />
+        <Row
+          label="Deposit basis"
+          value={
+            risk.score === null
+              ? "N/A"
+              : risk.score >= 70
+              ? "5% (capped at RM500)"
+              : risk.score >= 40
+              ? "10% (capped at RM1,000)"
+              : risk.score >= 30
+              ? "15% (capped at RM1,500)"
+              : "Platform assessment required"
+          }
+        />
+        <Row
+          label={`${completed} completed rentals`}
+          value={`+${completed * 2} points`}
+        />
+        <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border }}>
+          <Text style={[s.bold, { fontSize: 13, marginBottom: 4 }]}>V1.8 Rules-Based Deposit Schedule:</Text>
+          <Text style={s.caption}>• Low Risk (70–100): 5% deposit, capped at RM500 (Direct checkout)</Text>
+          <Text style={s.caption}>• Medium Risk (40–69): 10% deposit, capped at RM1,000 (Direct checkout)</Text>
+          <Text style={s.caption}>• High Risk (30–39): 15% deposit, capped at RM1,500 (Direct checkout)</Text>
+          <Text style={s.caption}>• Very High Risk (0–29): Deposit by platform review; classroom requests stay Pending</Text>
+        </View>
+      </Card>
+
+      {/* Renter Reliability & Incident History */}
+      <Section title="Renter Reliability & Incident History" />
+      <Card>
+        <Text style={s.caption}>
+          V1.8 Single Winning Incident Rule: When multiple violations occur on the same physical rental, only the single most serious
+          penalty is applied. Secondary incidents are recorded in audit history but not stacked.
+        </Text>
+        {user.riskHistory && user.riskHistory.length > 0 ? (
+          user.riskHistory.map((item) => (
+            <View
+              key={item.id}
+              style={{
+                backgroundColor: colors.paleBlue,
+                padding: 12,
+                borderRadius: 10,
+                marginTop: 8,
+                gap: 4,
+              }}
+            >
+              <View style={s.row}>
+                <Text style={s.bold}>{item.itemTitle}</Text>
+                <Text style={s.caption}>{item.date}</Text>
+              </View>
+              {item.incidents.map((inc, i) => (
+                <View key={i} style={s.row}>
+                  <Text style={[s.caption, { color: colors.navy }]}>• {inc.description}</Text>
+                  <Badge
+                    text={inc.isWinning ? `${inc.penalty >= 0 ? "+" : ""}${inc.penalty} (Applied)` : "Recorded"}
+                    green={inc.isWinning && inc.penalty > 0}
+                  />
+                </View>
+              ))}
+              <Row
+                label="Score impact"
+                value={`${item.scoreBefore} → ${item.scoreAfter} (${item.effectiveAdjustment >= 0 ? "+" : ""}${item.effectiveAdjustment})`}
+                strong
+              />
+            </View>
+          ))
+        ) : (
+          <Text style={[s.caption, { marginVertical: 8 }]}>
+            No incident records. Clean rental history established with initial verified score of 70.
+          </Text>
+        )}
+        <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border, gap: 8 }}>
+          <Text style={[s.bold, { fontSize: 13 }]}>Classroom Demo — Live Scoring Simulator:</Text>
+          <Button
+            secondary
+            onPress={() =>
+              simulateOutcome("Sony A7 III Rental", [
+                { type: "on_time_success", confirmed: true },
+              ])
+            }
+          >
+            +2 On-Time Return (No issues)
+          </Button>
+          <Button
+            secondary
+            onPress={() =>
+              simulateOutcome("PS5 Console Rental (4h Late)", [
+                { type: "late_return", hoursLate: 4, confirmed: true },
+              ])
+            }
+          >
+            −2 Late Return (4h late, 2h grace)
+          </Button>
+          <Button
+            secondary
+            onPress={() =>
+              simulateOutcome("DJI Mini Drone Rental", [
+                { type: "minor_damage", confirmed: true },
+              ])
+            }
+          >
+            −10 Confirmed Minor Damage
+          </Button>
+          <Button
+            secondary
+            onPress={() =>
+              simulateOutcome("GoPro Hero 12 Rental", [
+                { type: "serious_damage", confirmed: true },
+              ])
+            }
+          >
+            −30 Confirmed Serious Damage / Loss
+          </Button>
+          <Button
+            secondary
+            onPress={() =>
+              simulateOutcome("Projector Rental (Late + Minor Damage)", [
+                { type: "late_return", hoursLate: 4, confirmed: true },
+                { type: "minor_damage", confirmed: true },
+              ])
+            }
+          >
+            Winning Rule Test: 4h Late (−2) + Minor Damage (−10) → −10 Only
+          </Button>
+        </View>
+      </Card>
+
+      {/* Your Activity */}
       <Section title="Your activity" />
       <View style={{ gap: 10 }}>
         <Button
@@ -214,6 +393,8 @@ export default function ProfileScreen() {
           Rental history
         </Button>
       </View>
+
+      {/* Community Reviews */}
       <Section title="Community reviews" />
       {reviews.length ? (
         reviews.map((r) => (
@@ -230,11 +411,12 @@ export default function ProfileScreen() {
           Complete a rental to receive your first review.
         </Text>
       )}
+
+      {/* Demo Accounts Switcher */}
       <Section title="Demo accounts" />
       <Card>
         <Text style={s.caption}>
-          The renter and owner share this device’s demo data. Switch accounts to
-          approve requests, arrange handovers and reply to messages.
+          Switch accounts to demonstrate different customer personas, eKYC states, risk tiers, and role separation between Renter and Lender.
         </Text>
         {state.profiles
           .filter((p) => !p.passwordHash)
@@ -246,8 +428,10 @@ export default function ProfileScreen() {
               onPress={() => {
                 act({ type: "login", userId: p.id });
                 setEditing(false);
+                setError("");
+                setSuccess("");
               }}
-            >{`${p.name}${user.id === p.id ? " · current account" : ""}`}</Button>
+            >{`${p.name} (${p.verification === "verified" ? `Score ${p.riskScore ?? "70"}` : "Unverified"})${user.id === p.id ? " · current account" : ""}`}</Button>
           ))}
         <Button secondary onPress={() => router.push("/auth")}>
           Sign in or create another account
@@ -260,6 +444,16 @@ export default function ProfileScreen() {
           }}
         >
           Sign out
+        </Button>
+        <Button
+          secondary
+          danger
+          onPress={() => {
+            act({ type: "resetDemoState" });
+            setSuccess("All classroom mock data and fixtures reset to initial seed state!");
+          }}
+        >
+          ↺ Reset All Classroom Demo Data (Seed State)
         </Button>
       </Card>
     </Screen>

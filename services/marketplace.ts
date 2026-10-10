@@ -1,6 +1,22 @@
 import type { CollectionMethod, Listing, VerificationStatus } from "../types";
 import type { Marketplace, Profile, Booking } from "../types/marketplace";
-import { availability, parseDate, quoteFor, riskFor } from "./booking";
+import {
+  availability,
+  calculateCancellationCutoff,
+  calculateDurationMinutes,
+  checkHandoverConflict,
+  isCancellationEligible,
+  parseDate,
+  parseTimestamp,
+  quoteFor,
+  riskFor,
+} from "./booking";
+import {
+  calculateBorrowerServiceFee,
+  calculateConsecutiveQuote,
+} from "./deposit";
+import { evaluateRentalOutcome, tierForScore } from "./riskScore";
+import { createSeed } from "../data/seed";
 
 export type Action =
   | { type: "login"; userId: string | null }
@@ -10,6 +26,19 @@ export type Action =
   | { type: "favourite"; listingId: string }
   | { type: "saveListing"; listing: Listing }
   | { type: "deleteListing"; id: string }
+  | { type: "boostListing"; listingId: string }
+  | {
+      type: "recordRentalOutcome";
+      renterId: string;
+      itemTitle: string;
+      bookingId?: string;
+      rawIncidents: {
+        type: "on_time_success" | "late_return" | "minor_damage" | "serious_damage" | "theft_fraud";
+        hoursLate?: number;
+        confirmed?: boolean;
+        description?: string;
+      }[];
+    }
   | {
       type: "request";
       id: string;
@@ -36,6 +65,40 @@ export type Action =
       method?: string;
       failed?: boolean;
     }
+  | {
+      type: "handoverConfirm";
+      bookingId: string;
+      role: "owner" | "renter";
+    }
+  | {
+      type: "acceptRevisedRental";
+      bookingId: string;
+    }
+  | {
+      type: "returnConfirm";
+      bookingId: string;
+      role: "owner" | "renter";
+      actualReturnTimestamp?: string;
+      photo?: string;
+      notes?: string;
+    }
+  | {
+      type: "consecutiveExtend";
+      bookingId: string;
+      additionalDays: number;
+    }
+  | {
+      type: "resolveDispute";
+      disputeId: string;
+      scenario: "minor_damage" | "serious_damage" | "rejected" | "overdue_restriction";
+    }
+  | {
+      type: "settleOverdueObligation";
+      userId: string;
+    }
+  | {
+      type: "resetDemoState";
+    }
   | { type: "message"; bookingId: string; text: string }
   | { type: "review"; bookingId: string; rating: number; text: string }
   | {
@@ -50,10 +113,16 @@ export type Action =
 
 export const newId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
 function requireThat(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
+
 export function transition(previous: Marketplace, action: Action): Marketplace {
+  if (action.type === "resetDemoState") {
+    return createSeed();
+  }
+
   const state: Marketplace = JSON.parse(JSON.stringify(previous));
   const now = new Date().toISOString();
   const notify = (userId: string, title: string, bookingId?: string) =>
@@ -65,6 +134,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       read: false,
       createdAt: now,
     });
+
   if (action.type === "login") {
     requireThat(
       action.userId === null ||
@@ -74,6 +144,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
     state.currentUserId = action.userId;
     return state;
   }
+
   if (action.type === "signup") {
     requireThat(
       action.profile.name.trim().length >= 2 &&
@@ -90,8 +161,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
     state.currentUserId = action.profile.id;
     return state;
   }
+
   const user = state.profiles.find((p) => p.id === state.currentUserId);
   requireThat(user, "Sign in to continue.");
+
   const bookingFor = (id: string): Booking => {
     const b = state.bookings.find((b) => b.id === id);
     requireThat(
@@ -100,7 +173,19 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
     );
     return b;
   };
+
   switch (action.type) {
+    case "settleOverdueObligation": {
+      const targetUser = state.profiles.find((p) => p.id === action.userId);
+      requireThat(targetUser, "User not found.");
+      targetUser.hasOverdueObligation = false;
+      notify(
+        targetUser.id,
+        "Simulated settlement complete. Outstanding damage obligation has been cleared. Booking privileges restored.",
+      );
+      break;
+    }
+
     case "profile":
       requireThat(
         action.name.trim().length >= 2,
@@ -109,6 +194,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       user.name = action.name.trim();
       user.avatar = action.avatar;
       break;
+
     case "verify":
       requireThat(
         (action.status === "pending" &&
@@ -118,6 +204,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Verification cannot make that transition.",
       );
       user.verification = action.status;
+      if (action.status === "verified" && (user.riskScore === undefined || user.riskScore === null)) {
+        user.riskScore = 70;
+        user.riskLevel = "low";
+      }
       state.listings
         .filter((l) => l.ownerId === user.id)
         .forEach((l) => {
@@ -128,6 +218,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         `Demo identity verification: ${action.status.replace("_", " ")}.`,
       );
       break;
+
     case "favourite":
       requireThat(
         state.listings.some((l) => l.id === action.listingId),
@@ -137,6 +228,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         ? user.favourites.filter((id) => id !== action.listingId)
         : [...user.favourites, action.listingId];
       break;
+
     case "saveListing": {
       const l = action.listing;
       const existing = state.listings.find((i) => i.id === l.id);
@@ -189,6 +281,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         : [l, ...state.listings];
       break;
     }
+
     case "deleteListing":
       requireThat(
         state.listings.some((l) => l.id === action.id && l.ownerId === user.id),
@@ -204,9 +297,72 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       state.listings = state.listings.filter((l) => l.id !== action.id);
       break;
+
+    case "boostListing": {
+      const listing = state.listings.find((l) => l.id === action.listingId);
+      requireThat(listing, "Listing not found.");
+      requireThat(
+        listing.ownerId === user.id,
+        "Only the owner can boost this listing.",
+      );
+      requireThat(
+        listing.status === "published",
+        "Only published listings can be boosted.",
+      );
+      listing.featuredUntil = new Date(Date.now() + 7 * 86400000).toISOString();
+      notify(
+        user.id,
+        `Listing boosted! "${listing.title}" is now featured for 7 days (RM10 demo fee).`,
+      );
+      break;
+    }
+
+    case "recordRentalOutcome": {
+      const renter = state.profiles.find((p) => p.id === action.renterId);
+      requireThat(renter, "Renter not found.");
+      const evaluation = evaluateRentalOutcome(action.rawIncidents);
+      const scoreBefore = renter.riskScore ?? 70;
+      const scoreAfter = Math.max(
+        0,
+        Math.min(100, scoreBefore + evaluation.effectiveAdjustment),
+      );
+      renter.riskScore = scoreAfter;
+      renter.riskLevel = tierForScore(scoreAfter).level;
+      if (evaluation.isBanned) {
+        renter.isBanned = true;
+      }
+      if (!renter.riskHistory) {
+        renter.riskHistory = [];
+      }
+      renter.riskHistory.unshift({
+        id: newId(),
+        bookingId: action.bookingId,
+        itemTitle: action.itemTitle,
+        date: new Date().toISOString().slice(0, 10),
+        incidents: evaluation.incidents,
+        effectiveAdjustment: evaluation.effectiveAdjustment,
+        scoreBefore,
+        scoreAfter,
+        appealStatus: "none",
+      });
+      notify(
+        renter.id,
+        `Rental outcome recorded for ${action.itemTitle}: ${evaluation.effectiveAdjustment >= 0 ? "+" : ""}${evaluation.effectiveAdjustment} points. New score: ${scoreAfter}.`,
+      );
+      break;
+    }
+
     case "request": {
       const listing = state.listings.find((l) => l.id === action.listingId);
       requireThat(listing, "Listing not found.");
+      requireThat(
+        !user.isBanned,
+        "This account is banned from booking due to confirmed fraudulent activity.",
+      );
+      requireThat(
+        !user.hasOverdueObligation,
+        "You have an outstanding damage obligation. Direct rental requests are restricted.",
+      );
       requireThat(
         user.id !== listing.ownerId,
         "You cannot rent your own item.",
@@ -234,6 +390,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         ),
         "You already requested these dates.",
       );
+
+      const durMinutes = calculateDurationMinutes(action.start, action.end);
+      const cutoff = calculateCancellationCutoff(action.start);
+
       state.bookings.unshift({
         id: action.id,
         listingId: listing.id,
@@ -243,6 +403,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         renterId: user.id,
         start: action.start,
         end: action.end,
+        scheduledPickup: action.start,
+        scheduledReturn: action.end,
+        durationMinutes: durMinutes,
+        cancellationCutoff: cutoff,
         collectionMethod,
         status: "pending",
         quote: quoteFor(
@@ -253,7 +417,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           action.end,
           action.protection,
         ),
-        riskScore: riskFor(state, user).score,
+        riskScore: riskFor(state, user).score ?? 70,
         payment: "required",
         deposit: "required",
         createdAt: now,
@@ -265,6 +429,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       break;
     }
+
     case "booking": {
       const b = bookingFor(action.id);
       const owner = user.id === b.ownerId;
@@ -293,25 +458,52 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           b.status = "rejected";
           notify(b.renterId, `Your request for ${b.title} was declined.`, b.id);
           break;
-        case "cancel":
+        case "cancel": {
           requireThat(
-            ["pending", "approved"].includes(b.status) &&
-              b.payment !== "processing",
+            b.payment !== "processing",
             "Only unpaid requests can be cancelled.",
           );
-          b.status = "cancelled";
-          notify(
-            owner ? b.renterId : b.ownerId,
-            `${b.title} request was cancelled.`,
-            b.id,
-          );
+          if (["pending", "approved"].includes(b.status)) {
+            b.status = "cancelled";
+            notify(
+              owner ? b.renterId : b.ownerId,
+              `${b.title} request was cancelled.`,
+              b.id,
+            );
+          } else if (b.status === "upcoming") {
+            const pickup = b.scheduledPickup || b.start;
+            requireThat(
+              isCancellationEligible(pickup),
+              "Cancellation is only permitted at least 24 hours before scheduled pickup.",
+            );
+            b.status = "cancelled";
+            b.payment = "refunded";
+            b.deposit = "released";
+            notify(
+              b.renterId,
+              `Booking cancelled for ${b.title}. 100% simulated refund (RM${(b.quote.rentalFee + b.quote.serviceFee).toFixed(2)}) and deposit release processed. RM0 cancellation fee.`,
+              b.id,
+            );
+            notify(
+              b.ownerId,
+              `Booking for ${b.title} was cancelled by renter at least 24h before pickup. Availability has been restored.`,
+              b.id,
+            );
+          } else {
+            throw new Error("Only unpaid requests or eligible upcoming bookings can be cancelled.");
+          }
           break;
+        }
         case "pay":
           requireThat(
             !owner &&
               b.status === "approved" &&
               ["required", "failed"].includes(b.payment),
             "Payment requires owner approval.",
+          );
+          requireThat(
+            b.riskScore >= 30,
+            "Renters with Rental Risk Score below 30 require platform approval. Payment is not available for this booking.",
           );
           requireThat(
             ["Demo card", "Demo FPX", "Demo BNPL"].includes(
@@ -342,7 +534,13 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           if (!action.failed) {
             b.status = "upcoming";
             b.deposit = "secured";
-            b.agreement = `DEMO RENTAL AGREEMENT • ${b.id}\nOwner: ${state.profiles.find((p) => p.id === b.ownerId)?.name}\nRenter: ${user.name}\nItem: ${b.title}\nCollection: ${b.start} • Return: ${b.end}\nCollection method: ${b.collectionMethod || "Meet Owner"}${b.collectionMethod === "Delivery Available" ? " (external logistics arrangement; no delivery fee is charged in this demo)" : ""}\nRental: RM${b.quote.rentalFee.toFixed(2)} • Service: RM${b.quote.serviceFee.toFixed(2)} • Protection: RM${b.quote.protection.toFixed(2)}\nRefundable deposit: RM${b.quote.deposit.toFixed(2)}\nTotal: RM${b.quote.total.toFixed(2)}\nBoth parties record condition photos at handover and return. Deposit release follows owner return confirmation; disputed deposits remain on hold for review. No actual money, insurance or deposit custody is provided in this academic demo.\nGenerated ${now}`;
+            if (!b.scheduledPickup) b.scheduledPickup = b.start;
+            if (!b.scheduledReturn) b.scheduledReturn = b.end;
+            if (!b.durationMinutes) b.durationMinutes = b.quote.days * 1440;
+            if (!b.cancellationCutoff) {
+              b.cancellationCutoff = calculateCancellationCutoff(b.scheduledPickup);
+            }
+            b.agreement = `DEMO RENTAL AGREEMENT • ${b.id}\nOwner: ${state.profiles.find((p) => p.id === b.ownerId)?.name}\nRenter: ${user.name}\nItem: ${b.title}\nCollection: ${b.start} • Return: ${b.end}\nCollection method: ${b.collectionMethod || "Meet Owner"}${b.collectionMethod === "Delivery Available" ? " (external logistics arrangement; no delivery fee is charged in this demo)" : ""}\nRental: RM${b.quote.rentalFee.toFixed(2)} • Service: RM${b.quote.serviceFee.toFixed(2)} • Protection: RM${b.quote.protection.toFixed(2)}\nRefundable deposit: RM${b.quote.deposit.toFixed(2)}\nTotal: RM${b.quote.total.toFixed(2)}\nBoth parties record condition photos at handover and return. Deposit release follows mutual return confirmation; disputed deposits remain on hold for review. No actual money, insurance or deposit custody is provided in this academic demo.\nGenerated ${now}`;
             notify(
               b.ownerId,
               `Demo payment received for ${b.title}. Ready for handover.`,
@@ -373,6 +571,18 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           });
           b.status = checkIn ? "active" : "return_pending";
           b.deposit = checkIn ? "held" : "release_pending";
+          if (checkIn) {
+            b.lenderHandoverAt = now;
+            b.renterReceivedAt = now;
+            b.activationTimestamp = now;
+            if (!b.effectiveReturnDeadline) {
+              const durMs = (b.durationMinutes || (b.quote.days * 1440)) * 60000;
+              b.effectiveReturnDeadline = new Date(Date.now() + durMs).toISOString();
+            }
+          } else {
+            b.renterReturnConfirmedAt = now;
+            b.actualReturnTimestamp = now;
+          }
           notify(
             checkIn ? b.renterId : b.ownerId,
             checkIn
@@ -382,24 +592,472 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           );
           break;
         }
-        case "release":
+        case "release": {
           requireThat(
             owner &&
               b.status === "return_pending" &&
               b.deposit === "release_pending",
             "The owner must inspect a returned item before releasing the deposit.",
           );
+          b.lenderReturnConfirmedAt = now;
           b.status = "completed";
           b.deposit = "released";
+
+          const renterProfile = state.profiles.find((p) => p.id === b.renterId);
+          if (renterProfile) {
+            const evaluation = evaluateRentalOutcome([
+              { type: "on_time_success", confirmed: true, description: "On-time return with no issues" },
+            ]);
+            const scoreBefore = renterProfile.riskScore ?? 70;
+            const scoreAfter = Math.min(100, scoreBefore + evaluation.effectiveAdjustment);
+            renterProfile.riskScore = scoreAfter;
+            renterProfile.riskLevel = tierForScore(scoreAfter).level;
+            if (!renterProfile.riskHistory) renterProfile.riskHistory = [];
+            renterProfile.riskHistory.unshift({
+              id: newId(),
+              bookingId: b.id,
+              itemTitle: b.title,
+              date: new Date().toISOString().slice(0, 10),
+              incidents: evaluation.incidents,
+              effectiveAdjustment: evaluation.effectiveAdjustment,
+              scoreBefore,
+              scoreAfter,
+              appealStatus: "none",
+            });
+          }
           notify(
             b.renterId,
             `Rental complete. Demo deposit released for ${b.title}.`,
             b.id,
           );
           break;
+        }
       }
       break;
     }
+
+    case "handoverConfirm": {
+      const b = bookingFor(action.bookingId);
+      const owner = user.id === b.ownerId;
+      requireThat(
+        b.status === "upcoming",
+        "Handover can only be confirmed for upcoming paid rentals.",
+      );
+
+      if (action.role === "owner") {
+        requireThat(owner, "Only the owner can confirm item handed over.");
+        b.lenderHandoverAt = now;
+        notify(
+          b.renterId,
+          `Owner confirmed handover for ${b.title}. Please confirm receipt when you receive the item.`,
+          b.id,
+        );
+      } else {
+        requireThat(!owner, "Only the renter can confirm item received.");
+        b.renterReceivedAt = now;
+        notify(
+          b.ownerId,
+          `Renter confirmed receipt for ${b.title}. Waiting for owner handover confirmation.`,
+          b.id,
+        );
+      }
+
+      if (b.lenderHandoverAt && b.renterReceivedAt) {
+        const activationTs = Math.max(
+          new Date(b.lenderHandoverAt).getTime(),
+          new Date(b.renterReceivedAt).getTime(),
+        );
+        const listing = state.listings.find((l) => l.id === b.listingId);
+        requireThat(listing, "Listing not found.");
+
+        const conflictRes = checkHandoverConflict(state, b, listing, activationTs);
+
+        if (conflictRes.hasConflict && conflictRes.conflictOffer) {
+          b.conflictOffer = conflictRes.conflictOffer;
+          notify(
+            b.renterId,
+            `Pickup schedule conflict detected with a future booking. Review and accept your revised rental offer.`,
+            b.id,
+          );
+          notify(
+            b.ownerId,
+            `Late handover created a schedule overlap. Renter has been offered a conflict-free shortened rental.`,
+            b.id,
+          );
+        } else {
+          b.activationTimestamp = new Date(activationTs).toISOString();
+          const durMinutes = b.durationMinutes || (b.quote.days * 1440);
+          b.effectiveReturnDeadline = new Date(activationTs + durMinutes * 60000).toISOString();
+          b.status = "active";
+          b.deposit = "held";
+          notify(
+            b.renterId,
+            `Handover complete! ${b.title} is now ACTIVE. Return deadline: ${new Date(b.effectiveReturnDeadline).toLocaleDateString()}.`,
+            b.id,
+          );
+          notify(
+            b.ownerId,
+            `Handover complete! ${b.title} is now active. Return deadline: ${new Date(b.effectiveReturnDeadline).toLocaleDateString()}.`,
+            b.id,
+          );
+        }
+      }
+      break;
+    }
+
+    case "acceptRevisedRental": {
+      const b = bookingFor(action.bookingId);
+      const owner = user.id === b.ownerId;
+      requireThat(!owner, "Only the renter can accept the revised rental offer.");
+      requireThat(b.conflictOffer, "No revised rental offer is pending.");
+
+      const offer = b.conflictOffer;
+      b.effectiveReturnDeadline = offer.revisedEnd;
+      b.durationMinutes = offer.revisedDurationMinutes;
+      b.quote.days = offer.revisedRentalDays;
+      b.quote.rentalFee = offer.revisedRentalFee;
+      b.quote.serviceFee = offer.revisedServiceFee;
+      b.quote.total = Math.round((offer.revisedRentalFee + offer.revisedServiceFee + b.quote.deposit) * 100) / 100;
+
+      const actTs = Math.max(
+        b.lenderHandoverAt ? new Date(b.lenderHandoverAt).getTime() : Date.now(),
+        b.renterReceivedAt ? new Date(b.renterReceivedAt).getTime() : Date.now(),
+      );
+      b.activationTimestamp = new Date(actTs).toISOString();
+      b.status = "active";
+      b.deposit = "held";
+      b.conflictOffer = null;
+
+      if (offer.refundAmount > 0) {
+        notify(
+          b.renterId,
+          `Revised offer accepted! Simulated refund of RM${offer.refundAmount.toFixed(2)} processed. Rental is now ACTIVE.`,
+          b.id,
+        );
+      } else {
+        notify(
+          b.renterId,
+          `Revised offer accepted (RM0 fee adjustment, 3 billable days maintained). Rental is now ACTIVE.`,
+          b.id,
+        );
+      }
+      notify(
+        b.ownerId,
+        `Renter accepted revised rental offer. ${b.title} is now active.`,
+        b.id,
+      );
+      break;
+    }
+
+    case "returnConfirm": {
+      const b = bookingFor(action.bookingId);
+      const owner = user.id === b.ownerId;
+      requireThat(
+        ["active", "return_pending"].includes(b.status),
+        "Return confirmation is only available for active or returning rentals.",
+      );
+      requireThat(
+        !state.disputes.some(
+          (d) => d.bookingId === b.id && d.status === "under_review",
+        ),
+        "A dispute is active on this rental. Clean return cannot proceed.",
+      );
+
+      if (action.role === "renter") {
+        requireThat(!owner, "Only the renter can confirm physical return handback.");
+        if (action.photo) {
+          state.evidence.push({
+            id: newId(),
+            bookingId: b.id,
+            authorId: user.id,
+            kind: "check_out",
+            photo: action.photo,
+            notes: action.notes?.trim() || "Return condition photo",
+            createdAt: now,
+          });
+        }
+        const hasEvidence = state.evidence.some(
+          (e) => e.bookingId === b.id && e.kind === "check_out",
+        );
+        requireThat(
+          hasEvidence,
+          "Upload at least one condition photo before confirming return.",
+        );
+
+        b.renterReturnConfirmedAt = now;
+        b.actualReturnTimestamp = action.actualReturnTimestamp || b.actualReturnTimestamp || now;
+        b.status = "return_pending";
+        b.deposit = "release_pending";
+        notify(
+          b.ownerId,
+          `Renter confirmed return and uploaded condition evidence for ${b.title}. Please inspect the item and confirm return.`,
+          b.id,
+        );
+      } else {
+        requireThat(owner, "Only the owner can confirm return inspection.");
+        b.lenderReturnConfirmedAt = now;
+        if (action.actualReturnTimestamp && !b.actualReturnTimestamp) {
+          b.actualReturnTimestamp = action.actualReturnTimestamp;
+        }
+        notify(
+          b.renterId,
+          `Owner inspected and confirmed return for ${b.title}.`,
+          b.id,
+        );
+      }
+
+      if (
+        b.renterReturnConfirmedAt &&
+        b.lenderReturnConfirmedAt &&
+        !state.disputes.some(
+          (d) => d.bookingId === b.id && d.status === "under_review",
+        )
+      ) {
+        b.status = "completed";
+        b.deposit = "released";
+
+        const returnInstant = b.actualReturnTimestamp
+          ? new Date(b.actualReturnTimestamp).getTime()
+          : Date.now();
+        const deadlineInstant = b.effectiveReturnDeadline
+          ? new Date(b.effectiveReturnDeadline).getTime()
+          : parseTimestamp(b.end);
+
+        const diffHours = (returnInstant - deadlineInstant) / 3600000;
+        const renter = state.profiles.find((p) => p.id === b.renterId);
+        if (renter) {
+          if (diffHours <= 2) {
+            const evaluation = evaluateRentalOutcome([
+              { type: "on_time_success", confirmed: true, description: "On-time return with no disputes" },
+            ]);
+            const scoreBefore = renter.riskScore ?? 70;
+            const scoreAfter = Math.min(100, scoreBefore + evaluation.effectiveAdjustment);
+            renter.riskScore = scoreAfter;
+            renter.riskLevel = tierForScore(scoreAfter).level;
+            if (!renter.riskHistory) renter.riskHistory = [];
+            renter.riskHistory.unshift({
+              id: newId(),
+              bookingId: b.id,
+              itemTitle: b.title,
+              date: new Date().toISOString().slice(0, 10),
+              incidents: evaluation.incidents,
+              effectiveAdjustment: evaluation.effectiveAdjustment,
+              scoreBefore,
+              scoreAfter,
+              appealStatus: "none",
+            });
+            notify(
+              b.renterId,
+              `Rental complete! Full simulated deposit (RM${b.quote.deposit.toFixed(2)}) released. +2 Reliability Score awarded! New score: ${scoreAfter}.`,
+              b.id,
+            );
+          } else {
+            const hoursLate = Math.ceil(diffHours);
+            const evaluation = evaluateRentalOutcome([
+              { type: "late_return", hoursLate, confirmed: true, description: `Returned ${hoursLate} hours late` },
+            ]);
+            const scoreBefore = renter.riskScore ?? 70;
+            const scoreAfter = Math.max(0, scoreBefore + evaluation.effectiveAdjustment);
+            renter.riskScore = scoreAfter;
+            renter.riskLevel = tierForScore(scoreAfter).level;
+            if (!renter.riskHistory) renter.riskHistory = [];
+            renter.riskHistory.unshift({
+              id: newId(),
+              bookingId: b.id,
+              itemTitle: b.title,
+              date: new Date().toISOString().slice(0, 10),
+              incidents: evaluation.incidents,
+              effectiveAdjustment: evaluation.effectiveAdjustment,
+              scoreBefore,
+              scoreAfter,
+              appealStatus: "none",
+            });
+            notify(
+              b.renterId,
+              `Rental complete! Full simulated deposit (RM${b.quote.deposit.toFixed(2)}) released. Return was ${hoursLate} hours late (${evaluation.effectiveAdjustment} points). New score: ${scoreAfter}.`,
+              b.id,
+            );
+          }
+        }
+        notify(
+          b.ownerId,
+          `Rental complete for ${b.title}. Demo deposit released to renter.`,
+          b.id,
+        );
+      }
+      break;
+    }
+
+    case "consecutiveExtend": {
+      const b = bookingFor(action.bookingId);
+      const owner = user.id === b.ownerId;
+      requireThat(!owner, "Only the renter can extend the rental.");
+      requireThat(b.status === "active", "Extensions are only available for active rentals.");
+      requireThat(
+        action.additionalDays >= 1 && action.additionalDays <= 30,
+        "Choose 1 to 30 additional days.",
+      );
+
+      const listing = state.listings.find((l) => l.id === b.listingId);
+      requireThat(listing, "Listing not found.");
+
+      const currentDeadline = b.effectiveReturnDeadline
+        ? new Date(b.effectiveReturnDeadline).getTime()
+        : parseTimestamp(b.end);
+
+      const newDeadline = currentDeadline + action.additionalDays * 86400000;
+      const newDeadlineIso = new Date(newDeadline).toISOString();
+
+      const hasConflict = state.bookings.some(
+        (other) =>
+          other.id !== b.id &&
+          other.listingId === b.listingId &&
+          ["confirmed", "upcoming", "active", "approved"].includes(other.status) &&
+          parseTimestamp(other.start) < newDeadline &&
+          parseTimestamp(other.end) > currentDeadline,
+      );
+      requireThat(!hasConflict, "Item is already reserved by another renter for the requested extension period.");
+
+      const additionalRentalFee = listing.dailyPrice * action.additionalDays;
+      const quoteExtension = calculateConsecutiveQuote(additionalRentalFee);
+
+      b.effectiveReturnDeadline = newDeadlineIso;
+      b.quote.days += action.additionalDays;
+      b.quote.rentalFee += quoteExtension.additionalRentalFee;
+      b.quote.serviceFee += quoteExtension.serviceFee;
+      b.quote.total = Math.round((b.quote.total + quoteExtension.total) * 100) / 100;
+
+      if (!b.chainBookings) b.chainBookings = [];
+      b.chainBookings.push(
+        `Extension +${action.additionalDays}d: RM${quoteExtension.total.toFixed(2)} (RM0 extra deposit)`,
+      );
+
+      notify(
+        b.renterId,
+        `Rental extended by ${action.additionalDays} days! New return deadline: ${new Date(newDeadlineIso).toLocaleDateString()}. Additional charge: RM${quoteExtension.total.toFixed(2)} (RM0 extra deposit).`,
+        b.id,
+      );
+      notify(
+        b.ownerId,
+        `${user.name} extended rental of ${b.title} by ${action.additionalDays} days. New deadline: ${new Date(newDeadlineIso).toLocaleDateString()}.`,
+        b.id,
+      );
+      break;
+    }
+
+    case "resolveDispute": {
+      const dispute = state.disputes.find((d) => d.id === action.disputeId);
+      requireThat(dispute, "Dispute not found.");
+      const b = state.bookings.find((item) => item.id === dispute.bookingId);
+      requireThat(b, "Booking not found.");
+      const renter = state.profiles.find((p) => p.id === b.renterId);
+      requireThat(renter, "Renter not found.");
+
+      dispute.status = "resolved";
+
+      if (action.scenario === "minor_damage") {
+        const deduction = Math.min(b.quote.deposit, 150);
+        const remainder = Math.max(0, b.quote.deposit - deduction);
+        b.status = "completed";
+        b.deposit = (remainder > 0 ? "released" : "held");
+
+        const evaluation = evaluateRentalOutcome([
+          {
+            type: "minor_damage",
+            confirmed: true,
+            description: "Fictional damage claim approved (Demo): RM150 assessed repair cost.",
+          },
+        ]);
+        const scoreBefore = renter.riskScore ?? 70;
+        const scoreAfter = Math.max(0, Math.min(100, scoreBefore + evaluation.effectiveAdjustment));
+        renter.riskScore = scoreAfter;
+        renter.riskLevel = tierForScore(scoreAfter).level;
+        if (!renter.riskHistory) renter.riskHistory = [];
+        renter.riskHistory.unshift({
+          id: newId(),
+          bookingId: b.id,
+          itemTitle: b.title,
+          date: new Date().toISOString().slice(0, 10),
+          incidents: evaluation.incidents,
+          effectiveAdjustment: evaluation.effectiveAdjustment,
+          scoreBefore,
+          scoreAfter,
+          appealStatus: "none",
+        });
+
+        notify(
+          b.renterId,
+          `Dispute resolved (Illustrative Demo): Confirmed minor damage. RM${deduction.toFixed(2)} deducted from deposit; RM${remainder.toFixed(2)} released. Risk score adjusted by -10 to ${scoreAfter}.`,
+          b.id,
+        );
+        notify(
+          b.ownerId,
+          `Dispute resolved (Illustrative Demo): RM${deduction.toFixed(2)} simulated compensation applied from deposit.`,
+          b.id,
+        );
+      } else if (action.scenario === "serious_damage") {
+        b.status = "completed";
+        b.deposit = "held";
+
+        const evaluation = evaluateRentalOutcome([
+          {
+            type: "serious_damage",
+            confirmed: true,
+            description: "Fictional major damage claim approved (Demo): Full deposit applied to replacement liability.",
+          },
+        ]);
+        const scoreBefore = renter.riskScore ?? 70;
+        const scoreAfter = Math.max(0, Math.min(100, scoreBefore + evaluation.effectiveAdjustment));
+        renter.riskScore = scoreAfter;
+        renter.riskLevel = tierForScore(scoreAfter).level;
+        if (!renter.riskHistory) renter.riskHistory = [];
+        renter.riskHistory.unshift({
+          id: newId(),
+          bookingId: b.id,
+          itemTitle: b.title,
+          date: new Date().toISOString().slice(0, 10),
+          incidents: evaluation.incidents,
+          effectiveAdjustment: evaluation.effectiveAdjustment,
+          scoreBefore,
+          scoreAfter,
+          appealStatus: "none",
+        });
+
+        notify(
+          b.renterId,
+          `Dispute resolved (Illustrative Demo): Confirmed major damage. Full deposit RM${b.quote.deposit.toFixed(2)} applied to liability. Risk score adjusted by -30 to ${scoreAfter}.`,
+          b.id,
+        );
+        notify(
+          b.ownerId,
+          `Dispute resolved (Illustrative Demo): RM${b.quote.deposit.toFixed(2)} full deposit compensation applied to owner.`,
+          b.id,
+        );
+      } else if (action.scenario === "rejected") {
+        b.status = "completed";
+        b.deposit = "released";
+
+        notify(
+          b.renterId,
+          `Dispute review completed (Illustrative Demo): No damage confirmed. 100% simulated deposit (RM${b.quote.deposit.toFixed(2)}) released in full.`,
+          b.id,
+        );
+        notify(
+          b.ownerId,
+          `Dispute review completed (Illustrative Demo): Claim rejected after condition assessment. Deposit released to renter.`,
+          b.id,
+        );
+      } else if (action.scenario === "overdue_restriction") {
+        renter.hasOverdueObligation = true;
+        notify(
+          renter.id,
+          "Confirmed damage obligation unpaid after 7 days. All new bookings restricted until settled (Demo).",
+          b.id,
+        );
+      }
+      break;
+    }
+
     case "message": {
       const b = bookingFor(action.bookingId);
       requireThat(
@@ -420,6 +1078,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       break;
     }
+
     case "review": {
       const b = bookingFor(action.bookingId);
       requireThat(
@@ -464,6 +1123,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       }
       break;
     }
+
     case "dispute": {
       const b = bookingFor(action.bookingId);
       requireThat(
@@ -512,6 +1172,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       break;
     }
+
     case "readNotices":
       state.notifications
         .filter((n) => n.userId === user.id)
@@ -519,6 +1180,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           n.read = true;
         });
       break;
+
     case "readConversation":
       bookingFor(action.bookingId);
       state.notifications
@@ -533,5 +1195,6 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         });
       break;
   }
+
   return state;
 }

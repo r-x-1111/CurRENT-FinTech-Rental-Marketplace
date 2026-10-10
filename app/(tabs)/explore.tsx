@@ -19,16 +19,17 @@ export default function ExploreScreen() {
     q?: string;
     category?: string;
     saved?: string;
+    location?: string;
   }>();
   const { state, user } = useMarketplace();
   const [query, setQuery] = useState(params.q || "");
   const [category, setCategory] = useState(params.category || "All items");
-  const [location, setLocation] = useState("");
+  const [location, setLocation] = useState(params.location || "");
   const [price, setPrice] = useState("");
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [saved, setSaved] = useState(params.saved === "1");
-  const [filters, setFilters] = useState(false);
+  const [filters, setFilters] = useState(!!params.location);
   const [verified, setVerified] = useState(false);
   const [minimumRating, setMinimumRating] = useState("Any rating");
   const [sort, setSort] = useState("Recommended");
@@ -36,7 +37,8 @@ export default function ExploreScreen() {
     setQuery(params.q || "");
     setCategory(params.category || "All items");
     setSaved(params.saved === "1");
-  }, [params.q, params.category, params.saved]);
+    if (params.location !== undefined) setLocation(params.location);
+  }, [params.q, params.category, params.saved, params.location]);
   let dateError = "";
   if (start || end) {
     try {
@@ -80,6 +82,11 @@ export default function ExploreScreen() {
       return true;
     })
     .sort((a, b) => {
+      const now = Date.now();
+      const aBoosted = a.featuredUntil && new Date(a.featuredUntil).getTime() > now ? 1 : 0;
+      const bBoosted = b.featuredUntil && new Date(b.featuredUntil).getTime() > now ? 1 : 0;
+      if (aBoosted !== bBoosted) return bBoosted - aBoosted;
+
       if (sort === "Price: low to high") return a.dailyPrice - b.dailyPrice;
       if (sort === "Price: high to low") return b.dailyPrice - a.dailyPrice;
       if (sort === "Top rated") return b.rating - a.rating;

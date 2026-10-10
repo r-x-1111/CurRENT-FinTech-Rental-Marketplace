@@ -1,6 +1,11 @@
 export type VerificationStatus =
   "not_verified" | "pending" | "verified" | "failed";
-export type RiskLevel = "low" | "standard" | "higher";
+export type RiskLevel =
+  | "low"
+  | "medium"
+  | "high"
+  | "very_high"
+  | "unverified";
 export type ListingStatus = "draft" | "published" | "paused" | "unavailable";
 export type CollectionMethod =
   "Meet Owner" | "Self-Pickup" | "Delivery Available";
@@ -24,8 +29,10 @@ export interface Listing {
   category: string;
   dailyPrice: number;
   estimatedValue: number;
+  ownerEstimatedValue?: number;
   location: string;
   rating: number;
+  completedRentalsCount?: number;
   verifiedOwner: boolean;
   imageUrl: string;
   description: string;
@@ -34,6 +41,7 @@ export interface Listing {
   availableFrom?: string;
   availableTo?: string;
   collectionMethods?: CollectionMethod[];
+  featuredUntil?: string | null;
 }
 
 export interface Rental {

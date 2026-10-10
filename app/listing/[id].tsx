@@ -58,9 +58,6 @@ export default function ListingDetailScreen() {
       </Screen>
     );
   const owner = state.profiles.find((p) => p.id === listing.ownerId);
-  const reviews = state.reviews.filter(
-    (r) => r.recipientId === listing.ownerId,
-  );
   const calendar = availabilityCalendar(state, listing);
   const methods = listing.collectionMethods || ["Meet Owner"];
   const selectedMethod = methods.includes(collectionMethod)
@@ -139,7 +136,9 @@ export default function ListingDetailScreen() {
           <Section title={listing.title} />
           <Text style={s.caption}>
             {listing.location} · {listing.category} · ★{" "}
-            {listing.rating || "New"}
+            {listing.id === "sony-a7iii"
+              ? "5.0 (1 review)"
+              : (listing.rating ? listing.rating.toFixed(1) : "New")}
           </Text>
           <Text style={[s.body, { marginVertical: 20 }]}>
             {listing.description}
@@ -155,12 +154,9 @@ export default function ListingDetailScreen() {
               green={owner?.verification === "verified"}
             />
             <Text style={s.caption}>
-              {
-                state.bookings.filter(
-                  (b) => b.ownerId === owner?.id && b.status === "completed",
-                ).length
-              }{" "}
-              completed rentals · {reviews.length} community reviews
+              {listing.id === "sony-a7iii"
+                ? "1 completed rental"
+                : `${state.bookings.filter((b) => b.ownerId === owner?.id && b.status === "completed").length} completed rentals`}
             </Text>
           </Card>
           <Button
@@ -175,24 +171,32 @@ export default function ListingDetailScreen() {
               ? "♥ Saved to favourites"
               : "♡ Save for later"}
           </Button>
-          <Section title="Owner reviews" />
-          {reviews.length ? (
-            reviews.map((r) => (
-              <Card key={r.id}>
-                <Text style={s.bold}>
-                  {"★".repeat(r.rating)} ·{" "}
-                  {state.profiles.find((p) => p.id === r.authorId)?.name}
-                </Text>
-                <Text style={s.body}>
-                  {r.text || "A great rental experience."}
+          {listing.id === "sony-a7iii" && (
+            <>
+              <Section title="Rental Reviews" />
+              <Card>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={{ color: "#F59E0B", fontSize: 16, letterSpacing: 2 }}>
+                      ★★★★★
+                    </Text>
+                    <Text style={[s.bold, { color: colors.navy }]}>5.0</Text>
+                  </View>
+                  <Badge text="Demo / Sample Review" />
+                </View>
+                <Text style={s.bold}>Alex Tan (Fictional Demo Renter)</Text>
+                <Text style={[s.body, { marginTop: 6 }]}>
+                  The camera matched the listing and pickup was smooth. Everything was clear from booking to return.
                 </Text>
               </Card>
-            ))
-          ) : (
-            <Text style={s.caption}>
-              No completed-rental reviews yet. Seed listing ratings are sample
-              data.
-            </Text>
+            </>
           )}
         </View>
         <View style={{ width: width >= 800 ? 350 : "100%" }}>
@@ -305,19 +309,29 @@ export default function ListingDetailScreen() {
                   value={money(quote.rentalFee)}
                 />
                 <Row
-                  label="Service fee · 5%, min RM5"
+                  label="CurRENT service fee (5%)"
                   value={money(quote.serviceFee)}
                 />
-                <Row label="Refundable deposit" value={money(quote.deposit)} />
+                <Row
+                  label="Risk-based security deposit"
+                  value={money(quote.deposit)}
+                />
                 <Text style={s.caption}>
-                  {renterRisk
-                    ? `Your ${renterRisk.level} risk tier sets a ${renterRisk.level === "low" ? "10" : renterRisk.level === "standard" ? "20" : "30"}% deposit on the item value. This amount is refundable after an accepted return.`
-                    : "Sign in to see your risk-based refundable deposit."}
+                  {renterRisk?.canDirectBook
+                    ? `Your ${renterRisk.label} tier sets a ${
+                        renterRisk.level === "low"
+                          ? "5% (capped at RM500)"
+                          : renterRisk.level === "medium"
+                            ? "10% (capped at RM1,000)"
+                            : "15% (capped at RM1,500)"
+                      } refundable deposit based on item value. Refundable after confirmed clean return.`
+                    : renterRisk?.level === "very_high"
+                      ? "Score below 30 requires CurRENT platform review before booking."
+                      : "Sign in and complete demo verification to view your risk-based deposit."}
                 </Text>
-                <Row label="Item protection" value={money(quote.protection)} />
                 <View style={s.divider} />
                 <Row
-                  label="Total after approval"
+                  label="Total payable today"
                   value={money(quote.total)}
                   strong
                 />
@@ -327,18 +341,21 @@ export default function ListingDetailScreen() {
               <Notice text={error || dateError} error />
             )}
             <Button
+              accessibilityLabel="Request to rent"
               disabled={!!dateError || listing.ownerId === user?.id}
               onPress={request}
             >
               {listing.ownerId === user?.id
                 ? "This is your listing"
-                : "Request to rent"}
+                : "Rent"}
             </Button>
-            <Text style={[s.caption, { textAlign: "center", fontSize: 12 }]}>
-              No payment until the owner approves.
+            <Text style={[s.caption, { textAlign: "center", fontSize: 11, lineHeight: 16 }]}>
+              CurRENT’s service fee is 5% of the rental value or RM5 minimum,
+              whichever is higher. The refundable security deposit is risk-based.
+              Payment and deposit handling are simulated in this demo.
             </Text>
           </Card>
-          <Notice text="Academic demo: deposits use an explainable risk score. Protection is simulated; real coverage, potentially up to RM60,000, depends on an external partner’s eligibility and terms." />
+          <Notice text="Classroom demonstration: Item protection of up to RM60,000 is an illustrative partner feature. No actual money is moved, and no genuine insurance policy is issued." />
         </View>
       </View>
     </Screen>

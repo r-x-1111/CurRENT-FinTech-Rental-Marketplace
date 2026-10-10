@@ -69,16 +69,19 @@ export function Button({
   secondary,
   disabled,
   danger,
+  accessibilityLabel,
 }: {
   children: React.ReactNode;
   onPress: () => void;
   secondary?: boolean;
   disabled?: boolean;
   danger?: boolean;
+  accessibilityLabel?: string;
 }) {
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
@@ -217,7 +220,7 @@ export function Chips({
   selected,
   onSelect,
 }: {
-  options: string[];
+  options: readonly string[] | string[];
   selected: string;
   onSelect: (value: string) => void;
 }) {

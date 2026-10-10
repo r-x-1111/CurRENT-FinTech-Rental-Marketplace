@@ -2,8 +2,29 @@ import type {
   CollectionMethod,
   Listing,
   RentalStatus,
+  RiskLevel,
   VerificationStatus,
 } from "./index";
+
+export interface RiskIncidentDetail {
+  type: "on_time_success" | "late_return" | "minor_damage" | "serious_damage" | "theft_fraud";
+  description: string;
+  penalty: number;
+  hoursLate?: number;
+  isWinning: boolean;
+}
+
+export interface RiskIncidentRecord {
+  id: string;
+  bookingId?: string;
+  itemTitle: string;
+  date: string;
+  incidents: RiskIncidentDetail[];
+  effectiveAdjustment: number;
+  scoreBefore: number;
+  scoreAfter: number;
+  appealStatus?: "none" | "pending" | "resolved";
+}
 
 export interface Profile {
   id: string;
@@ -14,6 +35,11 @@ export interface Profile {
   favourites: string[];
   passwordHash?: string;
   salt?: string;
+  riskScore?: number | null;
+  riskLevel?: RiskLevel;
+  isBanned?: boolean;
+  hasOverdueObligation?: boolean;
+  riskHistory?: RiskIncidentRecord[];
 }
 export interface Quote {
   days: number;
@@ -47,6 +73,30 @@ export interface Booking {
   paymentMethod?: string;
   agreement?: string;
   createdAt: string;
+  scheduledPickup?: string;
+  scheduledReturn?: string;
+  durationMinutes?: number;
+  cancellationCutoff?: string;
+  lenderHandoverAt?: string | null;
+  renterReceivedAt?: string | null;
+  activationTimestamp?: string | null;
+  effectiveReturnDeadline?: string | null;
+  renterReturnConfirmedAt?: string | null;
+  lenderReturnConfirmedAt?: string | null;
+  actualReturnTimestamp?: string | null;
+  consecutiveParentId?: string | null;
+  chainBookings?: string[];
+  conflictOffer?: {
+    revisedEnd: string;
+    revisedDurationMinutes: number;
+    revisedRentalDays: number;
+    originalRentalFee: number;
+    revisedRentalFee: number;
+    originalServiceFee: number;
+    revisedServiceFee: number;
+    refundAmount: number;
+    depositRetained: number;
+  } | null;
 }
 export interface Evidence {
   id: string;

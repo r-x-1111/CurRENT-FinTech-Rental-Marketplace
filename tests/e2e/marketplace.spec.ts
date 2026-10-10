@@ -31,7 +31,7 @@ test("renter and owner complete a rental, exchange messages, upload evidence and
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
-  await expect(page.getByText("Big plans.")).toBeVisible();
+  await expect(page.getByText("Rent what you need")).toBeVisible();
   await page.screenshot({
     path: "test-results/home-desktop.png",
     fullPage: true,
