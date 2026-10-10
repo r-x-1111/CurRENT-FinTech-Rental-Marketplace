@@ -428,7 +428,7 @@ CurRENT is **Delivery Only**. The renter alone uploads the rental-condition medi
 | Stage | Actor and user-facing action | Evidence requirement / result |
 |---|---|---|
 | **Initial delivery receipt** | Renter presses **`Confirm Received`** | Records INITIAL delivery acknowledgement; never activates the booking. |
-| **Renter Check-in** | Renter uses **camera/Add Photos** and **video/Add Video** icons | Submit ≥6 photos + ≥1 video documenting the item upon delivery; owner sees same media. |
+| **Renter Check-in** | Renter uses screenshot-matched dashed icon tiles **`+ Add Photo`** and **`+ Add Video`** | Submit ≥6 photos + ≥1 video documenting the item upon delivery; owner sees the same media. |
 | **Renter Check-out** | Renter uploads return-condition media, then presses **`Confirm Return`** at bottom of Condition Evidence | Submit ≥6 photos + ≥1 video; then state **`Return Confirmed` / `Awaiting Lender Review`**, deposit held. |
 | **Lender return review** | Lender views renter's exact shared evidence, chooses **`No Issue – End Rental`** OR **`Apply Dispute`** | No lender uploads required. Clean review settles/release once; dispute holds deposit pending CurRENT review. |
 
