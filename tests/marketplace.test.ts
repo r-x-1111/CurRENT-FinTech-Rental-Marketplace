@@ -55,9 +55,9 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
     days: 2,
     rentalFee: 90,
     serviceFee: 5,
-    deposit: 200,
+    deposit: 400,
     protection: 0,
-    total: 295,
+    total: 495,
   });
   assert.deepEqual(calculateOwnerPayout(90), {
     commission: 10.8,
@@ -139,7 +139,7 @@ test("rental completes through participant-controlled steps, evidence, deposit r
   assert.equal(j.state.reviews.length, 2);
   assert.equal(j.state.listings[0].rating, 4);
   assert.equal(j.state.evidence.length, 2);
-  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 72);
+  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 77);
 });
 test("approval atomically rejects overlapping requests but permits adjacent rentals", () => {
   const j = journey();
@@ -205,7 +205,7 @@ test("dispute preserves evidence and freezes deposit release", () => {
   assert.throws(() => j.operation("release"), /inspect/);
   assert.throws(() => j.operation("cancel"), /unpaid/);
   assert.equal(j.state.disputes.length, 1);
-  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 40);
+  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 45);
 });
 test("listing publication, dates, ownership, verification and deletion are enforced", () => {
   const j = journey();
@@ -343,7 +343,7 @@ test("state snapshots can reload mid-payment without losing fees or agreement pr
     id: "booking-1",
     operation: "payment_result",
   });
-  assert.equal(paid.bookings[0].quote.total, 295);
+  assert.equal(paid.bookings[0].quote.total, 495);
   assert.equal(paid.bookings[0].payment, "paid");
   assert.equal(loaded.bookings[0].payment, "processing");
 });
@@ -368,7 +368,7 @@ test("started 24-hour block pricing charges full days for partial blocks", () =>
   assert.equal(rentalDays("2026-11-01T10:00:00Z", "2026-11-03T17:00:00Z"), 3);
 });
 
-test("simulated eKYC verification initializes risk score to strictly 70 and unverified is N/A", () => {
+test("simulated eKYC verification initializes risk score to strictly 75 and unverified is N/A", () => {
   let state = createSeed();
   // Switch to unverified renter Chloe Ng
   state = transition(state, { type: "login", userId: "unverified-renter" });
@@ -386,12 +386,12 @@ test("simulated eKYC verification initializes risk score to strictly 70 and unve
   state = transition(state, { type: "verify", status: "verified" });
   user = state.profiles.find((p) => p.id === "unverified-renter")!;
   assert.equal(user.verification, "verified");
-  assert.equal(user.riskScore, 70);
-  assert.equal(riskFor(state, user).score, 70);
-  assert.equal(riskFor(state, user).level, "low");
+  assert.equal(user.riskScore, 75);
+  assert.equal(riskFor(state, user).score, 75);
+  assert.equal(riskFor(state, user).level, "medium");
 });
 
-test("V1.8 risk score tier boundaries and direct checkout permissions (29, 30, 39, 40, 69, 70)", () => {
+test("V3.15 risk score tier boundaries and direct checkout permissions (29, 30, 39, 40, 70, 79, 80, 100)", () => {
   const { tierForScore } = require("../services/riskScore");
   // 0-29: Very High Risk, platform review, canDirectBook: false
   assert.deepEqual(tierForScore(0), { level: "very_high", label: "Very High Risk", canDirectBook: false });
@@ -401,12 +401,13 @@ test("V1.8 risk score tier boundaries and direct checkout permissions (29, 30, 3
   assert.deepEqual(tierForScore(30), { level: "high", label: "High Risk", canDirectBook: true });
   assert.deepEqual(tierForScore(39), { level: "high", label: "High Risk", canDirectBook: true });
 
-  // 40-69: Medium Risk, canDirectBook: true
+  // 40-79: Medium Risk, canDirectBook: true
   assert.deepEqual(tierForScore(40), { level: "medium", label: "Medium Risk", canDirectBook: true });
-  assert.deepEqual(tierForScore(69), { level: "medium", label: "Medium Risk", canDirectBook: true });
+  assert.deepEqual(tierForScore(70), { level: "medium", label: "Medium Risk", canDirectBook: true });
+  assert.deepEqual(tierForScore(79), { level: "medium", label: "Medium Risk", canDirectBook: true });
 
-  // 70-100: Low Risk, canDirectBook: true
-  assert.deepEqual(tierForScore(70), { level: "low", label: "Low Risk", canDirectBook: true });
+  // 80-100: Low Risk, canDirectBook: true
+  assert.deepEqual(tierForScore(80), { level: "low", label: "Low Risk", canDirectBook: true });
   assert.deepEqual(tierForScore(100), { level: "low", label: "Low Risk", canDirectBook: true });
 });
 
@@ -651,7 +652,7 @@ test("Phase 4 & 5: two-sided clean return releases deposit and awards +2 score, 
   state = transition(state, { type: "handoverConfirm", bookingId: "booking-return", role: "renter" });
 
   const scoreBefore = state.profiles.find((p) => p.id === "demo-renter")!.riskScore;
-  assert.equal(scoreBefore, 70);
+  assert.equal(scoreBefore, 75);
 
   // Renter confirms return with photo
   state = transition(state, {
@@ -678,7 +679,7 @@ test("Phase 4 & 5: two-sided clean return releases deposit and awards +2 score, 
   assert.equal(bCompleted.deposit, "released");
 
   const scoreAfter = state.profiles.find((p) => p.id === "demo-renter")!.riskScore;
-  assert.equal(scoreAfter, 72); // +2 awarded on on-time clean return!
+  assert.equal(scoreAfter, 77); // +2 awarded on on-time clean return! Initial 75 + 2 = 77
 });
 
 test("Phase 5: predefined fictional dispute resolutions properly adjust deposit and risk penalties", () => {
@@ -729,7 +730,7 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
   const bResolved = state.bookings.find((b) => b.id === "booking-dispute")!;
   assert.equal(bResolved.status, "completed");
   const renterAfter = state.profiles.find((p) => p.id === "demo-renter")!;
-  assert.equal(renterAfter.riskScore, 60); // 70 - 10 = 60
+  assert.equal(renterAfter.riskScore, 65); // 75 - 10 = 65
 });
 
 test("Phase 3: Option A delayed handover collision generates conflict offer that renter accepts to activate", () => {

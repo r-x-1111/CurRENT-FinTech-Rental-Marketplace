@@ -191,7 +191,7 @@ export default function ProfileScreen() {
         />
         <Text style={s.caption}>
           Simulate an external eKYC identity provider. In this classroom demo, no real identity documents or biometrics are collected.
-          Upon successful verification, every newly verified renter begins at strictly 70/100 (Low Risk).
+          Upon successful verification, every newly verified renter begins at strictly 75/100 (Medium Risk).
         </Text>
         {["not_verified", "failed"].includes(user.verification) && (
           <Button onPress={() => verify("pending")}>
@@ -204,7 +204,7 @@ export default function ProfileScreen() {
           <>
             <Notice text="Verification pending. Choose a simulated provider response to test either outcome." />
             <Button onPress={() => verify("verified")}>
-              Simulate verified result (Score 70)
+              Simulate verified result (Initial Score 75 · Medium)
             </Button>
             <Button secondary onPress={() => verify("failed")}>
               Simulate failed result
@@ -229,7 +229,7 @@ export default function ProfileScreen() {
           CurRENT Rental Risk Score is a platform reliability metric, NOT a consumer credit score.
           It transparently determines your refundable security deposit tier and booking permissions.
         </Text>
-        <Row label="Initial verified score" value="70 (Low Risk)" />
+        <Row label="Initial verified score" value="75 (Medium Risk)" />
         <Row
           label="Verification status"
           value={user.verification === "verified" ? "Verified (Demo eKYC)" : "Not verified (N/A)"}
@@ -249,7 +249,7 @@ export default function ProfileScreen() {
           value={
             risk.score === null
               ? "N/A"
-              : risk.score >= 70
+              : risk.score >= 80
               ? "5% (capped at RM500)"
               : risk.score >= 40
               ? "10% (capped at RM1,000)"
@@ -263,11 +263,11 @@ export default function ProfileScreen() {
           value={`+${completed * 2} points`}
         />
         <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border }}>
-          <Text style={[s.bold, { fontSize: 13, marginBottom: 4 }]}>V1.8 Rules-Based Deposit Schedule:</Text>
-          <Text style={s.caption}>• Low Risk (70–100): 5% deposit, capped at RM500 (Direct checkout)</Text>
-          <Text style={s.caption}>• Medium Risk (40–69): 10% deposit, capped at RM1,000 (Direct checkout)</Text>
+          <Text style={[s.bold, { fontSize: 13, marginBottom: 4 }]}>V3.15 Rules-Based Deposit Schedule:</Text>
+          <Text style={s.caption}>• Low Risk (80–100): 5% deposit, capped at RM500 (Direct checkout)</Text>
+          <Text style={s.caption}>• Medium Risk (40–79): 10% deposit, capped at RM1,000 (Direct checkout)</Text>
           <Text style={s.caption}>• High Risk (30–39): 15% deposit, capped at RM1,500 (Direct checkout)</Text>
-          <Text style={s.caption}>• Very High Risk (0–29): Deposit by platform review; classroom requests stay Pending</Text>
+          <Text style={s.caption}>• Very High Risk (0–29): CurRENT Platform Review request (Pending only, no checkout)</Text>
         </View>
       </Card>
 
@@ -275,7 +275,7 @@ export default function ProfileScreen() {
       <Section title="Renter Reliability & Incident History" />
       <Card>
         <Text style={s.caption}>
-          V1.8 Single Winning Incident Rule: When multiple violations occur on the same physical rental, only the single most serious
+          V3.15 Single Winning Incident Rule: When multiple violations occur on the same physical rental chain, only the single most serious
           penalty is applied. Secondary incidents are recorded in audit history but not stacked.
         </Text>
         {user.riskHistory && user.riskHistory.length > 0 ? (
@@ -312,85 +312,74 @@ export default function ProfileScreen() {
           ))
         ) : (
           <Text style={[s.caption, { marginVertical: 8 }]}>
-            No incident records. Clean rental history established with initial verified score of 70.
+            No incident records. Clean rental history established with initial verified score of 75.
           </Text>
         )}
-        <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border, gap: 8 }}>
-          <Text style={[s.bold, { fontSize: 13 }]}>Classroom Demo — Live Scoring Simulator:</Text>
-          <Button
-            secondary
-            onPress={() =>
-              simulateOutcome("Sony A7 III Rental", [
-                { type: "on_time_success", confirmed: true },
-              ])
-            }
-          >
-            +2 On-Time Return (No issues)
-          </Button>
-          <Button
-            secondary
-            onPress={() =>
-              simulateOutcome("PS5 Console Rental (4h Late)", [
-                { type: "late_return", hoursLate: 4, confirmed: true },
-              ])
-            }
-          >
-            −2 Late Return (4h late, 2h grace)
-          </Button>
-          <Button
-            secondary
-            onPress={() =>
-              simulateOutcome("DJI Mini Drone Rental", [
-                { type: "minor_damage", confirmed: true },
-              ])
-            }
-          >
-            −10 Confirmed Minor Damage
-          </Button>
-          <Button
-            secondary
-            onPress={() =>
-              simulateOutcome("GoPro Hero 12 Rental", [
-                { type: "serious_damage", confirmed: true },
-              ])
-            }
-          >
-            −30 Confirmed Serious Damage / Loss
-          </Button>
-          <Button
-            secondary
-            onPress={() =>
-              simulateOutcome("Projector Rental (Late + Minor Damage)", [
-                { type: "late_return", hoursLate: 4, confirmed: true },
-                { type: "minor_damage", confirmed: true },
-              ])
-            }
-          >
-            Winning Rule Test: 4h Late (−2) + Minor Damage (−10) → −10 Only
-          </Button>
-        </View>
+
+        {/* Live Scoring Simulator only in Admin Demo mode */}
+        {state.mode === "admin_demo" && (
+          <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: colors.border, gap: 8 }}>
+            <Text style={[s.bold, { fontSize: 13 }]}>Classroom Demo — Live Scoring Simulator:</Text>
+            <Button
+              secondary
+              onPress={() =>
+                simulateOutcome("Sony A7 III Rental", [
+                  { type: "on_time_success", confirmed: true },
+                ])
+              }
+            >
+              +2 Clean On-Time Return (No issues)
+            </Button>
+            <Button
+              secondary
+              onPress={() =>
+                simulateOutcome("PS5 Console Rental (4h Late)", [
+                  { type: "late_return", hoursLate: 4, confirmed: true },
+                ])
+              }
+            >
+              −2 Late Return (4h late beyond 2h grace)
+            </Button>
+            <Button
+              secondary
+              onPress={() =>
+                simulateOutcome("DJI Mini Drone Rental", [
+                  { type: "minor_damage", confirmed: true },
+                ])
+              }
+            >
+              −10 Confirmed Minor Damage
+            </Button>
+            <Button
+              secondary
+              onPress={() =>
+                simulateOutcome("GoPro Hero 12 Rental", [
+                  { type: "serious_damage", confirmed: true },
+                ])
+              }
+            >
+              −30 Confirmed Serious Damage / Loss
+            </Button>
+            <Button
+              secondary
+              onPress={() =>
+                simulateOutcome("Projector Rental (Late + Minor Damage)", [
+                  { type: "late_return", hoursLate: 4, confirmed: true },
+                  { type: "minor_damage", confirmed: true },
+                ])
+              }
+            >
+              Winning Rule Test: 4h Late (−2) + Minor Damage (−10) → −10 Only
+            </Button>
+          </View>
+        )}
       </Card>
 
-      {/* Your Activity */}
-      <Section title="Your activity" />
+      {/* Safety & Trust */}
+      <Section title="Safety & Support" />
       <View style={{ gap: 10 }}>
-        <Button
-          secondary
-          onPress={() =>
-            router.push({ pathname: "/(tabs)/explore", params: { saved: "1" } })
-          }
-        >{`Saved items · ${user.favourites.length}`}</Button>
-        <Button secondary onPress={() => router.push("/transactions")}>
-          Payment & transaction history
-        </Button>
-        <Button secondary onPress={() => router.push("/notifications")}>
-          Notifications
-        </Button>
-        <Button secondary onPress={() => router.push("../help")}>
-          Help & Trust and Safety
-        </Button>
-        <Button secondary onPress={() => router.push("/(tabs)/rentals")}>
-          Rental history
+        <Button secondary onPress={() => router.push("/help")}>
+          Help & Trust and Safety →
         </Button>
       </View>
 
@@ -412,49 +401,63 @@ export default function ProfileScreen() {
         </Text>
       )}
 
-      {/* Demo Accounts Switcher */}
-      <Section title="Demo accounts" />
+      {/* Demo Mode / Accounts Controls */}
+      <Section title="Demo controls" />
       <Card>
-        <Text style={s.caption}>
-          Switch accounts to demonstrate different customer personas, eKYC states, risk tiers, and role separation between Renter and Lender.
-        </Text>
-        {state.profiles
-          .filter((p) => !p.passwordHash)
-          .map((p) => (
+        {state.mode === "admin_demo" ? (
+          <>
+            <Text style={s.caption}>
+              Admin Demo mode is ACTIVE. Switch fictional customer personas or reset demo fixtures to initial state.
+            </Text>
+            {state.profiles
+              .filter((p) => !p.passwordHash)
+              .map((p) => (
+                <Button
+                  secondary
+                  key={p.id}
+                  disabled={user.id === p.id}
+                  onPress={() => {
+                    act({ type: "login", userId: p.id });
+                    setEditing(false);
+                    setError("");
+                    setSuccess("");
+                  }}
+                >{`${p.name} (${p.verification === "verified" ? `Score ${p.riskScore ?? "75"}` : "Unverified"})${user.id === p.id ? " · active" : ""}`}</Button>
+              ))}
             <Button
               secondary
-              key={p.id}
-              disabled={user.id === p.id}
+              danger
               onPress={() => {
-                act({ type: "login", userId: p.id });
-                setEditing(false);
-                setError("");
-                setSuccess("");
+                act({ type: "resetDemoState" });
+                setSuccess("All classroom mock data and fixtures reset to initial seed state!");
               }}
-            >{`${p.name} (${p.verification === "verified" ? `Score ${p.riskScore ?? "70"}` : "Unverified"})${user.id === p.id ? " · current account" : ""}`}</Button>
-          ))}
-        <Button secondary onPress={() => router.push("/auth")}>
-          Sign in or create another account
-        </Button>
-        <Button
-          danger
-          onPress={() => {
-            act({ type: "login", userId: null });
-            setEditing(false);
-          }}
-        >
-          Sign out
-        </Button>
-        <Button
-          secondary
-          danger
-          onPress={() => {
-            act({ type: "resetDemoState" });
-            setSuccess("All classroom mock data and fixtures reset to initial seed state!");
-          }}
-        >
-          ↺ Reset All Classroom Demo Data (Seed State)
-        </Button>
+            >
+              ↺ Reset Admin Demo Data
+            </Button>
+            <Button
+              onPress={() => {
+                act({ type: "setMode", mode: "normal" });
+                setSuccess("Returned to Normal Mode.");
+              }}
+            >
+              Exit Demo Mode
+            </Button>
+          </>
+        ) : (
+          <>
+            <Text style={s.caption}>
+              Currently in Normal Mode (clean new-user experience). You can switch into Admin Demo mode to inspect populated fixtures.
+            </Text>
+            <Button
+              onPress={() => {
+                act({ type: "setMode", mode: "admin_demo" });
+                setSuccess("Switched to Admin Demo mode.");
+              }}
+            >
+              Switch to Admin Demo Mode
+            </Button>
+          </>
+        )}
       </Card>
     </Screen>
   );

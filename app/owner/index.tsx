@@ -45,10 +45,9 @@ export default function OwnerDashboard() {
     (n, b) => n + calculateOwnerPayout(b.quote.rentalFee).payout,
     0,
   );
-  const filtered =
-    tab === "Requests"
-      ? bookings.filter((b) => b.status === "pending")
-      : bookings;
+  const activeRentalsCount = bookings.filter((b) =>
+    ["active", "upcoming", "return_pending"].includes(b.status),
+  ).length;
 
   return (
     <Screen
@@ -64,8 +63,8 @@ export default function OwnerDashboard() {
             `${listings.filter((l) => l.status === "published").length}`,
           ],
           [
-            "Pending Requests",
-            `${bookings.filter((b) => b.status === "pending").length}`,
+            "Active / Upcoming Rentals",
+            `${activeRentalsCount}`,
           ],
         ].map(([label, value]) => (
           <View key={label} style={[s.card, { flex: 1, minWidth: 140 }]}>
@@ -87,7 +86,7 @@ export default function OwnerDashboard() {
 
       <Section title="Lender Workspace" />
       <Chips
-        options={["Listings", "Requests", "Rentals", "Payouts", "Reviews"]}
+        options={["Listings", "Rentals", "Payouts & Commission", "Reviews"]}
         selected={tab}
         onSelect={setTab}
       />
@@ -95,17 +94,13 @@ export default function OwnerDashboard() {
       {!!error && <Notice text={error} error />}
       {!!success && <Notice text={success} />}
 
-      {["Requests", "Rentals"].includes(tab) &&
-        (filtered.length ? (
-          filtered.map((b) => <BookingCard key={b.id} booking={b} />)
+      {tab === "Rentals" &&
+        (bookings.length ? (
+          bookings.map((b) => <BookingCard key={b.id} booking={b} />)
         ) : (
           <Empty
-            title={
-              tab === "Requests"
-                ? "You’re all caught up"
-                : "No active rentals yet"
-            }
-            text="Rental requests and their next steps will appear here."
+            title="No rentals yet"
+            text="Confirmed bookings and their handover steps will appear here."
           />
         ))}
 
@@ -241,7 +236,7 @@ export default function OwnerDashboard() {
           />
         ))}
 
-      {tab === "Payouts" && (
+      {tab === "Payouts & Commission" && (
         <>
           <Notice text="Demo payouts are recorded after return inspection and deposit release. Platform commission is 12% of the rental fee. Estimated lender payout is 88%. No real funds are transferred." />
           {complete.length ? (

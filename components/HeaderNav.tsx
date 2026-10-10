@@ -19,7 +19,7 @@ export function HeaderNav({
   onScrollToSection?: (sectionKey: string) => void;
 }) {
   const { width } = useWindowDimensions();
-  const { state, user } = useMarketplace();
+  const { state, user, act } = useMarketplace();
   const isDesktop = width >= 800;
 
   const unreadNotices = state.notifications.filter(
@@ -27,129 +27,208 @@ export function HeaderNav({
   ).length;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.inner}>
-        {/* Brand */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="CurRENT Home"
-          onPress={() => router.push("/(tabs)")}
-          style={styles.brandContainer}
-        >
-          <Text style={styles.brandText}>
-            Cur<Text style={{ color: colors.blue }}>RENT</Text>
-            <Text style={styles.brandDot}> ●</Text>
-          </Text>
-          <Text style={styles.brandTag}>Klang Valley</Text>
-        </Pressable>
+    <View style={styles.wrapper}>
+      {/* Persistent Demo Mode Banner if in admin_demo mode */}
+      {state.mode === "admin_demo" && (
+        <View style={styles.demoBanner}>
+          <View style={styles.demoBannerInner}>
+            <View style={styles.demoBadge}>
+              <View style={styles.demoPulseDot} />
+              <Text style={styles.demoBadgeText}>DEMO MODE — Fictional Sample Data</Text>
+            </View>
+            <View style={styles.demoControls}>
+              <Text style={styles.demoPersonaLabel}>Persona:</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => act({ type: "login", userId: "demo-renter" })}
+                style={[
+                  styles.personaBtn,
+                  user?.id === "demo-renter" && styles.personaBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.personaBtnText,
+                    user?.id === "demo-renter" && styles.personaBtnTextActive,
+                  ]}
+                >
+                  Renter (Alex)
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => act({ type: "login", userId: "owner-aiman" })}
+                style={[
+                  styles.personaBtn,
+                  user?.id === "owner-aiman" && styles.personaBtnActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.personaBtnText,
+                    user?.id === "owner-aiman" && styles.personaBtnTextActive,
+                  ]}
+                >
+                  Lender (Aiman)
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => act({ type: "resetDemoState" })}
+                style={styles.demoActionBtn}
+              >
+                <Ionicons name="refresh-outline" size={13} color="#CBD5E1" />
+                <Text style={styles.demoActionBtnText}>Reset Demo Data</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => act({ type: "setMode", mode: "normal" })}
+                style={[styles.demoActionBtn, styles.exitDemoBtn]}
+              >
+                <Ionicons name="exit-outline" size={13} color="#F87171" />
+                <Text style={[styles.demoActionBtnText, { color: "#F87171" }]}>Exit Demo</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
 
-        {/* Desktop Nav Links */}
-        {isDesktop && (
-          <View style={styles.navLinks}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push("/(tabs)/explore")}
-              style={styles.navLink}
-            >
-              <Text
-                style={[
-                  styles.navLinkText,
-                  activeRoute === "explore" && styles.navLinkActive,
-                ]}
+      <View style={styles.container}>
+        <View style={styles.inner}>
+          {/* Brand */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="CurRENT Home"
+            onPress={() => router.push("/(tabs)")}
+            style={styles.brandContainer}
+          >
+            <Text style={styles.brandText}>
+              Cur<Text style={{ color: colors.blue }}>RENT</Text>
+              <Text style={styles.brandDot}> ●</Text>
+            </Text>
+            <Text style={styles.brandTag}>Klang Valley</Text>
+          </Pressable>
+
+          {/* Desktop Nav Links */}
+          {isDesktop && (
+            <View style={styles.navLinks}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push("/(tabs)/explore")}
+                style={styles.navLink}
               >
-                Browse rentals
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                if (onScrollToSection) onScrollToSection("howItWorks");
-                else router.push("/help");
-              }}
-              style={styles.navLink}
-            >
-              <Text style={styles.navLinkText}>How it works</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push("/owner")}
-              style={styles.navLink}
-            >
-              <Text
-                style={[
-                  styles.navLinkText,
-                  activeRoute === "owner" && styles.navLinkActive,
-                ]}
+                <Text
+                  style={[
+                    styles.navLinkText,
+                    activeRoute === "explore" && styles.navLinkActive,
+                  ]}
+                >
+                  Browse rentals
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  if (onScrollToSection) onScrollToSection("howItWorks");
+                  else router.push("/help");
+                }}
+                style={styles.navLink}
               >
-                List an item
-              </Text>
-            </Pressable>
+                <Text style={styles.navLinkText}>How it works</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push("/owner")}
+                style={styles.navLink}
+              >
+                <Text
+                  style={[
+                    styles.navLinkText,
+                    activeRoute === "owner" && styles.navLinkActive,
+                  ]}
+                >
+                  List an item
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  if (onScrollToSection) onScrollToSection("safety");
+                  else router.push("/help");
+                }}
+                style={styles.navLink}
+              >
+                <Text style={styles.navLinkText}>Safety</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Right Action Icons & Profile */}
+          <View style={styles.actions}>
+            {state.mode !== "admin_demo" && (
+              <Pressable
+                accessibilityLabel="Admin Demo"
+                accessibilityRole="button"
+                onPress={() => act({ type: "setMode", mode: "admin_demo" })}
+                style={styles.adminDemoBtn}
+              >
+                <Ionicons name="flask-outline" size={15} color={colors.blue} />
+                <Text style={styles.adminDemoBtnText}>Admin Demo</Text>
+              </Pressable>
+            )}
+
             <Pressable
+              accessibilityLabel="Messages"
               accessibilityRole="button"
-              onPress={() => {
-                if (onScrollToSection) onScrollToSection("safety");
-                else router.push("/help");
-              }}
-              style={styles.navLink}
+              onPress={() => router.push("/(tabs)/messages")}
+              style={styles.iconBtn}
             >
-              <Text style={styles.navLinkText}>Safety</Text>
+              <Ionicons
+                name="chatbubbles-outline"
+                size={20}
+                color={colors.navy}
+              />
+              {isDesktop && <Text style={styles.iconLabel}>Messages</Text>}
+            </Pressable>
+
+            <Pressable
+              accessibilityLabel="Notifications"
+              accessibilityRole="button"
+              onPress={() => router.push("/notifications")}
+              style={styles.iconBtn}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={20}
+                color={colors.navy}
+              />
+              {unreadNotices > 0 && <View style={styles.unreadDot} />}
+            </Pressable>
+
+            <Pressable
+              accessibilityLabel="Profile"
+              accessibilityRole="button"
+              onPress={() => router.push("/(tabs)/profile")}
+              style={styles.profileBtn}
+            >
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>
+                  {user?.name
+                    ? user.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .slice(0, 2)
+                        .join("")
+                    : "Hi"}
+                </Text>
+              </View>
+              {isDesktop && (
+                <Text style={styles.profileText}>
+                  {user ? user.name.split(" ")[0] : "Profile"}
+                </Text>
+              )}
             </Pressable>
           </View>
-        )}
-
-        {/* Right Action Icons & Profile */}
-        <View style={styles.actions}>
-          <Pressable
-            accessibilityLabel="Messages"
-            accessibilityRole="button"
-            onPress={() => router.push("/(tabs)/messages")}
-            style={styles.iconBtn}
-          >
-            <Ionicons
-              name="chatbubbles-outline"
-              size={20}
-              color={colors.navy}
-            />
-            {isDesktop && <Text style={styles.iconLabel}>Messages</Text>}
-          </Pressable>
-
-          <Pressable
-            accessibilityLabel="Notifications"
-            accessibilityRole="button"
-            onPress={() => router.push("/notifications")}
-            style={styles.iconBtn}
-          >
-            <Ionicons
-              name="notifications-outline"
-              size={20}
-              color={colors.navy}
-            />
-            {unreadNotices > 0 && <View style={styles.unreadDot} />}
-          </Pressable>
-
-          <Pressable
-            accessibilityLabel="Profile"
-            accessibilityRole="button"
-            onPress={() => router.push("/(tabs)/profile")}
-            style={styles.profileBtn}
-          >
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {user?.name
-                  ? user.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .slice(0, 2)
-                      .join("")
-                  : "Hi"}
-              </Text>
-            </View>
-            {isDesktop && (
-              <Text style={styles.profileText}>
-                {user ? user.name.split(" ")[0] : "Profile"}
-              </Text>
-            )}
-          </Pressable>
         </View>
       </View>
     </View>
@@ -261,6 +340,112 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: colors.navy,
+  },
+  wrapper: {
+    width: "100%",
+  },
+  demoBanner: {
+    backgroundColor: "#0F172A",
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E293B",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  demoBannerInner: {
+    maxWidth: 1180,
+    width: "100%",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  demoBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  demoPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#22C55E",
+  },
+  demoBadgeText: {
+    color: "#F8FAFC",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  demoControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  demoPersonaLabel: {
+    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "600",
+    marginRight: 2,
+  },
+  personaBtn: {
+    backgroundColor: "#1E293B",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  personaBtnActive: {
+    backgroundColor: colors.blue,
+    borderColor: colors.blue,
+  },
+  personaBtnText: {
+    color: "#CBD5E1",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  personaBtnTextActive: {
+    color: "white",
+    fontWeight: "700",
+  },
+  demoActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#1E293B",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  demoActionBtnText: {
+    color: "#CBD5E1",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  exitDemoBtn: {
+    borderColor: "rgba(239, 68, 68, 0.4)",
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+  },
+  adminDemoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+  },
+  adminDemoBtnText: {
+    color: colors.blue,
+    fontSize: 12,
+    fontWeight: "700",
   },
 });
 

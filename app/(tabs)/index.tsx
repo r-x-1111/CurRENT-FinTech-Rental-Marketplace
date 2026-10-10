@@ -16,11 +16,9 @@ import { HeaderNav } from "../../components/HeaderNav";
 import { Footer } from "../../components/Footer";
 import { ListingGrid } from "../../components/ListingGrid";
 import { RiskGauge } from "../../components/RiskGauge";
-import { FaqAccordion } from "../../components/FaqAccordion";
 import { colors } from "../../constants/theme";
 import { categories, locations } from "../../constants/categories";
 import { useMarketplace } from "../../context/Marketplace";
-import { sampleFaqs } from "../../data/mock";
 
 export default function HomeScreen() {
   const { state, user } = useMarketplace();
@@ -252,7 +250,7 @@ export default function HomeScreen() {
                 >
                   <Image
                     source={{
-                      uri: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=400&q=80",
+                      uri: "/products/sony-a7iii.jpg",
                     }}
                     style={styles.floatImg}
                   />
@@ -268,7 +266,7 @@ export default function HomeScreen() {
                 >
                   <Image
                     source={{
-                      uri: "https://images.unsplash.com/photo-1606144042614-b2417e99c4e3?auto=format&fit=crop&w=400&q=80",
+                      uri: "/products/ps5-console.jpg",
                     }}
                     style={styles.floatImg}
                   />
@@ -284,7 +282,7 @@ export default function HomeScreen() {
                 >
                   <Image
                     source={{
-                      uri: "https://images.unsplash.com/photo-1478720568477-152d9b164e26?auto=format&fit=crop&w=400&q=80",
+                      uri: "/products/portable-projector.jpg",
                     }}
                     style={styles.floatImg}
                   />
@@ -395,8 +393,8 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.stepTitle}>Return</Text>
               <Text style={styles.stepDesc}>
-                Upload return photos or videos. Once the lender confirms the
-                item’s condition, the deposit is released.
+                Upload return photos or videos. Once both parties confirm return
+                (No-Issues) independently, the deposit is released.
               </Text>
             </View>
           </View>
@@ -477,8 +475,8 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.trustCardTitleFeatured}>Renter Rental Risk Score</Text>
               <RiskGauge
-                score={70}
-                label="Low Risk"
+                score={75}
+                label="Medium Risk"
               />
               <Text style={styles.trustCardBodyFeatured}>
                 It is assessed based on identity verification, rental history and
@@ -632,70 +630,7 @@ export default function HomeScreen() {
         </View>
 
         {/* =========================================================================
-            6. DASHBOARD PREVIEW SECTION (Matches Canva Page 4)
-           ========================================================================= */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTag}>DASHBOARD PREVIEW</Text>
-            <Text style={styles.sectionTitle}>
-              Stay on top of one active rental.
-            </Text>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/(tabs)/rentals")}
-            style={styles.dashboardPreviewCard}
-          >
-            <View style={styles.previewTop}>
-              <View style={{ gap: 4 }}>
-                <Text style={styles.previewSub}>Current rental</Text>
-                <Text style={styles.previewItemTitle}>
-                  Sony A7 III Mirrorless Camera
-                </Text>
-                <Text style={styles.previewDue}>Return due 14 Oct 2026</Text>
-              </View>
-              <View style={styles.activeTag}>
-                <Text style={styles.activeTagText}>Active rental</Text>
-              </View>
-            </View>
-
-            <View style={styles.previewDivider} />
-
-            <View
-              style={[
-                styles.previewBottom,
-                { flexDirection: isDesktop ? "row" : "column", gap: 14 },
-              ]}
-            >
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={styles.previewStatLabel}>Deposit status</Text>
-                <Text style={styles.previewStatValue}>
-                  RM200 held securely
-                </Text>
-              </View>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={styles.previewStatLabel}>Messages</Text>
-                <Text style={styles.previewStatValue}>2 unread from Sarah</Text>
-              </View>
-            </View>
-          </Pressable>
-        </View>
-
-
-        {/* =========================================================================
-            8. QUESTIONS, ANSWERED (FAQ Accordion, Matches Canva Page 5)
-           ========================================================================= */}
-        <View style={styles.sectionWrap}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Questions, answered.</Text>
-          </View>
-
-          <FaqAccordion faqs={sampleFaqs} />
-        </View>
-
-        {/* =========================================================================
-            9. CLOSING CALL TO ACTION BANNER (Matches Canva Page 5)
+            6. CLOSING CALL TO ACTION BANNER (Matches Canva Page 5)
            ========================================================================= */}
         <View style={styles.sectionWrap}>
           <View

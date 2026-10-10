@@ -2,19 +2,19 @@ import { useState } from "react";
 import {
   Image,
   Pressable,
-  Switch,
+  StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
   Button,
   Card,
   Chips,
   Empty,
-  Field,
   Notice,
   Row,
   Screen,
@@ -28,27 +28,65 @@ import {
   dateAfter,
   money,
   quoteFor,
+  rentalDays,
   riskFor,
 } from "../../services/booking";
 import { colors } from "../../constants/theme";
 import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
+
+const TIME_OPTIONS = [
+  { value: "09:00", label: "09:00 AM" },
+  { value: "10:00", label: "10:00 AM" },
+  { value: "11:00", label: "11:00 AM" },
+  { value: "12:00", label: "12:00 PM" },
+  { value: "14:00", label: "02:00 PM" },
+  { value: "16:00", label: "04:00 PM" },
+  { value: "18:00", label: "06:00 PM" },
+];
+
+function formatTime(timeStr: string) {
+  const [h, m] = (timeStr || "11:00").split(":");
+  const hour = parseInt(h, 10);
+  if (isNaN(hour)) return timeStr;
+  const ampm = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  const displayMin = m || "00";
+  return `${displayHour < 10 ? `0${displayHour}` : displayHour}:${displayMin} ${ampm}`;
+}
+
+function formatDate(dateStr: string) {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return dateStr;
+}
+
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state, user, act } = useMarketplace();
   const listing = state.listings.find((l) => l.id === id);
+
   const [start, setStart] = useState(dateAfter(1));
   const [end, setEnd] = useState(dateAfter(3));
-  const [protection, setProtection] = useState(false);
+  const [pickupTime, setPickupTime] = useState("11:00");
+  // Return time is strictly auto-matched and locked to pickup time per 24-hour rental rules
+  const returnTime = pickupTime;
   const [collectionMethod, setCollectionMethod] =
     useState<CollectionMethod>("Meet Owner");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
+  const [showCheckout, setShowCheckout] = useState(false);
   const [error, setError] = useState("");
+  const [successNotice, setSuccessNotice] = useState("");
   const [photo, setPhoto] = useState("");
   const { width } = useWindowDimensions();
+
   if (
     !listing ||
     (listing.status !== "published" && listing.ownerId !== user?.id)
-  )
+  ) {
     return (
       <Screen back>
         <Empty
@@ -57,35 +95,118 @@ export default function ListingDetailScreen() {
         />
       </Screen>
     );
+  }
+
   const owner = state.profiles.find((p) => p.id === listing.ownerId);
-  const calendar = availabilityCalendar(state, listing);
+  const calendar = availabilityCalendar(state, listing, 28);
+  const firstDate = calendar[0]?.date
+    ? new Date(calendar[0].date + "T00:00:00Z")
+    : new Date();
+  const monthHeader = firstDate.toLocaleString("en-GB", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  // Monday = 0, Tuesday = 1, ..., Sunday = 6
+  const firstDayOffset = (firstDate.getUTCDay() + 6) % 7;
+  const emptyPads = Array.from({ length: firstDayOffset });
+  const weekDays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
   const methods = listing.collectionMethods || ["Meet Owner"];
   const selectedMethod = methods.includes(collectionMethod)
     ? collectionMethod
     : methods[0];
   const renterRisk = user ? riskFor(state, user) : null;
+
+  const startTimestamp = `${start}T${pickupTime}:00Z`;
+  const endTimestamp = `${end}T${returnTime}:00Z`;
+
   let quote;
   let dateError = "";
-  try {
-    quote = quoteFor(
-      state,
-      user || {
-        id: "",
-        name: "",
-        email: "",
-        verification: "not_verified",
-        favourites: [],
-      },
-      listing,
-      start,
-      end,
-      protection,
-    );
-    availability(state, listing, start, end);
-  } catch (e) {
-    dateError = (e as Error).message;
+  if (start && end) {
+    try {
+      quote = quoteFor(
+        state,
+        user || {
+          id: "",
+          name: "",
+          email: "",
+          verification: "not_verified",
+          favourites: [],
+        },
+        listing,
+        startTimestamp,
+        endTimestamp,
+      );
+      availability(state, listing, startTimestamp, endTimestamp);
+    } catch (e) {
+      dateError = (e as Error).message;
+    }
   }
-  function request() {
+
+  // Two-click calendar selection handler
+  function handleDayPress(dayDate: string) {
+    setError("");
+    setSuccessNotice("");
+    if (!start || (start && end)) {
+      setStart(dayDate);
+      setEnd("");
+    } else {
+      if (dayDate > start) {
+        setEnd(dayDate);
+      } else {
+        setStart(dayDate);
+        setEnd("");
+      }
+    }
+  }
+
+  // Dynamic cancellation cutoff calculation (24h before pickup)
+  let cancellationNotice = "";
+  if (start && end && !dateError) {
+    try {
+      const pickupEpoch = Date.parse(startTimestamp);
+      if (Number.isFinite(pickupEpoch)) {
+        const cutoffDate = new Date(pickupEpoch - 24 * 60 * 60 * 1000);
+        const cutoffFormatted = cutoffDate.toLocaleDateString("en-GB", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        cancellationNotice = `Free cancellation until ${cutoffFormatted} (24 hours before pickup). After this cutoff, cancellations are non-refundable.`;
+      }
+    } catch {
+      cancellationNotice = "";
+    }
+  }
+
+  // Handle Request CurRENT Platform Review for scores 0–29
+  function handleRequestPlatformReview() {
+    if (!user) {
+      router.push("/auth");
+      return;
+    }
+    try {
+      act({
+        type: "requestPlatformReview",
+        listingId: id,
+        start: startTimestamp,
+        end: endTimestamp,
+        notes: "Pending CurRENT Platform Review (Score 0–29). Does not lock inventory and is never sent to the lender.",
+      });
+      setSuccessNotice(
+        "Request submitted for CurRENT Platform Review (Demo). View in Your Rentals → Platform Review Requests. This request does not lock inventory and is never sent to the lender.",
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  // Handle Instant Booking checkout confirmation
+  function handleConfirmInstantBook() {
     if (!user) {
       router.push("/auth");
       return;
@@ -93,22 +214,24 @@ export default function ListingDetailScreen() {
     try {
       const bookingId = newId();
       act({
-        type: "request",
+        type: "instantBook",
         id: bookingId,
         listingId: id,
-        start,
-        end,
-        protection,
+        start: startTimestamp,
+        end: endTimestamp,
         collectionMethod: selectedMethod,
+        paymentMethod: selectedPaymentMethod,
       });
       router.push(`/rental/${bookingId}`);
     } catch (e) {
       setError((e as Error).message);
     }
   }
+
   return (
     <Screen back>
       <View style={[s.split, width < 800 && { flexDirection: "column" }]}>
+        {/* Left Column: Image, Details, Reviews */}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Image
             source={{ uri: photo || listing.imageUrl }}
@@ -116,6 +239,7 @@ export default function ListingDetailScreen() {
               width: "100%",
               height: width < 650 ? 270 : 380,
               borderRadius: 20,
+              backgroundColor: "#F1F5F9",
             }}
           />
           <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
@@ -128,21 +252,31 @@ export default function ListingDetailScreen() {
               >
                 <Image
                   source={{ uri }}
-                  style={{ width: 65, height: 60, borderRadius: 10 }}
+                  style={[
+                    styles.galleryThumb,
+                    (photo === uri || (!photo && uri === listing.imageUrl)) &&
+                      styles.galleryThumbActive,
+                  ]}
                 />
               </Pressable>
             ))}
           </View>
+
           <Section title={listing.title} />
           <Text style={s.caption}>
             {listing.location} · {listing.category} · ★{" "}
             {listing.id === "sony-a7iii"
               ? "5.0 (1 review)"
-              : (listing.rating ? listing.rating.toFixed(1) : "New")}
+              : listing.rating
+              ? listing.rating.toFixed(1)
+              : "New"}
           </Text>
+
           <Text style={[s.body, { marginVertical: 20 }]}>
             {listing.description}
           </Text>
+
+          {/* Owner info card */}
           <Card>
             <Text style={s.h2}>Meet {owner?.name || "the owner"}</Text>
             <Badge
@@ -156,9 +290,14 @@ export default function ListingDetailScreen() {
             <Text style={s.caption}>
               {listing.id === "sony-a7iii"
                 ? "1 completed rental"
-                : `${state.bookings.filter((b) => b.ownerId === owner?.id && b.status === "completed").length} completed rentals`}
+                : `${
+                    state.bookings.filter(
+                      (b) => b.ownerId === owner?.id && b.status === "completed",
+                    ).length
+                  } completed rentals`}
             </Text>
           </Card>
+
           <Button
             secondary
             onPress={() =>
@@ -171,6 +310,8 @@ export default function ListingDetailScreen() {
               ? "♥ Saved to favourites"
               : "♡ Save for later"}
           </Button>
+
+          {/* Canonical Sony A7 III Demo Review (Section 15 & 17.2) */}
           {listing.id === "sony-a7iii" && (
             <>
               <Section title="Rental Reviews" />
@@ -199,165 +340,747 @@ export default function ListingDetailScreen() {
             </>
           )}
         </View>
-        <View style={{ width: width >= 800 ? 350 : "100%" }}>
+
+        {/* Right Column: Clean Calendar, Locked Return Time, Booking Summary */}
+        <View style={{ width: width >= 800 ? 380 : "100%" }}>
           <Card>
-            <Text style={s.title}>
-              {money(listing.dailyPrice)}
-              <Text style={s.caption}> / day</Text>
-            </Text>
-            <Text style={s.caption}>
-              Available {listing.availableFrom || "from today"}
-              {listing.availableTo
-                ? ` until ${listing.availableTo}`
-                : " onwards"}
-            </Text>
-            <Text style={s.label}>Next 21 days</Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
-              {calendar.map((day) => (
-                <Pressable
-                  key={day.date}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${day.date}, ${day.status}`}
-                  accessibilityState={{ disabled: day.status !== "available" }}
-                  disabled={day.status !== "available"}
-                  onPress={() => {
-                    setStart(day.date);
-                    setEnd(
-                      new Date(Date.parse(`${day.date}T00:00:00Z`) + 86400000)
-                        .toISOString()
-                        .slice(0, 10),
+            {/* Header: Location, Rating, Price */}
+            <View style={styles.bookingCardHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bookingLocation}>
+                  {listing.location} · ★{" "}
+                  {listing.id === "sony-a7iii"
+                    ? "5.0 (1 completed rental)"
+                    : listing.rating
+                    ? `${listing.rating.toFixed(1)} rating`
+                    : "New"}
+                </Text>
+                <Text style={s.title}>
+                  {money(listing.dailyPrice)}
+                  <Text style={s.caption}> / day</Text>
+                </Text>
+              </View>
+              <Badge
+                text={
+                  owner?.verification === "verified"
+                    ? "Verified Owner"
+                    : "Instant Booking"
+                }
+                green
+              />
+            </View>
+
+            {/* 1. Date Range Input Boxes (Mockup Style) */}
+            <View style={styles.dateBoxesRow}>
+              <View
+                style={[
+                  styles.dateBox,
+                  Boolean(start && !end) && styles.dateBoxActive,
+                ]}
+              >
+                <Text style={styles.dateBoxLabel}>Start date</Text>
+                <View style={styles.dateBoxValueRow}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={15}
+                    color={colors.blue}
+                  />
+                  <Text style={styles.dateBoxValueText}>
+                    {start ? formatDate(start) : "Select date"}
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.dateBox,
+                  Boolean(start && end) && styles.dateBoxActive,
+                ]}
+              >
+                <Text style={styles.dateBoxLabel}>End date</Text>
+                <View style={styles.dateBoxValueRow}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={15}
+                    color={colors.blue}
+                  />
+                  <Text style={styles.dateBoxValueText}>
+                    {end ? formatDate(end) : "Select date"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* 2. Clean Monthly Calendar Grid */}
+            <View style={styles.calendarContainer}>
+              <View style={styles.calendarHeaderRow}>
+                <Text style={styles.calendarMonthTitle}>{monthHeader}</Text>
+                {Boolean(start || end) && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setStart("");
+                      setEnd("");
+                    }}
+                    style={styles.clearDatesBtn}
+                  >
+                    <Text style={styles.clearDatesText}>Reset dates</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {/* Day of Week Headers */}
+              <View style={styles.weekDaysRow}>
+                {weekDays.map((wd) => (
+                  <View key={wd} style={styles.weekDayCell}>
+                    <Text style={styles.weekDayText}>{wd}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* 7-Column Days Grid */}
+              <View style={styles.daysGrid}>
+                {emptyPads.map((_, i) => (
+                  <View key={`pad-${i}`} style={styles.dayCell} />
+                ))}
+                {calendar.map((day) => {
+                  const isStart = start === day.date;
+                  const isEnd = end === day.date;
+                  const isInRange = Boolean(
+                    start && end && day.date > start && day.date < end,
+                  );
+                  const isSelected = isStart || isEnd;
+                  const isAvailable = day.status === "available";
+                  const dayNum = parseInt(day.date.split("-")[2], 10);
+
+                  return (
+                    <View key={day.date} style={styles.dayCell}>
+                      <Pressable
+                        key={day.date}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${day.date}, ${day.status}`}
+                        accessibilityState={{ disabled: !isAvailable }}
+                        disabled={!isAvailable}
+                        onPress={() => handleDayPress(day.date)}
+                        style={[
+                          styles.dayBtn,
+                          isInRange && styles.dayBtnInRange,
+                          isSelected && styles.dayBtnSelected,
+                          !isAvailable && styles.dayBtnUnavailable,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.dayText,
+                            isInRange && styles.dayTextInRange,
+                            isSelected && styles.dayTextSelected,
+                            !isAvailable && styles.dayTextUnavailable,
+                          ]}
+                        >
+                          {dayNum}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.calendarHint}>
+                {!start
+                  ? "Click 1: Choose pickup date"
+                  : !end
+                  ? "Click 2: Choose return date"
+                  : `Rental duration: ${start && end ? rentalDays(startTimestamp, endTimestamp) : 0} days`}
+              </Text>
+            </View>
+
+            {/* 3. Pickup Arrangement & Locked Return Time Section */}
+            <View style={styles.arrangementSection}>
+              <View style={styles.arrangementHeaderRow}>
+                <Ionicons name="time-outline" size={16} color={colors.navy} />
+                <Text style={styles.arrangementTitle}>
+                  Pickup & Return Arrangement
+                </Text>
+              </View>
+
+              {/* Pickup Time Slots */}
+              <View style={{ marginTop: 8 }}>
+                <View style={styles.fieldLabelRow}>
+                  <Text style={styles.fieldLabel}>Pickup time</Text>
+                  <Text style={styles.fieldSubtext}>Lender's available slots</Text>
+                </View>
+                <View style={styles.timeSlotsRow}>
+                  {TIME_OPTIONS.map((opt) => {
+                    const isSelected = pickupTime === opt.value;
+                    return (
+                      <Pressable
+                        key={opt.value}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Pickup at ${opt.label}`}
+                        onPress={() => setPickupTime(opt.value)}
+                        style={[
+                          styles.timeSlotBtn,
+                          isSelected && styles.timeSlotBtnSelected,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.timeSlotText,
+                            isSelected && styles.timeSlotTextSelected,
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </Pressable>
                     );
-                    setError("");
-                  }}
-                  style={{
-                    paddingHorizontal: 10,
-                    paddingVertical: 8,
-                    borderRadius: 9,
-                    backgroundColor:
-                      day.status === "available"
-                        ? start === day.date
-                          ? colors.blue
-                          : colors.paleBlue
-                        : colors.lightGrey,
-                    opacity: day.status === "available" ? 1 : 0.6,
-                  }}
-                >
-                  <Text
+                  })}
+                </View>
+              </View>
+
+              {/* Return Time: Strictly Locked & Auto-matched to Pickup Time */}
+              <View style={styles.lockedReturnCard}>
+                <View style={styles.lockedReturnHeader}>
+                  <View
                     style={{
-                      color: start === day.date ? "white" : colors.navy,
-                      fontSize: 12,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 5,
                     }}
                   >
-                    {day.date.slice(5)}{" "}
-                    {day.status === "reserved"
-                      ? "Booked"
-                      : day.status === "unavailable"
-                        ? "Closed"
-                        : ""}
+                    <Ionicons name="lock-closed" size={13} color="#0369A1" />
+                    <Text style={styles.lockedReturnTitle}>
+                      Return time (auto-matched to pickup time)
+                    </Text>
+                  </View>
+                  <View style={styles.lockedPill}>
+                    <Text style={styles.lockedPillText}>Locked · 24h cycle</Text>
+                  </View>
+                </View>
+                <View style={styles.lockedReturnBody}>
+                  <Text style={styles.lockedReturnTimeText}>
+                    {formatTime(returnTime)}
                   </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={s.caption}>
-              Tap an available day for a one-day rental, then adjust the return
-              date. Booked and closed days cannot be selected.
-            </Text>
-            <Text style={s.label}>Collection method</Text>
-            <Chips
-              options={methods}
-              selected={selectedMethod}
-              onSelect={(value) =>
-                setCollectionMethod(value as CollectionMethod)
-              }
-            />
-            {selectedMethod === "Delivery Available" && (
-              <Text style={s.caption}>
-                Delivery is a demo option supported by an external logistics
-                provider in a live service. No delivery fee is included here;
-                confirm arrangements with the owner.
-              </Text>
-            )}
-            <Field
-              label="Collection date (YYYY-MM-DD)"
-              value={start}
-              onChangeText={setStart}
-            />
-            <Field
-              label="Return date (YYYY-MM-DD)"
-              value={end}
-              onChangeText={setEnd}
-            />
-            <Text style={s.caption}>
-              Return day is not charged. Minimum 1 day.
-            </Text>
-            {listing.estimatedValue <= 60000 && (
-              <View style={s.row}>
-                <Text style={[s.body, { flex: 1 }]}>
-                  Demo item protection · RM5/day
-                </Text>
-                <Switch
-                  accessibilityLabel="Include demo item protection"
-                  value={protection}
-                  onValueChange={setProtection}
+                  <Text style={styles.lockedReturnExplanation}>
+                    Scheduled return time is frozen to match your pickup time per
+                    CurRENT 24-hour rental rules.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Collection Method */}
+              <View style={{ marginTop: 8 }}>
+                <View style={styles.fieldLabelRow}>
+                  <Text style={styles.fieldLabel}>Collection method</Text>
+                  <Text style={styles.fieldSubtext}>
+                    Location: {listing.location}
+                  </Text>
+                </View>
+                <Chips
+                  options={methods}
+                  selected={selectedMethod}
+                  onSelect={(value) =>
+                    setCollectionMethod(value as CollectionMethod)
+                  }
                 />
               </View>
+            </View>
+
+            {/* Dynamic Cancellation Notice (24h before pickup) */}
+            {cancellationNotice !== "" && (
+              <View style={styles.cancellationNoticeBox}>
+                <Ionicons name="shield-checkmark" size={16} color="#0284C7" />
+                <Text style={styles.cancellationNoticeText}>
+                  {cancellationNotice}
+                </Text>
+              </View>
             )}
+
+            {/* Concise Booking Summary */}
             {quote && (
-              <>
-                <Row
-                  label={`Rental fee · ${quote.days} days`}
-                  value={money(quote.rentalFee)}
-                />
-                <Row
-                  label="CurRENT service fee (5%)"
-                  value={money(quote.serviceFee)}
-                />
-                <Row
-                  label="Risk-based security deposit"
-                  value={money(quote.deposit)}
-                />
-                <Text style={s.caption}>
+              <View style={styles.summaryContainer}>
+                <Text style={styles.summaryTitle}>Booking Summary</Text>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>
+                    Rental fee · {quote.days}{" "}
+                    {quote.days === 1 ? "day" : "days"}
+                  </Text>
+                  <Text style={styles.summaryValue}>
+                    {money(quote.rentalFee)}
+                  </Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>
+                    CurRENT service fee (5%, min RM5)
+                  </Text>
+                  <Text style={styles.summaryValue}>
+                    {money(quote.serviceFee)}
+                  </Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>
+                    Risk-based security deposit
+                  </Text>
+                  <Text style={styles.summaryValue}>{money(quote.deposit)}</Text>
+                </View>
+                <Text style={styles.depositNote}>
                   {renterRisk?.canDirectBook
                     ? `Your ${renterRisk.label} tier sets a ${
                         renterRisk.level === "low"
                           ? "5% (capped at RM500)"
                           : renterRisk.level === "medium"
-                            ? "10% (capped at RM1,000)"
-                            : "15% (capped at RM1,500)"
-                      } refundable deposit based on item value. Refundable after confirmed clean return.`
+                          ? "10% (capped at RM1,000)"
+                          : "15% (capped at RM1,500)"
+                      } refundable deposit based on replacement value. Released automatically upon verified clean return.`
                     : renterRisk?.level === "very_high"
-                      ? "Score below 30 requires CurRENT platform review before booking."
-                      : "Sign in and complete demo verification to view your risk-based deposit."}
+                    ? "Score 0–29: Direct checkout is blocked. Requires CurRENT Platform Review."
+                    : "Sign in and complete demo eKYC to view your risk-based deposit."}
                 </Text>
-                <View style={s.divider} />
-                <Row
-                  label="Total payable today"
-                  value={money(quote.total)}
-                  strong
-                />
-              </>
+                <View style={styles.summaryDivider} />
+                <View style={styles.summaryRowTotal}>
+                  <Text style={styles.summaryTotalLabel}>
+                    Total payable today
+                  </Text>
+                  <Text style={styles.summaryTotalValue}>
+                    {money(quote.total)}
+                  </Text>
+                </View>
+              </View>
             )}
+
             {!!(error || dateError) && (
               <Notice text={error || dateError} error />
             )}
-            <Button
-              accessibilityLabel="Request to rent"
-              disabled={!!dateError || listing.ownerId === user?.id}
-              onPress={request}
-            >
-              {listing.ownerId === user?.id
-                ? "This is your listing"
-                : "Rent"}
-            </Button>
-            <Text style={[s.caption, { textAlign: "center", fontSize: 11, lineHeight: 16 }]}>
-              CurRENT’s service fee is 5% of the rental value or RM5 minimum,
-              whichever is higher. The refundable security deposit is risk-based.
-              Payment and deposit handling are simulated in this demo.
+
+            {!!successNotice && <Notice text={successNotice} />}
+
+            {/* Simulated Checkout Panel */}
+            {showCheckout && quote && (
+              <View style={styles.checkoutPanel}>
+                <Text style={styles.checkoutTitle}>Simulated Checkout</Text>
+                <Text style={styles.checkoutSubtitle}>
+                  Choose a demo payment method. No real bank or card details are
+                  charged.
+                </Text>
+                <Chips
+                  options={["Demo FPX", "Demo Card"]}
+                  selected={selectedPaymentMethod}
+                  onSelect={setSelectedPaymentMethod}
+                />
+                <Button onPress={handleConfirmInstantBook}>
+                  Simulate Payment & Confirm Booking ({money(quote.total)})
+                </Button>
+                <Button secondary onPress={() => setShowCheckout(false)}>
+                  Back
+                </Button>
+              </View>
+            )}
+
+            {/* Main Action Buttons */}
+            {!showCheckout && (
+              <View style={{ marginTop: 14, gap: 8 }}>
+                {!user ? (
+                  <Button onPress={() => router.push("/auth")}>
+                    Sign in to Rent
+                  </Button>
+                ) : user.verification !== "verified" ? (
+                  <Button onPress={() => router.push("/(tabs)/profile")}>
+                    Complete Demo eKYC in Profile to Rent
+                  </Button>
+                ) : renterRisk?.level === "very_high" ? (
+                  <Button
+                    disabled={!start || !end || !!dateError}
+                    onPress={handleRequestPlatformReview}
+                  >
+                    Request CurRENT Platform Review
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={
+                      !start ||
+                      !end ||
+                      !!dateError ||
+                      listing.ownerId === user?.id
+                    }
+                    onPress={() => setShowCheckout(true)}
+                  >
+                    {listing.ownerId === user?.id
+                      ? "This is your listing"
+                      : "Rent"}
+                  </Button>
+                )}
+              </View>
+            )}
+
+            <Text style={styles.instantBookingFooterNotice}>
+              CurRENT confirms eligible bookings automatically after simulated
+              checkout. Lenders cannot accept or reject bookings.
             </Text>
           </Card>
-          <Notice text="Classroom demonstration: Item protection of up to RM60,000 is an illustrative partner feature. No actual money is moved, and no genuine insurance policy is issued." />
         </View>
       </View>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  galleryThumb: {
+    width: 65,
+    height: 60,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "transparent",
+    backgroundColor: "#F1F5F9",
+  },
+  galleryThumbActive: {
+    borderColor: colors.blue,
+  },
+  bookingCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  bookingLocation: {
+    fontSize: 12,
+    color: colors.muted,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  dateBoxesRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  dateBox: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  dateBoxActive: {
+    borderColor: colors.blue,
+    backgroundColor: "#EFF6FF",
+  },
+  dateBoxLabel: {
+    fontSize: 10,
+    color: "#64748B",
+    fontWeight: "600",
+    marginBottom: 2,
+  },
+  dateBoxValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  dateBoxValueText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  calendarContainer: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 10,
+    marginTop: 10,
+  },
+  calendarHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  calendarMonthTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  clearDatesBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  clearDatesText: {
+    fontSize: 11,
+    color: colors.blue,
+    fontWeight: "600",
+  },
+  weekDaysRow: {
+    flexDirection: "row",
+    marginBottom: 4,
+  },
+  weekDayCell: {
+    flex: 1,
+    alignItems: "center",
+  },
+  weekDayText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#94A3B8",
+  },
+  daysGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  dayCell: {
+    width: "14.28%",
+    alignItems: "center",
+    paddingVertical: 2,
+  },
+  dayBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  dayBtnSelected: {
+    backgroundColor: colors.blue,
+  },
+  dayBtnInRange: {
+    backgroundColor: "#DBEAFE",
+  },
+  dayBtnUnavailable: {
+    backgroundColor: "transparent",
+    opacity: 0.35,
+  },
+  dayText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.navy,
+  },
+  dayTextSelected: {
+    color: "white",
+    fontWeight: "800",
+  },
+  dayTextInRange: {
+    color: colors.blue,
+    fontWeight: "700",
+  },
+  dayTextUnavailable: {
+    color: "#94A3B8",
+    textDecorationLine: "line-through",
+  },
+  calendarHint: {
+    fontSize: 11,
+    color: colors.muted,
+    fontStyle: "italic",
+    textAlign: "center",
+    marginTop: 6,
+  },
+  arrangementSection: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 12,
+    gap: 8,
+  },
+  arrangementHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+    paddingBottom: 6,
+  },
+  arrangementTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.navy,
+  },
+  fieldLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  fieldSubtext: {
+    fontSize: 10,
+    color: colors.muted,
+  },
+  timeSlotsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+  timeSlotBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+  },
+  timeSlotBtnSelected: {
+    backgroundColor: colors.blue,
+    borderColor: colors.blue,
+  },
+  timeSlotText: {
+    fontSize: 11,
+    color: colors.navy,
+    fontWeight: "600",
+  },
+  timeSlotTextSelected: {
+    color: "white",
+    fontWeight: "700",
+  },
+  lockedReturnCard: {
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 4,
+    gap: 4,
+  },
+  lockedReturnHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  lockedReturnTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0369A1",
+  },
+  lockedPill: {
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  lockedPillText: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#0284C7",
+  },
+  lockedReturnBody: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  lockedReturnTimeText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0C4A6E",
+  },
+  lockedReturnExplanation: {
+    flex: 1,
+    fontSize: 10,
+    color: "#0369A1",
+    lineHeight: 13,
+  },
+  cancellationNoticeBox: {
+    flexDirection: "row",
+    gap: 8,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
+    alignItems: "center",
+  },
+  cancellationNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    color: "#0369A1",
+    lineHeight: 15,
+    fontWeight: "600",
+  },
+  summaryContainer: {
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+  },
+  summaryTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.navy,
+    marginBottom: 8,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 3,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: colors.navy,
+  },
+  summaryValue: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.navy,
+  },
+  depositNote: {
+    fontSize: 10,
+    color: colors.muted,
+    lineHeight: 14,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: "#E2E8F0",
+    marginVertical: 6,
+  },
+  summaryRowTotal: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 2,
+  },
+  summaryTotalLabel: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.navy,
+  },
+  summaryTotalValue: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: colors.blue,
+  },
+  instantBookingFooterNotice: {
+    textAlign: "center",
+    fontSize: 11,
+    lineHeight: 15,
+    color: colors.muted,
+    marginTop: 10,
+  },
+  checkoutPanel: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 14,
+    gap: 10,
+  },
+  checkoutTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.navy,
+  },
+  checkoutSubtitle: {
+    fontSize: 12,
+    color: colors.muted,
+    lineHeight: 16,
+  },
+});

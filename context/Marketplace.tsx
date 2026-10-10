@@ -11,7 +11,7 @@ import type { Marketplace } from "../types/marketplace";
 import { createSeed } from "../data/seed";
 import { transition, type Action } from "../services/marketplace";
 
-const STORAGE_KEY = "current-marketplace-v1";
+const STORAGE_KEY = "current-marketplace-v315";
 const Context = createContext<{
   state: Marketplace;
   act: (action: Action) => void;

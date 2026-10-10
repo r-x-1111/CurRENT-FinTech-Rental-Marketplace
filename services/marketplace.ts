@@ -99,6 +99,23 @@ export type Action =
   | {
       type: "resetDemoState";
     }
+  | { type: "setMode"; mode: "normal" | "admin_demo" }
+  | {
+      type: "instantBook";
+      id: string;
+      listingId: string;
+      start: string;
+      end: string;
+      collectionMethod?: CollectionMethod;
+      paymentMethod?: string;
+    }
+  | {
+      type: "requestPlatformReview";
+      listingId: string;
+      start: string;
+      end: string;
+      notes?: string;
+    }
   | { type: "message"; bookingId: string; text: string }
   | { type: "review"; bookingId: string; rating: number; text: string }
   | {
@@ -120,7 +137,10 @@ function requireThat(condition: unknown, message: string): asserts condition {
 
 export function transition(previous: Marketplace, action: Action): Marketplace {
   if (action.type === "resetDemoState") {
-    return createSeed();
+    return createSeed(previous.mode || "admin_demo");
+  }
+  if (action.type === "setMode") {
+    return createSeed(action.mode);
   }
 
   const state: Marketplace = JSON.parse(JSON.stringify(previous));
@@ -205,8 +225,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       user.verification = action.status;
       if (action.status === "verified" && (user.riskScore === undefined || user.riskScore === null)) {
-        user.riskScore = 70;
-        user.riskLevel = "low";
+        user.riskScore = 75;
+        user.riskLevel = "medium";
       }
       state.listings
         .filter((l) => l.ownerId === user.id)
@@ -426,6 +446,111 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         listing.ownerId,
         `${user.name} requested ${listing.title}.`,
         action.id,
+      );
+      break;
+    }
+
+    case "instantBook": {
+      const listing = state.listings.find((l) => l.id === action.listingId);
+      requireThat(listing, "Listing not found.");
+      requireThat(
+        !user.isBanned,
+        "This account is banned from booking due to confirmed fraudulent activity.",
+      );
+      requireThat(
+        !user.hasOverdueObligation,
+        "You have an outstanding damage obligation. Direct rental requests are restricted.",
+      );
+      requireThat(
+        user.id !== listing.ownerId,
+        "You cannot rent your own item.",
+      );
+      requireThat(
+        user.verification === "verified",
+        "Complete demo identity verification in Profile before booking a rental.",
+      );
+      const risk = riskFor(state, user);
+      requireThat(
+        (risk.score ?? 0) >= 30,
+        "Rental Risk Score below 30 requires CurRENT Platform Review. Direct checkout is not permitted.",
+      );
+      availability(state, listing, action.start, action.end);
+      const collectionMethod = action.collectionMethod || "Meet Owner";
+      requireThat(
+        (listing.collectionMethods || ["Meet Owner"]).includes(collectionMethod),
+        "This collection method is not available for this item.",
+      );
+
+      const durMinutes = calculateDurationMinutes(action.start, action.end);
+      const cutoff = calculateCancellationCutoff(action.start);
+      const quote = quoteFor(state, user, listing, action.start, action.end);
+
+      state.bookings.unshift({
+        id: action.id,
+        listingId: listing.id,
+        title: listing.title,
+        image: listing.imageUrl,
+        ownerId: listing.ownerId,
+        renterId: user.id,
+        start: action.start,
+        end: action.end,
+        scheduledPickup: action.start,
+        scheduledReturn: action.end,
+        durationMinutes: durMinutes,
+        cancellationCutoff: cutoff,
+        collectionMethod,
+        status: "upcoming",
+        quote,
+        riskScore: risk.score ?? 75,
+        payment: "paid",
+        deposit: "held",
+        paymentMethod: action.paymentMethod || "Demo FPX",
+        agreement: `DEMO RENTAL AGREEMENT V3.15 • ${action.id}\nLender: ${state.profiles.find((p) => p.id === listing.ownerId)?.name}\nRenter: ${user.name}\nItem: ${listing.title}\nPickup: ${action.start} • Return: ${action.end}\nCollection method: ${collectionMethod}\nRental fee: RM${quote.rentalFee.toFixed(2)} • Service fee: RM${quote.serviceFee.toFixed(2)}\nRefundable security deposit: RM${quote.deposit.toFixed(2)}\nTotal payable today: RM${quote.total.toFixed(2)}\nConfirmed automatically without lender approval.\nGenerated ${now}`,
+        createdAt: now,
+        contextMode: state.mode || "normal",
+      });
+
+      notify(
+        listing.ownerId,
+        `New booking confirmed: ${user.name} rented ${listing.title}.`,
+        action.id,
+      );
+      notify(
+        user.id,
+        `Booking confirmed (Demo) for ${listing.title}. Total: RM${quote.total.toFixed(2)}.`,
+        action.id,
+      );
+      break;
+    }
+
+    case "requestPlatformReview": {
+      const listing = state.listings.find((l) => l.id === action.listingId);
+      requireThat(listing, "Listing not found.");
+      requireThat(
+        user.verification === "verified",
+        "Complete demo identity verification before requesting review.",
+      );
+      const risk = riskFor(state, user);
+      requireThat(
+        (risk.score ?? 0) < 30,
+        "Platform review request is exclusively for Very High Risk scores (0–29).",
+      );
+      if (!state.platformReviewRequests) state.platformReviewRequests = [];
+      state.platformReviewRequests.unshift({
+        id: newId(),
+        renterId: user.id,
+        listingId: listing.id,
+        title: listing.title,
+        image: listing.imageUrl,
+        start: action.start,
+        end: action.end,
+        status: "pending_review",
+        createdAt: now,
+        notes: action.notes || "Pending CurRENT Platform Review (Demo). This request does not reserve inventory and is never sent to the lender.",
+      });
+      notify(
+        user.id,
+        `Platform review request submitted for ${listing.title}. Status: Pending (Demo).`,
       );
       break;
     }

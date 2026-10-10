@@ -8,7 +8,17 @@ export const categories = [
   "Tools",
   "Outdoors",
   "Event Gear",
-  "Cameras",
+] as const;
+
+export const MAIN_CATEGORIES = [
+  "Electronics",
+  "Gaming",
+  "Luxury",
+  "Household",
+  "Work & Office",
+  "Tools",
+  "Outdoors",
+  "Event Gear",
 ] as const;
 
 export const locations = [
@@ -22,4 +32,3 @@ export const locations = [
   "Bandar Sunway",
   "Puchong",
 ] as const;
-

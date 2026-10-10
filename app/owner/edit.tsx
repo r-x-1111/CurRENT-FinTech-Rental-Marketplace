@@ -30,7 +30,7 @@ export default function EditListing() {
   );
   const [title, setTitle] = useState(existing?.title || "");
   const [description, setDescription] = useState(existing?.description || "");
-  const [category, setCategory] = useState(existing?.category || "Cameras");
+  const [category, setCategory] = useState(existing?.category || "Electronics");
   const [location, setLocation] = useState(existing?.location || "");
   const [price, setPrice] = useState(existing?.dailyPrice.toString() || "");
   const [value, setValue] = useState(existing?.estimatedValue.toString() || "");
@@ -42,6 +42,11 @@ export default function EditListing() {
   const [collectionMethods, setCollectionMethods] = useState<
     CollectionMethod[]
   >(existing?.collectionMethods || ["Meet Owner"]);
+  const [pickupWindowsStr, setPickupWindowsStr] = useState(
+    existing?.pickupTimeWindows
+      ? existing.pickupTimeWindows.map((w) => `${w.start}-${w.end}`).join(", ")
+      : "10:00-12:00, 14:00-18:00",
+  );
   const [error, setError] = useState("");
   if (!user || (id && !existing))
     return (
@@ -54,6 +59,15 @@ export default function EditListing() {
     );
   function save(status: "draft" | "published") {
     try {
+      const parsedWindows = pickupWindowsStr
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((part) => {
+          const [wStart, wEnd] = part.split("-").map((t) => t.trim());
+          return { start: wStart || "10:00", end: wEnd || "12:00" };
+        });
+
       act({
         type: "saveListing",
         listing: {
@@ -73,6 +87,13 @@ export default function EditListing() {
           rating: existing?.rating || 0,
           verifiedOwner: user!.verification === "verified",
           status,
+          pickupTimeWindows:
+            parsedWindows.length >= 2
+              ? parsedWindows
+              : [
+                  { start: "10:00", end: "12:00" },
+                  { start: "14:00", end: "18:00" },
+                ],
         },
       });
       router.replace("/owner");

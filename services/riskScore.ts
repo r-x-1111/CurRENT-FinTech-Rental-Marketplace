@@ -33,7 +33,7 @@ export function tierForScore(score: number | null): { level: RiskLevel; label: s
   if (score === null || score === undefined) {
     return { level: "unverified", label: "Unverified", canDirectBook: false };
   }
-  if (score >= 70) {
+  if (score >= 80) {
     return { level: "low", label: "Low Risk", canDirectBook: true };
   }
   if (score >= 40) {
@@ -60,8 +60,8 @@ export function calculateRiskScore(input: RiskInputs): RiskResult {
     };
   }
 
-  // Newly verified renter starts at 70/100 (V1.8 rule)
-  let score = 70;
+  // Newly verified renter starts at 75/100 Medium (V3.15 rule)
+  let score = 75;
 
   if (input.rentalHistory && input.rentalHistory.length > 0) {
     for (const rental of input.rentalHistory) {

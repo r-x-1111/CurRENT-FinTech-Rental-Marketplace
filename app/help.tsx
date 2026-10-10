@@ -1,96 +1,160 @@
-import { Text } from "react-native";
+import React from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { Button, Card, Notice, Screen, Section, s } from "../components/ui";
-
-const faqs = [
-  [
-    "How is my security deposit calculated?",
-    "The demo uses estimated item value and your explainable Rental Risk Score. Low, standard and higher risk tiers use 10%, 20% and 30% of item value. The deposit is refundable after an accepted return with no active dispute.",
-  ],
-  [
-    "What happens if an item is damaged or not returned?",
-    "Open the related rental and report a problem with a reason, explanation and photo. Deposit release pauses while the case is under review. The prototype does not decide disputes automatically.",
-  ],
-  [
-    "How does verification work?",
-    "Profile lets you simulate an external authorised eKYC provider response. No real identity documents are collected.",
-  ],
-  [
-    "Can I rent out my own items?",
-    "Yes. Open Owner Mode from Profile, add item details and at least one photo, then publish after demo verification. You cannot request your own listing.",
-  ],
-  [
-    "When is the deposit released?",
-    "After the renter submits return evidence, the owner inspects the item and confirms the return. A disputed deposit remains paused.",
-  ],
-  [
-    "How are fees calculated?",
-    "The borrower service fee is 5% of the rental fee, with a RM5 minimum. Owners see a 12% platform commission on rental income. The quote lists the refundable deposit separately.",
-  ],
-  [
-    "Can I cancel?",
-    "A pending or approved request can be cancelled before payment processing. Refunds are not automated in this academic prototype.",
-  ],
-  [
-    "Can an item be delivered?",
-    "Only listings marked Delivery Available offer that option. A live service would use an external logistics provider. This demo does not calculate a delivery fee; confirm arrangements in rental messages.",
-  ],
-  [
-    "How does the Rental Risk Score work?",
-    "The demo score starts at 50 and reflects verification, completed rentals, reviews and disputes. Profile shows the calculation. It is not a credit score.",
-  ],
-] as const;
+import { FaqAccordion } from "../components/FaqAccordion";
+import { sampleFaqs } from "../data/mock";
+import { colors } from "../constants/theme";
 
 export default function HelpScreen() {
   return (
     <Screen
       back
       title="Help & Trust"
-      subtitle="Practical answers for safer rentals."
+      subtitle="Practical answers and safety rules for peer-to-peer rentals."
     >
-      <Notice text="CurRENT is an academic local prototype. Real identity checks, payments, deposit handling, BNPL, item protection and delivery would require authorised external providers." />
-      <Section title="How CurRENT works" />
+      <Notice text="CurRENT is an academic classroom demonstration in Klang Valley. Real identity checks, payments, deposit escrow, BNPL, item insurance and delivery would be supported by external authorised partners. No real money or personal data is collected." />
+
+      {/* Step-by-Step Rental Workflow */}
+      <Section title="How CurRENT Works" />
       <Card>
-        <Text style={s.body}>1. Search and choose an item near you.</Text>
-        <Text style={s.body}>
-          2. Verify, select dates and submit a request.
-        </Text>
-        <Text style={s.body}>
-          3. After approval, complete demo payment and arrange collection.
-        </Text>
-        <Text style={s.body}>
-          4. Record handover and return evidence, then complete the rental.
-        </Text>
+        <View style={styles.stepRow}>
+          <View style={styles.stepNum}>
+            <Text style={styles.stepNumText}>1</Text>
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.stepTitle}>Browse & Select Dates</Text>
+            <Text style={s.caption}>
+              Choose from 22 verified listings across Klang Valley. Select your dates using the 2-click calendar and view your transparent rental rate, 5% service fee, and risk-based deposit.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.stepDivider} />
+
+        <View style={styles.stepRow}>
+          <View style={styles.stepNum}>
+            <Text style={styles.stepNumText}>2</Text>
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.stepTitle}>Instant Booking & Secure Simulated Checkout</Text>
+            <Text style={s.caption}>
+              Eligible renters (scores 30–100) confirm immediately upon simulated checkout — no owner approval required. Renters scoring 0–29 submit a CurRENT Platform Review request.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.stepDivider} />
+
+        <View style={styles.stepRow}>
+          <View style={styles.stepNum}>
+            <Text style={styles.stepNumText}>3</Text>
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.stepTitle}>Two-Party Physical Handover</Text>
+            <Text style={s.caption}>
+              Meet at the arranged public or private venue. Both renter and lender independently confirm handover in the app to activate the rental clock.
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.stepDivider} />
+
+        <View style={styles.stepRow}>
+          <View style={styles.stepNum}>
+            <Text style={styles.stepNumText}>4</Text>
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.stepTitle}>Clean Return & Deposit Release</Text>
+            <Text style={s.caption}>
+              Renter uploads condition evidence photos. Once both parties confirm return (No-Issues), the simulated deposit is released and +2 reliability points are awarded.
+            </Text>
+          </View>
+        </View>
       </Card>
-      <Section title="Trust & Safety" />
+
+      {/* Trust & Safety Highlights */}
+      <Section title="Trust & Safety Highlights" />
       <Card>
-        <Text style={s.h2}>Know who you rent with</Text>
-        <Text style={s.body}>
-          Verified status, structured listings, reviews and rental history help
-          participants assess a request. Verification is simulated here.
-        </Text>
-        <Text style={s.h2}>Record item condition</Text>
-        <Text style={s.body}>
-          Handover and return photos, notes and on-platform messages create a
-          shared record. Optional protection depends on external partner
-          eligibility and terms; compensation is not automatic.
-        </Text>
-        <Text style={s.h2}>Resolve problems</Text>
-        <Text style={s.body}>
-          Either participant can report a problem from an active rental or
-          pending return. A dispute pauses demo deposit release for review.
-        </Text>
-        <Button secondary onPress={() => router.push("/(tabs)/rentals")}>
-          View rentals or report a problem
-        </Button>
+        <View style={{ gap: 14 }}>
+          <View style={styles.trustItem}>
+            <Ionicons name="shield-checkmark" size={22} color={colors.blue} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.h2}>Simulated Identity (eKYC)</Text>
+              <Text style={s.caption}>
+                Demo identity checks verify renters before booking. New verified renters start at 75 Medium Risk.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.trustItem}>
+            <Ionicons name="speedometer-outline" size={22} color="#F59E0B" />
+            <View style={{ flex: 1 }}>
+              <Text style={s.h2}>Rental Risk Score</Text>
+              <Text style={s.caption}>
+                Transparent 4-tier schedule (80–100 Low: 5%, 40–79 Medium: 10%, 30–39 High: 15%, 0–29 Very High: Platform review). Single winning incident rule ensures only the highest adjustment applies per rental.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.trustItem}>
+            <Ionicons name="lock-closed" size={22} color={colors.blue} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.h2}>Deposit Protection & Dispute Safeguard</Text>
+              <Text style={s.caption}>
+                Deposits are held safely and released only upon joint clean return confirmation. Any dispute pauses release for platform review.
+              </Text>
+            </View>
+          </View>
+
+          <Button secondary onPress={() => router.push("/(tabs)/rentals")}>
+            View Your Rentals Hub →
+          </Button>
+        </View>
       </Card>
-      <Section title="Frequently asked questions" />
-      {faqs.map(([question, answer]) => (
-        <Card key={question}>
-          <Text style={s.h2}>{question}</Text>
-          <Text style={s.body}>{answer}</Text>
-        </Card>
-      ))}
+
+      {/* Canonical 13 FAQs Accordion */}
+      <Section title="Frequently Asked Questions (Section 14)" />
+      <FaqAccordion faqs={sampleFaqs} />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 6,
+  },
+  stepNum: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.paleBlue,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  stepNumText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.blue,
+  },
+  stepTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  stepDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 4,
+  },
+  trustItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+});

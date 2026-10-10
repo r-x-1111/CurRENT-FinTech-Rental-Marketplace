@@ -1,19 +1,19 @@
 import { useEffect, useState } from "react";
-import { Switch, Text, View } from "react-native";
+import { Pressable, Switch, Text, View, StyleSheet } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Screen,
   Field,
   Chips,
-  Button,
   Empty,
-  Notice,
   s,
 } from "../../components/ui";
 import { ListingGrid } from "../../components/ListingGrid";
 import { useMarketplace } from "../../context/Marketplace";
 import { categories } from "../../constants/categories";
-import { availability, rentalDays } from "../../services/booking";
+import { colors } from "../../constants/theme";
+
 export default function ExploreScreen() {
   const params = useLocalSearchParams<{
     q?: string;
@@ -24,60 +24,26 @@ export default function ExploreScreen() {
   const { state, user } = useMarketplace();
   const [query, setQuery] = useState(params.q || "");
   const [category, setCategory] = useState(params.category || "All items");
-  const [location, setLocation] = useState(params.location || "");
-  const [price, setPrice] = useState("");
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
   const [saved, setSaved] = useState(params.saved === "1");
-  const [filters, setFilters] = useState(!!params.location);
-  const [verified, setVerified] = useState(false);
-  const [minimumRating, setMinimumRating] = useState("Any rating");
-  const [sort, setSort] = useState("Recommended");
+
   useEffect(() => {
     setQuery(params.q || "");
     setCategory(params.category || "All items");
     setSaved(params.saved === "1");
-    if (params.location !== undefined) setLocation(params.location);
-  }, [params.q, params.category, params.saved, params.location]);
-  let dateError = "";
-  if (start || end) {
-    try {
-      rentalDays(start, end);
-    } catch (e) {
-      dateError = (e as Error).message;
-    }
-  }
-  const priceError =
-    price !== "" && (!Number.isFinite(Number(price)) || Number(price) < 0)
-      ? "Enter a valid maximum price."
-      : "";
+  }, [params.q, params.category, params.saved]);
+
   const results = state.listings
     .filter((l) => {
-      if (
-        l.status !== "published" ||
-        (category !== "All items" && l.category !== category) ||
-        (saved && !user?.favourites.includes(l.id)) ||
-        (verified && !l.verifiedOwner) ||
-        (minimumRating !== "Any rating" &&
-          l.rating < Number(minimumRating.slice(0, 1)))
-      )
-        return false;
-      if (
-        ![l.title, l.description, l.category, l.location]
+      if (l.status !== "published") return false;
+      if (category !== "All items" && l.category !== category) return false;
+      if (saved && !user?.favourites.includes(l.id)) return false;
+      if (query.trim()) {
+        const q = query.trim().toLowerCase();
+        const matches = [l.title, l.description, l.category, l.location]
           .join(" ")
           .toLowerCase()
-          .includes(query.trim().toLowerCase()) ||
-        !l.location.toLowerCase().includes(location.trim().toLowerCase())
-      )
-        return false;
-      if (priceError || dateError || (price && l.dailyPrice > Number(price)))
-        return false;
-      if (start && end) {
-        try {
-          availability(state, l, start, end);
-        } catch {
-          return false;
-        }
+          .includes(q);
+        if (!matches) return false;
       }
       return true;
     })
@@ -85,25 +51,17 @@ export default function ExploreScreen() {
       const now = Date.now();
       const aBoosted = a.featuredUntil && new Date(a.featuredUntil).getTime() > now ? 1 : 0;
       const bBoosted = b.featuredUntil && new Date(b.featuredUntil).getTime() > now ? 1 : 0;
-      if (aBoosted !== bBoosted) return bBoosted - aBoosted;
-
-      if (sort === "Price: low to high") return a.dailyPrice - b.dailyPrice;
-      if (sort === "Price: high to low") return b.dailyPrice - a.dailyPrice;
-      if (sort === "Top rated") return b.rating - a.rating;
-      return 0;
+      return bBoosted - aBoosted;
     });
+
   function clear() {
     setQuery("");
     setCategory("All items");
-    setLocation("");
-    setPrice("");
-    setStart("");
-    setEnd("");
     setSaved(false);
-    setVerified(false);
-    setMinimumRating("Any rating");
-    setSort("Recommended");
   }
+
+  const hasFilter = query.trim() !== "" || category !== "All items" || saved;
+
   return (
     <Screen
       title="Find your next good thing."
@@ -115,93 +73,95 @@ export default function ExploreScreen() {
         onChangeText={setQuery}
         placeholder="Camera, camping gear, projector…"
       />
-      <Chips options={categories} selected={category} onSelect={setCategory} />
-      <View style={[s.row, { marginBottom: 16 }]}>
-        <Button secondary onPress={() => setFilters(!filters)}>
-          {filters ? "Hide filters" : "Refine your search"}
-        </Button>
-        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-          <Text style={s.label}>Saved only</Text>
+
+      <View style={{ marginVertical: 8 }}>
+        <Chips options={categories} selected={category} onSelect={setCategory} />
+      </View>
+
+      <View style={styles.controlsRow}>
+        <View style={styles.savedToggleRow}>
+          <Ionicons
+            name={saved ? "heart" : "heart-outline"}
+            size={18}
+            color={saved ? colors.danger : colors.navy}
+          />
+          <Text style={styles.savedLabel}>Saved only</Text>
           <Switch
             accessibilityLabel="Saved items only"
             value={saved}
             onValueChange={setSaved}
+            trackColor={{ false: "#CBD5E1", true: colors.blue }}
           />
         </View>
+
+        {hasFilter && (
+          <Pressable accessibilityRole="button" onPress={clear} style={styles.clearBtn}>
+            <Ionicons name="close-circle-outline" size={16} color={colors.muted} />
+            <Text style={styles.clearBtnText}>Reset search</Text>
+          </Pressable>
+        )}
       </View>
-      {filters && (
-        <View style={s.card}>
-          <Field
-            label="Location"
-            value={location}
-            onChangeText={setLocation}
-            placeholder="e.g. Petaling Jaya"
-          />
-          <Field
-            label="Maximum daily price (RM)"
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="decimal-pad"
-            placeholder="Any price"
-          />
-          <Field
-            label="Collection date (YYYY-MM-DD)"
-            value={start}
-            onChangeText={setStart}
-            placeholder="Any date"
-          />
-          <Field
-            label="Return date (YYYY-MM-DD)"
-            value={end}
-            onChangeText={setEnd}
-            placeholder="Any date"
-          />
-          <View style={s.row}>
-            <Text style={s.label}>Verified owners only</Text>
-            <Switch
-              accessibilityLabel="Verified owners only"
-              value={verified}
-              onValueChange={setVerified}
-            />
-          </View>
-          <Text style={s.label}>Minimum rating</Text>
-          <Chips
-            options={["Any rating", "4+ stars", "5 stars"]}
-            selected={minimumRating}
-            onSelect={setMinimumRating}
-          />
-          <Text style={s.label}>Sort results</Text>
-          <Chips
-            options={[
-              "Recommended",
-              "Price: low to high",
-              "Price: high to low",
-              "Top rated",
-            ]}
-            selected={sort}
-            onSelect={setSort}
-          />
-          <Button secondary onPress={clear}>
-            Clear filters
-          </Button>
-        </View>
-      )}
-      {!!(dateError || priceError) && (
-        <Notice text={dateError || priceError} error />
-      )}
-      <Text style={[s.caption, { marginBottom: 16 }]}>
-        {results.length} finds for you
-      </Text>
+
+      <View style={styles.resultsHeader}>
+        <Text style={styles.resultsCount}>
+          {results.length} {results.length === 1 ? "item" : "items"} available
+        </Text>
+      </View>
+
       {results.length ? (
         <ListingGrid listings={results} />
       ) : (
         <Empty
-          title="No matches just yet"
-          text="Try another search or give your filters a little more room."
-          action="Clear search & filters"
+          title="No matches found"
+          text="Try another keyword or select a different category to discover available gear."
+          action="Reset search"
           onPress={clear}
         />
       )}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginVertical: 14,
+    paddingHorizontal: 2,
+  },
+  savedToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  savedLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.navy,
+  },
+  clearBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: "#F1F5F9",
+  },
+  clearBtnText: {
+    fontSize: 13,
+    color: colors.muted,
+    fontWeight: "600",
+  },
+  resultsHeader: {
+    marginBottom: 16,
+  },
+  resultsCount: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+});

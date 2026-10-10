@@ -41,6 +41,7 @@ export interface Profile {
   hasOverdueObligation?: boolean;
   riskHistory?: RiskIncidentRecord[];
 }
+
 export interface Quote {
   days: number;
   rentalFee: number;
@@ -49,6 +50,20 @@ export interface Quote {
   protection: number;
   total: number;
 }
+
+export interface PlatformReviewRequest {
+  id: string;
+  renterId: string;
+  listingId: string;
+  title: string;
+  image: string;
+  start: string;
+  end: string;
+  status: "pending_review";
+  createdAt: string;
+  notes?: string;
+}
+
 export interface Booking {
   id: string;
   listingId: string;
@@ -97,7 +112,9 @@ export interface Booking {
     refundAmount: number;
     depositRetained: number;
   } | null;
+  contextMode?: "normal" | "admin_demo";
 }
+
 export interface Evidence {
   id: string;
   bookingId: string;
@@ -107,13 +124,16 @@ export interface Evidence {
   notes: string;
   createdAt: string;
 }
+
 export interface Message {
   id: string;
   bookingId: string;
   authorId: string;
   text: string;
   createdAt: string;
+  read?: boolean;
 }
+
 export interface Review {
   id: string;
   bookingId: string;
@@ -122,6 +142,7 @@ export interface Review {
   rating: number;
   text: string;
 }
+
 export interface Notice {
   id: string;
   userId: string;
@@ -130,6 +151,7 @@ export interface Notice {
   read: boolean;
   createdAt: string;
 }
+
 export interface Dispute {
   id: string;
   bookingId: string;
@@ -139,9 +161,11 @@ export interface Dispute {
   status: "under_review" | "resolved";
   createdAt: string;
 }
+
 export interface Marketplace {
   version: 1;
   currentUserId: string | null;
+  mode: "normal" | "admin_demo";
   profiles: Profile[];
   listings: Listing[];
   bookings: Booking[];
@@ -150,4 +174,5 @@ export interface Marketplace {
   reviews: Review[];
   notifications: Notice[];
   disputes: Dispute[];
+  platformReviewRequests: PlatformReviewRequest[];
 }

@@ -22,6 +22,18 @@ export type RentalStatus =
   | "cancelled"
   | "disputed";
 
+export interface AvailabilityPeriod {
+  id?: string;
+  start: string;
+  end: string;
+}
+
+export interface PickupTimeWindow {
+  id?: string;
+  start: string; // e.g. "10:00"
+  end: string;   // e.g. "12:00"
+}
+
 export interface Listing {
   id: string;
   ownerId: string;
@@ -31,6 +43,8 @@ export interface Listing {
   estimatedValue: number;
   ownerEstimatedValue?: number;
   location: string;
+  publicArea?: string;
+  privateMeetingVenue?: string;
   rating: number;
   completedRentalsCount?: number;
   verifiedOwner: boolean;
@@ -40,6 +54,8 @@ export interface Listing {
   images?: string[];
   availableFrom?: string;
   availableTo?: string;
+  availabilityPeriods?: AvailabilityPeriod[];
+  pickupTimeWindows?: PickupTimeWindow[];
   collectionMethods?: CollectionMethod[];
   featuredUntil?: string | null;
 }
