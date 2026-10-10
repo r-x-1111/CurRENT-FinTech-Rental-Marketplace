@@ -25,7 +25,7 @@ export default function HowItWorksScreen() {
               <Text style={styles.stepTitle}>Search</Text>
             </View>
             <Text style={s.caption}>
-              Search for the item you need from trusted owners across Klang Valley. Choose from 22 verified listings or filter by 8 categories.
+              Search for the item you need.
             </Text>
           </View>
         </View>
@@ -42,7 +42,7 @@ export default function HowItWorksScreen() {
               <Text style={styles.stepTitle}>Review</Text>
             </View>
             <Text style={s.caption}>
-              Select your rental dates using the 2-click calendar. Review the transparent daily rate, 5% CurRENT service fee (minimum RM5), and refundable risk-based security deposit.
+              Select your rental dates and review the rental fee, service fee and risk-based deposit.
             </Text>
           </View>
         </View>
@@ -59,7 +59,7 @@ export default function HowItWorksScreen() {
               <Text style={styles.stepTitle}>Pay</Text>
             </View>
             <Text style={s.caption}>
-              Complete simulated payment via FPX (no real bank or card details collected). Eligible renters (scores 30–100) confirm instantly without owner approval. Renters scoring 0–29 submit a CurRENT Platform Review request.
+              Complete secure payment through an authorised provider.
             </Text>
           </View>
         </View>
@@ -76,7 +76,7 @@ export default function HowItWorksScreen() {
               <Text style={styles.stepTitle}>Return</Text>
             </View>
             <Text style={s.caption}>
-              Upload return condition evidence (≥6 photos + ≥1 video). Once both renter and lender independently confirm return (No-Issues), the refundable deposit is released and +2 reliability points are awarded.
+              Upload return photos or videos. Once the lender confirms the item's condition, the rental is completed and the deposit is released. If an issue is reported, the deposit is held for dispute review.
             </Text>
           </View>
         </View>

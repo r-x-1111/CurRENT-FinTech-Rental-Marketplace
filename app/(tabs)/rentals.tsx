@@ -5,9 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { Badge, Chips, Empty, Screen, s } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
-import { dateAfter, formatMalaysiaDateTime, money } from "../../services/booking";
+import { dateAfter } from "../../services/booking";
 import { colors } from "../../constants/theme";
-import type { Booking } from "../../types/marketplace";
 
 export default function RentalsScreen() {
   const { state, user } = useMarketplace();
@@ -24,26 +23,23 @@ export default function RentalsScreen() {
   );
 
   const tabs = [
-    "All",
     "Upcoming",
     "Active",
     "Return Due",
     "Completed",
     "Cancelled",
     "Disputed",
-    "Platform Review Requests",
+    ...(visiblePlatformRequests.length > 0 ? ["Platform Review Requests"] : []),
     "Payment & Transaction History",
   ];
 
-  const [activeTab, setActiveTab] = useState("All");
+  const [activeTab, setActiveTab] = useState("Upcoming");
 
   const userBookings = state.bookings.filter((b) => b.renterId === user?.id);
 
   // Filter bookings based on activeTab
   const filteredBookings = userBookings.filter((b) => {
     switch (activeTab) {
-      case "All":
-        return true;
       case "Upcoming":
         return b.status === "upcoming";
       case "Active":
@@ -63,112 +59,6 @@ export default function RentalsScreen() {
         return false;
     }
   });
-
-  // Find upcoming or active booking for the relocated Dashboard Preview summary card
-  const upcomingBooking = userBookings.find((b) => b.status === "upcoming");
-  const activeBooking = userBookings.find(
-    (b) => b.status === "active" || b.status === "return_pending",
-  );
-
-  // Helper to render the relocated summary card
-  function renderRelocatedSummaryCard(booking: Booking, variant: "upcoming" | "active") {
-    const owner = state.profiles.find((p) => p.id === booking.ownerId);
-    const unreadMessages = state.notifications.filter(
-      (n) =>
-        n.userId === user?.id &&
-        n.bookingId === booking.id &&
-        !n.read &&
-        n.title.includes("sent you a message"),
-    ).length;
-
-    const returnDueStr = booking.effectiveReturnDeadline
-      ? new Date(booking.effectiveReturnDeadline).toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })
-      : booking.end.slice(0, 10);
-
-    const isUpcoming = variant === "upcoming";
-
-    return (
-      <View style={styles.summaryCardWrapper} key={booking.id}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push(`/rental/${booking.id}`)}
-          style={styles.dashboardPreviewCard}
-        >
-          <View style={styles.previewTop}>
-            <Image source={{ uri: booking.image }} style={styles.previewThumb} />
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={styles.previewSub}>
-                {isUpcoming ? "Confirmed reservation" : "Current rental"}
-              </Text>
-              <Text style={styles.previewItemTitle}>{booking.title}</Text>
-              <Text style={styles.previewDue}>
-                {isUpcoming
-                  ? `Scheduled rental start: ${formatMalaysiaDateTime(booking.scheduledPickup || booking.start)}`
-                  : `Return due: ${returnDueStr}`}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.activeTag,
-                isUpcoming && { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.activeTagText,
-                  isUpcoming && { color: colors.blue },
-                ]}
-              >
-                {isUpcoming ? "Confirmed - Upcoming" : "Active rental"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.previewDivider} />
-
-          <View style={styles.previewBottom}>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.previewStatLabel}>Deposit status</Text>
-              <Text style={styles.previewStatValue}>
-                {money(booking.quote.deposit)} held (Demo)
-              </Text>
-            </View>
-
-            {/* Messages with working deep-link icon beside label */}
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={styles.messagesLabelRow}>
-                <Text style={styles.previewStatLabel}>Messages:</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Open rental conversation"
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    router.push(`/conversation/${booking.id}`);
-                  }}
-                  style={styles.messageDeepLinkIcon}
-                >
-                  <Ionicons name="chatbubbles" size={16} color={colors.blue} />
-                </Pressable>
-              </View>
-              <Pressable
-                onPress={() => router.push(`/conversation/${booking.id}`)}
-              >
-                <Text style={styles.previewStatValue}>
-                  {unreadMessages > 0
-                    ? `${unreadMessages} unread from ${owner?.name || "Owner"}`
-                    : `Chat with ${owner?.name || "Owner"}`}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Pressable>
-      </View>
-    );
-  }
 
   // Helper to build transaction ledger
   function renderPaymentHistory() {
@@ -202,7 +92,7 @@ export default function RentalsScreen() {
         itemTitle: b.title,
         type: "Rental Fee",
         amount: b.quote.rentalFee,
-        method: b.paymentMethod || "Demo FPX",
+        method: b.paymentMethod || "FPX",
         status: b.payment === "refunded" ? "Refunded" : "Paid",
       });
 
@@ -213,7 +103,7 @@ export default function RentalsScreen() {
         itemTitle: b.title,
         type: "CurRENT Service Fee",
         amount: b.quote.serviceFee,
-        method: b.paymentMethod || "Demo FPX",
+        method: b.paymentMethod || "FPX",
         status: b.payment === "refunded" ? "Refunded" : "Paid",
       });
 
@@ -224,12 +114,12 @@ export default function RentalsScreen() {
         itemTitle: b.title,
         type: "Security Deposit (Refundable)",
         amount: b.quote.deposit,
-        method: b.paymentMethod || "Demo FPX",
+        method: b.paymentMethod || "FPX",
         status:
           b.deposit === "released"
             ? "Released · Full Deposit Refund"
             : b.deposit === "held"
-            ? "Held Securely (Demo)"
+            ? "Held Securely"
             : b.deposit === "disputed"
             ? "Held for Dispute Review"
             : "Processed",
@@ -377,28 +267,15 @@ export default function RentalsScreen() {
       {activeTab !== "Payment & Transaction History" &&
         activeTab !== "Platform Review Requests" && (
           <View style={{ marginTop: 12, gap: 14 }}>
-            {/* Show relocated summary card if viewing Upcoming tab or Active tab */}
-            {activeTab === "Upcoming" && upcomingBooking && (
-              renderRelocatedSummaryCard(upcomingBooking, "upcoming")
-            )}
-
-            {activeTab === "Active" && activeBooking && (
-              renderRelocatedSummaryCard(activeBooking, "active")
-            )}
-
             {filteredBookings.length > 0 ? (
               filteredBookings.map((b) => <BookingCard key={b.id} booking={b} />)
             ) : (
-              // If we already rendered the summary card, don't show empty
-              (activeTab === "Upcoming" && upcomingBooking) ||
-              (activeTab === "Active" && activeBooking) ? null : (
-                <Empty
-                  title="No rentals in this category"
-                  text="Your upcoming, active, and completed bookings will appear here."
-                  action="Explore rentals"
-                  onPress={() => router.push("/(tabs)/explore")}
-                />
-              )
+              <Empty
+                title="No rentals in this category"
+                text="Your upcoming, active, and completed bookings will appear here."
+                action="Explore rentals"
+                onPress={() => router.push("/(tabs)/explore")}
+              />
             )}
           </View>
         )}
@@ -437,89 +314,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.slate,
     lineHeight: 18,
-  },
-  summaryCardWrapper: {
-    marginBottom: 6,
-  },
-  dashboardPreviewCard: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: "#0B1F3A",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
-    gap: 14,
-  },
-  previewTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  previewThumb: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    backgroundColor: "#F1F5F9",
-  },
-  previewSub: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  previewItemTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: colors.navy,
-  },
-  previewDue: {
-    fontSize: 13,
-    color: colors.muted,
-  },
-  activeTag: {
-    backgroundColor: "#DCFCE7",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-  },
-  activeTagText: {
-    color: "#166534",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  previewDivider: {
-    height: 1,
-    backgroundColor: "#F1F5F9",
-  },
-  previewBottom: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  previewStatLabel: {
-    fontSize: 12,
-    color: colors.muted,
-    fontWeight: "600",
-  },
-  previewStatValue: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.navy,
-  },
-  messagesLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  messageDeepLinkIcon: {
-    padding: 2,
   },
   historyNoticeBox: {
     flexDirection: "row",

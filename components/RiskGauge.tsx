@@ -3,7 +3,7 @@ import { Platform, StyleSheet, Text, View } from "react-native";
 import { colors } from "../constants/theme";
 
 export function RiskGauge({
-  score = 75,
+  score = 78,
   label = "Medium Risk",
 }: {
   score?: number | null;

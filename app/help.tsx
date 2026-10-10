@@ -83,7 +83,7 @@ export default function HelpScreen() {
             <View style={{ flex: 1 }}>
               <Text style={s.h2}>Simulated Identity (eKYC)</Text>
               <Text style={s.caption}>
-                Demo identity checks verify renters before booking. New verified renters start at 75 Medium Risk.
+                Demo identity checks verify renters before booking. New verified renters start at 78 Medium Risk.
               </Text>
             </View>
           </View>

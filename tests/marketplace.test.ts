@@ -146,7 +146,7 @@ test("rental completes through participant-controlled steps, evidence, deposit r
   assert.equal(j.state.reviews.length, 2);
   assert.equal(j.state.listings[0].rating, 4);
   assert.equal(j.state.evidence.length, 2);
-  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 77);
+  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 80);
 });
 test("approval atomically rejects overlapping requests but permits adjacent rentals", () => {
   const j = journey();
@@ -212,7 +212,7 @@ test("dispute preserves evidence and freezes deposit release", () => {
   assert.throws(() => j.operation("release"), /inspect/);
   assert.throws(() => j.operation("cancel"), /unpaid/);
   assert.equal(j.state.disputes.length, 1);
-  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 45);
+  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 48);
 });
 test("listing publication, dates, ownership, verification and deletion are enforced", () => {
   const j = journey();
@@ -368,7 +368,7 @@ test("started 24-hour block pricing charges full days for partial blocks", () =>
   assert.equal(rentalDays("2026-11-01T10:00:00Z", "2026-11-03T17:00:00Z"), 3);
 });
 
-test("simulated eKYC verification initializes risk score to strictly 75 and unverified is N/A", () => {
+test("simulated eKYC verification initializes risk score to strictly 78 and unverified is N/A", () => {
   let state = createSeed();
   // Switch to unverified renter Chloe Ng
   state = transition(state, { type: "login", userId: "unverified-renter" });
@@ -386,8 +386,8 @@ test("simulated eKYC verification initializes risk score to strictly 75 and unve
   state = transition(state, { type: "verify", status: "verified" });
   user = state.profiles.find((p) => p.id === "unverified-renter")!;
   assert.equal(user.verification, "verified");
-  assert.equal(user.riskScore, 75);
-  assert.equal(riskFor(state, user).score, 75);
+  assert.equal(user.riskScore, 78);
+  assert.equal(riskFor(state, user).score, 78);
   assert.equal(riskFor(state, user).level, "medium");
 });
 
@@ -652,7 +652,7 @@ test("Phase 4 & 5: two-sided clean return releases deposit and awards +2 score, 
   state = transition(state, { type: "handoverConfirm", bookingId: "booking-return", role: "renter" });
 
   const scoreBefore = state.profiles.find((p) => p.id === "demo-renter")!.riskScore;
-  assert.equal(scoreBefore, 75);
+  assert.equal(scoreBefore, 78);
 
   const samplePhotos = [
     "photo-1", "photo-2", "photo-3", "photo-4", "photo-5", "photo-6"
@@ -709,7 +709,7 @@ test("Phase 4 & 5: two-sided clean return releases deposit and awards +2 score, 
   assert.equal(bCompleted.deposit, "released");
 
   const scoreAfter = state.profiles.find((p) => p.id === "demo-renter")!.riskScore;
-  assert.equal(scoreAfter, 77); // +2 awarded on on-time clean return! Initial 75 + 2 = 77
+  assert.equal(scoreAfter, 80); // +2 awarded on on-time clean return! Initial 78 + 2 = 80
 });
 
 test("Phase 5: predefined fictional dispute resolutions properly adjust deposit and risk penalties", () => {
@@ -760,7 +760,7 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
   const bResolved = state.bookings.find((b) => b.id === "booking-dispute")!;
   assert.equal(bResolved.status, "completed");
   const renterAfter = state.profiles.find((p) => p.id === "demo-renter")!;
-  assert.equal(renterAfter.riskScore, 65); // 75 - 10 = 65
+  assert.equal(renterAfter.riskScore, 68); // 78 - 10 = 68
 });
 
 test("Phase 3: Option A delayed handover collision generates conflict offer that renter accepts to activate", () => {
@@ -907,7 +907,7 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
   assert.equal(booked.payment, "paid");
 });
 
-test("V3.23 Demo Account has at least 3 records per activity, 4 completed, score 75 (+2,+2,-2,-2) and single Sony review", () => {
+test("V3.23 Demo Account has at least 3 records per activity, 4 completed, score 78 (+2,+2,-2,-2) and single Sony review", () => {
   const seed = createSeed("admin_demo");
   const demoUserId = "demo-renter";
   const userBookings = seed.bookings.filter((b) => b.renterId === demoUserId);
@@ -942,14 +942,14 @@ test("V3.23 Demo Account has at least 3 records per activity, 4 completed, score
   // 7. Exactly 4 Completed rentals matching 4 linked risk adjustments (+2, +2, -2, -2)
   const completed = userBookings.filter((b) => b.status === "completed");
   assert.equal(completed.length, 4, `Expected exactly 4 completed rentals, got ${completed.length}`);
-  assert.equal(demoProfile.riskScore, 75, "Expected risk score 75");
+  assert.equal(demoProfile.riskScore, 78, "Expected risk score 78");
   assert.equal(demoProfile.riskLevel, "medium", "Expected medium risk tier");
   assert.ok(demoProfile.riskHistory, "Risk history must be present");
   assert.equal(demoProfile.riskHistory.length, 4, "Expected 4 risk incident records");
   const adjustments = demoProfile.riskHistory.map((h) => h.effectiveAdjustment);
   assert.deepEqual(adjustments.slice().sort(), [-2, -2, 2, 2], "Expected adjustments to be +2, +2, -2, -2");
   const sumAdj = adjustments.reduce((a, b) => a + b, 0);
-  assert.equal(sumAdj, 0, "Adjustments must net to 0 from 75 baseline");
+  assert.equal(sumAdj, 0, "Adjustments must net to 0 from 78 baseline");
 
   // 8. At least 3 saved items (favourites)
   assert.ok(demoProfile.favourites.length >= 3, `Expected >= 3 favourites, got ${demoProfile.favourites.length}`);
@@ -1165,6 +1165,46 @@ test("Sony A7 III image gallery has 4 distinct original reference images in exac
     const stats = fs.statSync(fullPath);
     assert.ok(stats.size > 10000, `Asset file must be high quality (>10KB): ${imgPath}`);
   }
+});
+
+test("Section 10: consecutive extension on active/upcoming booking charges RM0 deposit and updates end date", () => {
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+
+  // Create an upcoming booking for Sony A7 III (2 days: RM90 rent + RM5 svc + RM400 deposit = RM495)
+  const startTs = toMalaysiaUtcTimestamp(dateAfter(10), "11:00");
+  const endTs = toMalaysiaUtcTimestamp(dateAfter(12), "11:00");
+  const bookingId = "ext-test-1";
+
+  state = transition(state, {
+    type: "instantBook",
+    id: bookingId,
+    listingId: "sony-a7iii",
+    start: startTs,
+    end: endTs,
+    paymentMethod: "FPX",
+  });
+
+  const bInitial = state.bookings.find((b) => b.id === bookingId)!;
+  assert.equal(bInitial.quote.days, 2);
+  assert.equal(bInitial.quote.rentalFee, 90);
+  assert.equal(bInitial.quote.deposit, 400); // 10% medium deposit
+  assert.equal(bInitial.quote.total, 495); // 90 + 5 + 400
+
+  // Extend by 2 contiguous days (additional RM90 rent + RM5 svc + RM0 deposit = RM95)
+  state = transition(state, {
+    type: "consecutiveExtend",
+    bookingId,
+    additionalDays: 2,
+  });
+
+  const bExtended = state.bookings.find((b) => b.id === bookingId)!;
+  assert.equal(bExtended.quote.days, 4);
+  assert.equal(bExtended.quote.rentalFee, 180); // 90 + 90
+  assert.equal(bExtended.quote.serviceFee, 10); // 5 + 5
+  assert.equal(bExtended.quote.deposit, 400); // Original deposit remains held; RM0 extra deposit
+  assert.equal(bExtended.quote.total, 590); // 495 + 95 = 590
+  assert.ok(bExtended.chainBookings?.length);
 });
 
 

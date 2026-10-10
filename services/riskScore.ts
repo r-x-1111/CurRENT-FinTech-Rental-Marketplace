@@ -60,8 +60,8 @@ export function calculateRiskScore(input: RiskInputs): RiskResult {
     };
   }
 
-  // Newly verified renter starts at 75/100 Medium (V3.15 rule)
-  let score = 75;
+  // Newly verified renter starts at 78/100 Medium (V3.23 rule)
+  let score = 78;
 
   if (input.rentalHistory && input.rentalHistory.length > 0) {
     for (const rental of input.rentalHistory) {

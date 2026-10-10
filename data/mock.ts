@@ -19,7 +19,7 @@ export const sampleReviews: SampleReview[] = [
   {
     id: "rev-1",
     itemTitle: "Sony A7 III Mirrorless Camera",
-    authorName: "Alex Tan (Fictional Demo Renter)",
+    authorName: "Alex Tan",
     location: "Petaling Jaya",
     rating: 5,
     text: "The camera matched the listing and delivery was smooth. Everything was clear from booking to return.",
@@ -31,12 +31,12 @@ export const sampleFaqs: FaqItem[] = [
   {
     question: "How does CurRENT verify users?",
     answer:
-      "Sign Up demonstrates choosing MyKad or Passport, previewing sample identity-document photos locally, and a simulated facial-scan animation; these do not check actual documents, capture real faces or use a live eKYC service. Demo-only verified status is server controlled; initial verified renter score is 75 Medium. Genuine account sign-in is separate from this fictional eKYC process.",
+      "Sign Up demonstrates choosing MyKad or Passport, previewing sample identity-document photos locally, and a simulated facial-scan animation; these do not check actual documents, capture real faces or use a live eKYC service. Demo-only verified status is server controlled; initial verified renter score is 78 Medium. Genuine account sign-in is separate from this fictional eKYC process.",
   },
   {
     question: "How is the security deposit handled?",
     answer:
-      "Calculated, held and refunded as Demo only; two-party documented Check-out No Issues releases the full amount once; disputes hold it; not actual escrow.",
+      "Calculated/held/refunded as Demo only; renter Confirm Return and lender End Rental — No Issue after viewing shared media release the full amount once; disputes hold it; not actual escrow.",
   },
   {
     question: "How is the security deposit calculated?",
@@ -66,7 +66,7 @@ export const sampleFaqs: FaqItem[] = [
   {
     question: "How does Rental Risk Score work?",
     answer:
-      "Initially 75 Medium; Low 80–100, Medium 40–79, High 30–39, Very High 0–29; +2 clean, >2h late −min(5,ceil(hoursLate−2)), minor damage −10, serious damage/loss −30, confirmed intentional fraud ban; one final outcome per chain and no invented 4h-late penalty based on button click alone. Only the renter sees their private Risk Score History; Completed Rentals counts distinct finalised rental chains and +N points denotes effective clean-completion awards, synchronised with that same record history.",
+      "Initially 78 Medium; Low 80–100, Medium 40–79, High 30–39, Very High 0–29; +2 clean, >2h late −min(5,ceil(hoursLate−2)), minor damage −10, serious damage/loss −30, confirmed intentional fraud ban; one final outcome per chain and no invented 4h-late penalty based on button click alone. Only the renter sees their private Risk Score History; Completed Rentals counts distinct finalised rental chains and +N points denotes effective clean-completion awards, synchronised with that same record history, not an independently mutable number.",
   },
   {
     question: "What if something is damaged or missing?",
@@ -76,7 +76,7 @@ export const sampleFaqs: FaqItem[] = [
   {
     question: "How do delivery receipt, item condition and return work?",
     answer:
-      "Delivery Only. Renter's Confirm Received means item was delivered successfully but does not activate rental; the clock is scheduled. For each actor/stage Check-in/Check-out, submit ≥6 photos and ≥1 video for completed evidence. At final delivery-based return, both parties independently Confirm Check-out — No Issues after their own media; any dispute holds deposit. Check-out tap time is not automatic proof of late return.",
+      "Delivery Only. Renter Confirm Received acknowledges first delivery (clock stays scheduled). Renter alone uploads ≥6 photos + ≥1 video at Check-in and Check-out using camera/video-add icons; lender views those same files. Renter Confirm Return begins final review; lender presses End Rental — No Issue to settle cleanly or Apply for Dispute to hold funds. No lender media upload, and click times are not proof of on-time return.",
   },
   {
     question: "Can I cancel a confirmed booking?",

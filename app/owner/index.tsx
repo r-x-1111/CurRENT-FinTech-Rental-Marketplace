@@ -50,7 +50,7 @@ export default function OwnerDashboard() {
     >
       <View style={s.split}>
         {[
-          ["Net Demo Earnings (88%)", money(earnings), false],
+          ["Net Earnings (88%)", money(earnings), false],
           [
             "Live Listings",
             `${listings.filter((l) => l.status === "published").length}`,
@@ -65,7 +65,7 @@ export default function OwnerDashboard() {
           <Pressable
             key={label as string}
             disabled={!clickable}
-            onPress={clickable ? () => router.push("/(tabs)/rentals") : undefined}
+            onPress={clickable ? () => setTab("Rentals") : undefined}
             style={[styles.kpiCard, clickable && styles.kpiCardClickable]}
           >
             <Text style={styles.kpiLabel}>{label as string}</Text>
@@ -94,7 +94,7 @@ export default function OwnerDashboard() {
 
       {tab === "Rentals" &&
         (bookings.length ? (
-          bookings.map((b) => <BookingCard key={b.id} booking={b} />)
+          bookings.map((b) => <BookingCard key={b.id} booking={b} isLender />)
         ) : (
           <Empty
             title="No rentals yet"
@@ -287,7 +287,7 @@ export default function OwnerDashboard() {
                   )}
                 />
                 <Row
-                  label="Net demo payout · 88%"
+                  label="Net payout · 88%"
                   value={money(calculateOwnerPayout(b.quote.rentalFee).payout)}
                   strong
                 />

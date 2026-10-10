@@ -17,6 +17,7 @@ import { useMarketplace } from "../../context/Marketplace";
 import { categories } from "../../constants/categories";
 import { newId } from "../../services/marketplace";
 import { colors } from "../../constants/theme";
+import type { AvailabilityPeriod } from "../../types";
 
 export default function EditListing() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -28,9 +29,21 @@ export default function EditListing() {
   const [title, setTitle] = useState(existing?.title || "");
   const [description, setDescription] = useState(existing?.description || "");
   const [category, setCategory] = useState(existing?.category || "Electronics");
-  const [location, setLocation] = useState(existing?.location || "");
-  const [price, setPrice] = useState(existing?.dailyPrice.toString() || "");
-  const [value, setValue] = useState(existing?.estimatedValue.toString() || "");
+  const [location, setLocation] = useState(existing?.location || "Petaling Jaya");
+  
+  // Private dispatch address fields
+  const [addressLine1, setAddressLine1] = useState(
+    existing?.privateMeetingVenue?.split(", ")[0] || "No. 12, Jalan SS 15/4",
+  );
+  const [addressLine2, setAddressLine2] = useState(
+    existing?.privateMeetingVenue?.split(", ")[1]?.includes("Jaya") ? "" : existing?.privateMeetingVenue?.split(", ")[1] || "",
+  );
+  const [postcode, setPostcode] = useState("47500");
+  const [city, setCity] = useState("Subang Jaya");
+  const [stateName, setStateName] = useState("Selangor");
+
+  const [price, setPrice] = useState(existing?.dailyPrice?.toString() || "");
+  
   const [photos, setPhotos] = useState<string[]>(
     existing?.images && existing.images.length >= 6
       ? existing.images
@@ -41,20 +54,37 @@ export default function EditListing() {
       ? existing.videos
       : existing ? ["/videos/listing-preview-sample.mp4"] : [],
   );
-  const [start, setStart] = useState(existing?.availableFrom || "");
-  const [end, setEnd] = useState(existing?.availableTo || "");
+
+  // Availability periods
+  const [periods, setPeriods] = useState<AvailabilityPeriod[]>(
+    existing?.availabilityPeriods && existing.availabilityPeriods.length > 0
+      ? existing.availabilityPeriods
+      : existing?.availableFrom && existing?.availableTo
+      ? [{ start: existing.availableFrom, end: existing.availableTo }]
+      : [{ start: "2026-10-20", end: "2026-11-20" }],
+  );
+  const [inputStart, setInputStart] = useState("");
+  const [inputEnd, setInputEnd] = useState("");
+
+  // Start-time windows
   const [pickupWindowsStr, setPickupWindowsStr] = useState(
     existing?.pickupTimeWindows
       ? existing.pickupTimeWindows.map((w) => `${w.start}-${w.end}`).join(", ")
       : "10:00-12:00, 14:00-18:00",
   );
+
+  // Listing Boost (RM10 for 7 days)
+  const [boostListing, setBoostListing] = useState(
+    Boolean(existing?.featuredUntil && new Date(existing.featuredUntil).getTime() > Date.now()),
+  );
+
   const [error, setError] = useState("");
 
   if (!user) {
     return <Redirect href="/auth" />;
   }
 
-  if (id && !existing)
+  if (id && !existing) {
     return (
       <Screen back>
         <Empty
@@ -63,6 +93,37 @@ export default function EditListing() {
         />
       </Screen>
     );
+  }
+
+  const dailyPriceNum = parseFloat(price);
+  const estimatedPayout =
+    !isNaN(dailyPriceNum) && dailyPriceNum > 0
+      ? (dailyPriceNum * 0.88).toFixed(2)
+      : "—";
+
+  function handleAddPeriod() {
+    if (!inputStart.trim() || !inputEnd.trim()) {
+      setError("Please specify both Start Date and End Date.");
+      return;
+    }
+    setError("");
+    setPeriods((prev) => [...prev, { start: inputStart.trim(), end: inputEnd.trim() }]);
+    setInputStart("");
+    setInputEnd("");
+  }
+
+  function handleRemovePeriod(index: number) {
+    setPeriods((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleEditPeriod(index: number) {
+    const p = periods[index];
+    if (p) {
+      setInputStart(p.start);
+      setInputEnd(p.end);
+      setPeriods((prev) => prev.filter((_, i) => i !== index));
+    }
+  }
 
   function save(status: "draft" | "published") {
     try {
@@ -75,6 +136,28 @@ export default function EditListing() {
           return { start: wStart || "10:00", end: wEnd || "12:00" };
         });
 
+      if (parsedWindows.length < 2 && status === "published") {
+        setError("Please configure at least 2 scheduled rental start-time windows.");
+        return;
+      }
+
+      if (periods.length === 0 && status === "published") {
+        setError("Please add at least one availability period before publishing.");
+        return;
+      }
+
+      const formattedDispatchAddress = [
+        addressLine1.trim(),
+        addressLine2.trim(),
+        `${postcode.trim()} ${city.trim()}`,
+        stateName.trim(),
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+      const internalEstimatedValue =
+        existing?.estimatedValue ?? (dailyPriceNum > 0 ? dailyPriceNum * 10 : 500);
+
       act({
         type: "saveListing",
         listing: {
@@ -84,17 +167,23 @@ export default function EditListing() {
           description: description.trim(),
           category,
           location: location.trim(),
+          publicArea: location.trim(),
+          privateMeetingVenue: formattedDispatchAddress,
           dailyPrice: Number(price),
-          estimatedValue: Number(value),
+          estimatedValue: internalEstimatedValue,
           images: photos,
           videos,
           imageUrl: photos[0] || "",
-          availableFrom: start || undefined,
-          availableTo: end || undefined,
+          availableFrom: periods[0]?.start || undefined,
+          availableTo: periods[periods.length - 1]?.end || undefined,
+          availabilityPeriods: periods,
           collectionMethods: ["Delivery Only"],
           rating: existing?.rating || 0,
           verifiedOwner: user!.verification === "verified",
           status,
+          featuredUntil: boostListing
+            ? new Date(Date.now() + 7 * 86400000).toISOString()
+            : existing?.featuredUntil,
           pickupTimeWindows:
             parsedWindows.length >= 2
               ? parsedWindows
@@ -109,6 +198,16 @@ export default function EditListing() {
       setError((e as Error).message);
     }
   }
+
+  const canPublish =
+    title.trim().length > 0 &&
+    description.trim().length > 0 &&
+    location.trim().length > 0 &&
+    addressLine1.trim().length > 0 &&
+    dailyPriceNum > 0 &&
+    photos.length >= 6 &&
+    videos.length >= 1 &&
+    periods.length >= 1;
 
   return (
     <Screen
@@ -154,38 +253,196 @@ export default function EditListing() {
           selected={category}
           onSelect={setCategory}
         />
+
+        {/* Public locality vs Private dispatch address */}
         <Field
-          label="Service area / locality"
+          label="Service area / locality (Public)"
           value={location}
           onChangeText={setLocation}
           placeholder="e.g. Petaling Jaya"
         />
+        <Text style={[s.caption, { marginTop: -8, marginBottom: 14 }]}>
+          Shown on public listing cards next to the map pin icon.
+        </Text>
+
+        <View style={styles.privateAddressBox}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <Ionicons name="lock-closed" size={16} color={colors.navy} />
+            <Text style={styles.privateAddressTitle}>Private Item / Dispatch Address</Text>
+          </View>
+          <Text style={styles.privateAddressSub}>
+            Private to you and CurRENT. Never revealed publicly to browsers or renters. Used strictly for courier dispatch.
+          </Text>
+
+          <Field
+            label="Street / Address line 1"
+            value={addressLine1}
+            onChangeText={setAddressLine1}
+            placeholder="e.g. No. 12, Jalan SS 15/4"
+          />
+          <Field
+            label="Unit / Building / Line 2 (Optional)"
+            value={addressLine2}
+            onChangeText={setAddressLine2}
+            placeholder="e.g. Level 2, Unit B"
+          />
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Postcode"
+                value={postcode}
+                onChangeText={setPostcode}
+                placeholder="47500"
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={{ flex: 1.5 }}>
+              <Field
+                label="City / District"
+                value={city}
+                onChangeText={setCity}
+                placeholder="Subang Jaya"
+              />
+            </View>
+          </View>
+          <Field
+            label="State"
+            value={stateName}
+            onChangeText={setStateName}
+            placeholder="Selangor"
+          />
+        </View>
+
         <Field
           label="Daily rental price (RM)"
           value={price}
           onChangeText={setPrice}
           keyboardType="decimal-pad"
-        />
-        <Field
-          label="Estimated replacement value (RM)"
-          value={value}
-          onChangeText={setValue}
-          keyboardType="decimal-pad"
-        />
-        <Notice text="Replacement value helps estimate the risk-based refundable security deposit." />
-        <Field
-          label="Available from (YYYY-MM-DD, optional)"
-          value={start}
-          onChangeText={setStart}
-        />
-        <Field
-          label="Available until (YYYY-MM-DD, optional)"
-          value={end}
-          onChangeText={setEnd}
+          placeholder="e.g. 45.00"
         />
 
+        {/* Read-only Estimated Payout (RM/day) - 88% of daily rental price */}
+        <View style={styles.payoutContainer}>
+          <Text style={s.label}>Estimated payout (RM/day)</Text>
+          <View style={styles.payoutBox}>
+            <Text style={styles.payoutValue}>
+              {estimatedPayout !== "—" ? `RM ${estimatedPayout}` : "—"}
+            </Text>
+            <Text style={styles.payoutSub}>88% of daily price</Text>
+          </View>
+        </View>
+
+        {/* Exact Pale-blue 12% commission notice from Section 4.2 / website reference */}
+        <View style={styles.commissionNoticeBox}>
+          <Ionicons name="information-circle-outline" size={18} color={colors.navy} />
+          <Text style={styles.commissionNoticeText}>
+            CurRENT charges a 12% commission only when a rental is successfully completed. Your payout will be released once the deposit has been settled.
+          </Text>
+        </View>
+
+        {/* Compact Availability Section (Section 4.3) */}
+        <View style={{ marginTop: 14, marginBottom: 14 }}>
+          <Text style={s.label}>Availability</Text>
+          <Text style={[s.caption, { marginBottom: 10 }]}>
+            Set the date ranges when your item is available for rent.
+          </Text>
+
+          {/* Current saved periods */}
+          {periods.length > 0 && (
+            <View style={{ gap: 8, marginBottom: 12 }}>
+              {periods.map((p, idx) => (
+                <View key={`${p.start}-${p.end}-${idx}`} style={styles.periodRow}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                    <Ionicons name="calendar-outline" size={16} color={colors.blue} />
+                    <Text style={styles.periodDateText}>
+                      {p.start} – {p.end}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => handleEditPeriod(idx)}
+                      style={styles.periodActionBtn}
+                    >
+                      <Text style={styles.periodActionText}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => handleRemovePeriod(idx)}
+                      style={[styles.periodActionBtn, { borderColor: "#FCA5A5" }]}
+                    >
+                      <Text style={[styles.periodActionText, { color: "#DC2626" }]}>Remove</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Add period inputs */}
+          <View style={styles.addPeriodBox}>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Field
+                  label="Start Date"
+                  value={inputStart}
+                  onChangeText={setInputStart}
+                  placeholder="2026-10-20"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Field
+                  label="End Date"
+                  value={inputEnd}
+                  onChangeText={setInputEnd}
+                  placeholder="2026-11-20"
+                />
+              </View>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={handleAddPeriod}
+              style={styles.addAvailabilityBtn}
+            >
+              <Ionicons name="add-circle-outline" size={18} color={colors.blue} />
+              <Text style={styles.addAvailabilityText}>+ Add Availability</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Scheduled Rental Start-Time Windows (Section 4.3) */}
+        <Field
+          label="Available delivery time slots (e.g. 10:00-12:00, 14:00-18:00)"
+          value={pickupWindowsStr}
+          onChangeText={setPickupWindowsStr}
+          placeholder="10:00-12:00, 14:00-18:00"
+        />
+        <Text style={[s.caption, { marginTop: -8, marginBottom: 14 }]}>
+          Requires at least two non-overlapping start-time windows for scheduled dispatch.
+        </Text>
+
+        {/* Optional Listing Boost (Section 4.2) */}
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: boostListing }}
+          onPress={() => setBoostListing(!boostListing)}
+          style={[styles.boostBox, boostListing && styles.boostBoxActive]}
+        >
+          <Ionicons
+            name={boostListing ? "checkbox" : "square-outline"}
+            size={20}
+            color={boostListing ? colors.blue : colors.muted}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.boostTitle}>Listing Boost — RM10 for 7 days (Optional)</Text>
+            <Text style={styles.boostSub}>
+              Give your item featured placement prominence at the top of the searchable Home catalogue.
+            </Text>
+          </View>
+        </Pressable>
+
         {/* Fixed Fulfilment Label: Delivery Only per V3.23 */}
-        <View style={{ marginTop: 6, marginBottom: 12 }}>
+        <View style={{ marginTop: 14, marginBottom: 14 }}>
           <Text style={s.label}>Fulfilment method</Text>
           <View style={styles.deliveryOnlyBadge}>
             <Ionicons name="car-outline" size={16} color={colors.blue} />
@@ -208,15 +465,7 @@ export default function EditListing() {
             </Button>
           )}
           <Button
-            disabled={
-              !title.trim() ||
-              !description.trim() ||
-              !location.trim() ||
-              !price ||
-              !value ||
-              photos.length < 6 ||
-              videos.length < 1
-            }
+            disabled={!canPublish}
             onPress={() => save("published")}
           >
             Publish listing
@@ -231,6 +480,145 @@ export default function EditListing() {
 }
 
 const styles = StyleSheet.create({
+  payoutContainer: {
+    gap: 7,
+    marginBottom: 10,
+  },
+  payoutBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  payoutValue: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: colors.navy,
+  },
+  payoutSub: {
+    fontSize: 12,
+    color: colors.slate,
+    fontWeight: "600",
+  },
+  commissionNoticeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.paleBlue,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    marginBottom: 14,
+  },
+  commissionNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.navy,
+    lineHeight: 18,
+  },
+  privateAddressBox: {
+    backgroundColor: colors.paleBlue,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    padding: 14,
+    marginBottom: 14,
+  },
+  privateAddressTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  privateAddressSub: {
+    fontSize: 12,
+    color: colors.slate,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  periodRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  periodDateText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.navy,
+  },
+  periodActionBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: "white",
+  },
+  periodActionText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.navy,
+  },
+  addPeriodBox: {
+    backgroundColor: "#FAFAFA",
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+  addAvailabilityBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    backgroundColor: colors.paleBlue,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+  },
+  addAvailabilityText: {
+    color: colors.blue,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  boostBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "white",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 14,
+    marginBottom: 14,
+  },
+  boostBoxActive: {
+    borderColor: colors.blue,
+    backgroundColor: colors.paleBlue,
+  },
+  boostTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  boostSub: {
+    fontSize: 12,
+    color: colors.slate,
+    marginTop: 2,
+    lineHeight: 16,
+  },
   deliveryOnlyBadge: {
     flexDirection: "row",
     alignItems: "center",

@@ -142,6 +142,32 @@ export default function ListingDetailScreen() {
   const startTimestamp = start ? toMalaysiaUtcTimestamp(start, pickupTime) : "";
   const endTimestamp = end ? toMalaysiaUtcTimestamp(end, returnTime) : "";
 
+  // Check for immediately contiguous consecutive extension (Section 10)
+  const existingActiveBooking = user
+    ? state.bookings.find(
+        (b) =>
+          b.renterId === user.id &&
+          b.listingId === listing.id &&
+          ["confirmed", "upcoming", "active"].includes(b.status),
+      )
+    : undefined;
+
+  const isConsecutiveExtension = Boolean(
+    existingActiveBooking &&
+      startTimestamp &&
+      (startTimestamp === existingActiveBooking.scheduledReturn ||
+        startTimestamp === existingActiveBooking.end ||
+        (existingActiveBooking.end && start === existingActiveBooking.end.slice(0, 10))),
+  );
+
+  const extensionDays =
+    isConsecutiveExtension && start && end
+      ? rentalDays(startTimestamp, endTimestamp)
+      : 0;
+  const extRentalFee = listing.dailyPrice * extensionDays;
+  const extServiceFee = Math.max(5, Math.round(extRentalFee * 0.05));
+  const extTotal = extRentalFee + extServiceFee;
+
   let quote: ReturnType<typeof quoteFor> | undefined;
   let dateError = "";
   if (start && end) {
@@ -159,7 +185,13 @@ export default function ListingDetailScreen() {
         startTimestamp,
         endTimestamp,
       );
-      availability(state, listing, startTimestamp, endTimestamp);
+      availability(
+        state,
+        listing,
+        startTimestamp,
+        endTimestamp,
+        isConsecutiveExtension ? existingActiveBooking?.id : undefined,
+      );
     } catch (e) {
       dateError = (e as Error).message;
     }
@@ -184,7 +216,7 @@ export default function ListingDetailScreen() {
 
   // Dynamic cancellation cutoff calculation per README V3.23 Section 7.4
   let cancellationNotice = "";
-  if (start && end && !dateError && (renterRisk?.score ?? 75) >= 30) {
+  if (start && end && !dateError && (renterRisk?.score ?? 78) >= 30) {
     if (!pickupTime) {
       cancellationNotice =
         "Free cancellation until 24 hours before your chosen rental start time";
@@ -218,7 +250,7 @@ export default function ListingDetailScreen() {
         start,
         end,
         pickupTime: formatTime(pickupTime),
-        returnTime: `${formatTime(returnTime)} (Automatically matched)`,
+        returnTime: formatTime(returnTime),
         durationDays: quote ? quote.days : 1,
         collectionMethod: "Delivery Only",
         deliveryAddress: fullDeliveryAddress,
@@ -244,6 +276,15 @@ export default function ListingDetailScreen() {
       return;
     }
     try {
+      if (isConsecutiveExtension && existingActiveBooking) {
+        act({
+          type: "consecutiveExtend",
+          bookingId: existingActiveBooking.id,
+          additionalDays: extensionDays,
+        });
+        router.push(`/rental/${existingActiveBooking.id}`);
+        return;
+      }
       const bookingId = newId();
       act({
         type: "instantBook",
@@ -369,11 +410,11 @@ export default function ListingDetailScreen() {
                     </Text>
                     <Text style={[s.bold, { color: colors.navy }]}>5.0</Text>
                   </View>
-                  <Badge text="Demo / Sample Review" />
+                  <Badge text="Sample Review" />
                 </View>
-                <Text style={s.bold}>Alex Tan (Fictional Demo Renter)</Text>
+                <Text style={s.bold}>Alex Tan</Text>
                 <Text style={[s.body, { marginTop: 6 }]}>
-                  The camera matched the listing and pickup was smooth. Everything was clear from booking to return.
+                  The camera matched the listing and delivery was smooth. Everything was clear from booking to return.
                 </Text>
               </Card>
             </>
@@ -715,16 +756,19 @@ export default function ListingDetailScreen() {
             )}
 
             {/* Concise Booking Summary for eligible direct renters */}
-            {renterRisk?.level !== "very_high" && quote && (
+            {renterRisk?.level !== "very_high" && (quote || isConsecutiveExtension) && (
               <View style={styles.summaryContainer}>
-                <Text style={styles.summaryTitle}>Booking Summary</Text>
+                <Text style={styles.summaryTitle}>
+                  {isConsecutiveExtension ? "Extension Summary" : "Booking Summary"}
+                </Text>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
-                    Rental fee · {quote.days}{" "}
-                    {quote.days === 1 ? "day" : "days"}
+                    {isConsecutiveExtension ? "Additional rental fee" : "Rental fee"} ·{" "}
+                    {isConsecutiveExtension ? extensionDays : quote?.days}{" "}
+                    {(isConsecutiveExtension ? extensionDays : quote?.days) === 1 ? "day" : "days"}
                   </Text>
                   <Text style={styles.summaryValue}>
-                    {money(quote.rentalFee)}
+                    {money(isConsecutiveExtension ? extRentalFee : quote?.rentalFee ?? 0)}
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>
@@ -732,17 +776,21 @@ export default function ListingDetailScreen() {
                     CurRENT service fee (5%, min RM5)
                   </Text>
                   <Text style={styles.summaryValue}>
-                    {money(quote.serviceFee)}
+                    {money(isConsecutiveExtension ? extServiceFee : quote?.serviceFee ?? 0)}
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
-                    Risk-based security deposit
+                    {isConsecutiveExtension ? "Security Deposit" : "Risk-based security deposit"}
                   </Text>
-                  <Text style={styles.summaryValue}>{money(quote.deposit)}</Text>
+                  <Text style={styles.summaryValue}>
+                    {isConsecutiveExtension ? "—" : money(quote?.deposit ?? 0)}
+                  </Text>
                 </View>
                 <Text style={styles.depositNote}>
-                  {renterRisk?.canDirectBook
+                  {isConsecutiveExtension
+                    ? "Original deposit remains held; no additional deposit required."
+                    : renterRisk?.canDirectBook
                     ? `Your ${renterRisk.label} tier sets a ${
                         renterRisk.level === "low"
                           ? "5% (capped at RM500)"
@@ -755,10 +803,10 @@ export default function ListingDetailScreen() {
                 <View style={styles.summaryDivider} />
                 <View style={styles.summaryRowTotal}>
                   <Text style={styles.summaryTotalLabel}>
-                    Total payable today
+                    {isConsecutiveExtension ? "Total to Pay" : "Total payable today"}
                   </Text>
                   <Text style={styles.summaryTotalValue}>
-                    {money(quote.total)}
+                    {money(isConsecutiveExtension ? extTotal : quote?.total ?? 0)}
                   </Text>
                 </View>
               </View>

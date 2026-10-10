@@ -37,36 +37,16 @@ export default function ProfileScreen() {
   const completed = state.bookings.filter(
     (b) => b.renterId === user.id && b.status === "completed",
   ).length;
+  const cleanPoints = (user.riskHistory || []).reduce(
+    (acc, item) => acc + (item.effectiveAdjustment === 2 ? 2 : 0),
+    0,
+  );
 
   function verify(status: "pending" | "verified" | "failed") {
     try {
       act({ type: "verify", status });
       setError("");
       setSuccess(`Verification updated to ${status}.`);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  function simulateOutcome(
-    itemTitle: string,
-    rawIncidents: {
-      type: "on_time_success" | "late_return" | "minor_damage" | "serious_damage" | "theft_fraud";
-      hoursLate?: number;
-      confirmed?: boolean;
-      description?: string;
-    }[],
-  ) {
-    if (!user) return;
-    try {
-      act({
-        type: "recordRentalOutcome",
-        renterId: user.id,
-        itemTitle,
-        rawIncidents,
-      });
-      setError("");
-      setSuccess(`Simulated outcome recorded for ${itemTitle}.`);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -172,7 +152,7 @@ export default function ProfileScreen() {
       )}
 
       <Button onPress={() => router.push("/owner")}>
-        Open Owner Mode (Lender Workspace) →
+        Lender Mode
       </Button>
 
       {/* Identity Verification (Demo eKYC) */}
@@ -184,7 +164,7 @@ export default function ProfileScreen() {
         />
         <Text style={s.caption}>
           Simulate an external eKYC identity provider. In this classroom demo, no real identity documents or biometrics are collected.
-          Upon successful verification, every newly verified renter begins at strictly 75/100 (Medium Risk).
+          Upon successful verification, every newly verified renter begins at strictly 78/100 (Medium Risk).
         </Text>
         {["not_verified", "failed"].includes(user.verification) && (
           <Button onPress={() => verify("pending")}>
@@ -197,7 +177,7 @@ export default function ProfileScreen() {
           <>
             <Notice text="Verification pending. Choose a simulated provider response to test either outcome." />
             <Button onPress={() => verify("verified")}>
-              Simulate verified result (Initial Score 75 · Medium)
+              Simulate verified result (Initial Score 78 · Medium)
             </Button>
             <Button secondary onPress={() => verify("failed")}>
               Simulate failed result
@@ -222,7 +202,7 @@ export default function ProfileScreen() {
           CurRENT Rental Risk Score is a platform reliability metric, NOT a consumer credit score.
           It transparently determines your refundable security deposit tier and booking permissions.
         </Text>
-        <Row label="Initial verified score" value="75 (Medium Risk)" />
+        <Row label="Initial verified score" value="78 (Medium Risk)" />
         <Row
           label="Verification status"
           value={user.verification === "verified" ? "Verified (Demo eKYC)" : "Not verified (N/A)"}
@@ -253,7 +233,7 @@ export default function ProfileScreen() {
         />
         <Row
           label={`${completed} completed rentals`}
-          value={`+${completed * 2} points`}
+          value={`+${cleanPoints} points`}
         />
         <View style={styles.rulesContainer}>
           <Text style={styles.rulesHeading}>What You Should Know</Text>
@@ -317,7 +297,7 @@ export default function ProfileScreen() {
           ))
         ) : (
           <Text style={[s.caption, { marginVertical: 8 }]}>
-            No incident records. Clean rental history established with initial verified score of 75.
+            No incident records. Clean rental history established with initial verified score of 78.
           </Text>
         )}
       </Card>

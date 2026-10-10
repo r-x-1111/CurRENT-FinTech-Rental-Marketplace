@@ -241,7 +241,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       user.verification = action.status;
       if (action.status === "verified" && (user.riskScore === undefined || user.riskScore === null)) {
-        user.riskScore = 75;
+        user.riskScore = 78;
         user.riskLevel = "medium";
       }
       state.listings
@@ -350,7 +350,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const renter = state.profiles.find((p) => p.id === action.renterId);
       requireThat(renter, "Renter not found.");
       const evaluation = evaluateRentalOutcome(action.rawIncidents);
-      const scoreBefore = renter.riskScore ?? 70;
+      const scoreBefore = renter.riskScore ?? 78;
       const scoreAfter = Math.max(
         0,
         Math.min(100, scoreBefore + evaluation.effectiveAdjustment),
@@ -440,7 +440,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           action.end,
           action.protection,
         ),
-        riskScore: riskFor(state, user).score ?? 70,
+        riskScore: riskFor(state, user).score ?? 78,
         payment: "required",
         deposit: "required",
         createdAt: now,
@@ -500,7 +500,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         collectionMethod,
         status: "upcoming",
         quote,
-        riskScore: risk.score ?? 75,
+        riskScore: risk.score ?? 78,
         payment: "paid",
         deposit: "held",
         paymentMethod: action.paymentMethod || "Demo FPX",
@@ -752,7 +752,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             const evaluation = evaluateRentalOutcome([
               { type: "on_time_success", confirmed: true, description: "On-time return with no issues" },
             ]);
-            const scoreBefore = renterProfile.riskScore ?? 70;
+            const scoreBefore = renterProfile.riskScore ?? 78;
             const scoreAfter = Math.min(100, scoreBefore + evaluation.effectiveAdjustment);
             renterProfile.riskScore = scoreAfter;
             renterProfile.riskLevel = tierForScore(scoreAfter).level;
@@ -1003,7 +1003,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             const evaluation = evaluateRentalOutcome([
               { type: "on_time_success", confirmed: true, description: "On-time return with no disputes" },
             ]);
-            const scoreBefore = renter.riskScore ?? 70;
+            const scoreBefore = renter.riskScore ?? 78;
             const scoreAfter = Math.min(100, scoreBefore + evaluation.effectiveAdjustment);
             renter.riskScore = scoreAfter;
             renter.riskLevel = tierForScore(scoreAfter).level;
@@ -1029,7 +1029,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             const evaluation = evaluateRentalOutcome([
               { type: "late_return", hoursLate, confirmed: true, description: `Returned ${hoursLate} hours late` },
             ]);
-            const scoreBefore = renter.riskScore ?? 70;
+            const scoreBefore = renter.riskScore ?? 78;
             const scoreAfter = Math.max(0, scoreBefore + evaluation.effectiveAdjustment);
             renter.riskScore = scoreAfter;
             renter.riskLevel = tierForScore(scoreAfter).level;
@@ -1065,7 +1065,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const b = bookingFor(action.bookingId);
       const owner = user.id === b.ownerId;
       requireThat(!owner, "Only the renter can extend the rental.");
-      requireThat(b.status === "active", "Extensions are only available for active rentals.");
+      requireThat(
+        ["confirmed", "upcoming", "active"].includes(b.status),
+        "Extensions are only available for confirmed, upcoming, or active rentals.",
+      );
       requireThat(
         action.additionalDays >= 1 && action.additionalDays <= 30,
         "Choose 1 to 30 additional days.",
@@ -1094,6 +1097,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const additionalRentalFee = listing.dailyPrice * action.additionalDays;
       const quoteExtension = calculateConsecutiveQuote(additionalRentalFee);
 
+      b.end = newDeadlineIso;
+      b.scheduledReturn = newDeadlineIso;
       b.effectiveReturnDeadline = newDeadlineIso;
       b.quote.days += action.additionalDays;
       b.quote.rentalFee += quoteExtension.additionalRentalFee;
@@ -1141,7 +1146,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             description: "Fictional damage claim approved (Demo): RM150 assessed repair cost.",
           },
         ]);
-        const scoreBefore = renter.riskScore ?? 70;
+        const scoreBefore = renter.riskScore ?? 78;
         const scoreAfter = Math.max(0, Math.min(100, scoreBefore + evaluation.effectiveAdjustment));
         renter.riskScore = scoreAfter;
         renter.riskLevel = tierForScore(scoreAfter).level;
@@ -1179,7 +1184,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             description: "Fictional major damage claim approved (Demo): Full deposit applied to replacement liability.",
           },
         ]);
-        const scoreBefore = renter.riskScore ?? 70;
+        const scoreBefore = renter.riskScore ?? 78;
         const scoreAfter = Math.max(0, Math.min(100, scoreBefore + evaluation.effectiveAdjustment));
         renter.riskScore = scoreAfter;
         renter.riskLevel = tierForScore(scoreAfter).level;

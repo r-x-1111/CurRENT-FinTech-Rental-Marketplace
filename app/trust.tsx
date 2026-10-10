@@ -36,7 +36,7 @@ export default function TrustScreen() {
           <Text style={styles.trustCardTitle}>Verified Users</Text>
           <Text style={styles.trustCardBody}>
             Identity checks are completed by authorised external eKYC
-            providers before booking (simulated in demo). New verified renters begin at score 75 Medium.
+            providers before booking (simulated in demo). New verified renters begin at score 78 Medium.
           </Text>
         </View>
 
@@ -47,7 +47,7 @@ export default function TrustScreen() {
           </View>
           <Text style={styles.trustCardTitleFeatured}>Renter Rental Risk Score</Text>
           <RiskGauge
-            score={75}
+            score={78}
             label="Medium Risk"
           />
           <Text style={styles.trustCardBodyFeatured}>
@@ -64,7 +64,7 @@ export default function TrustScreen() {
           <Text style={styles.trustCardTitle}>Secure Deposit</Text>
           <Text style={styles.trustCardBody}>
             Refundable deposits are shown clearly before you request a rental.
-            Released automatically after joint clean return confirmation (No-Issues).
+            Released after renter return evidence, Confirm Return and lender End Rental — No Issue review without dispute.
           </Text>
         </View>
 
