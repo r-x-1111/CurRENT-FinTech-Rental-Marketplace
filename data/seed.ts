@@ -329,16 +329,26 @@ export function createAdminDemoSeed(): Marketplace {
 
   const demoPlatformRequests: PlatformReviewRequest[] = [
     {
-      id: "plat-req-1",
+      id: "REQ-D4A89C1F",
       renterId: "demo-renter",
       listingId: "drone",
-      title: "Drone (Score 0–29 Platform Eligibility Request)",
+      title: "Drone",
       image: "/products/drone.jpg",
+      lenderName: "Sarah Lim",
       start: "2026-11-15",
       end: "2026-11-18",
+      pickupTime: "11:00 AM",
+      returnTime: "11:00 AM",
+      durationDays: 3,
+      collectionMethod: "Meet Owner",
+      location: "Kuala Lumpur",
+      dailyPrice: 80,
+      estimatedRentalFee: 240,
       status: "pending_review",
+      statusLabel: "Pending CurRENT Review (Demo)",
       createdAt: "2026-10-08T15:00:00Z",
-      notes: "Pending CurRENT Platform Review (Demo). This request does not reserve inventory and is never sent to the lender.",
+      notes: "Pending CurRENT Review (Demo). Application submitted for CurRENT platform assessment.",
+      contextMode: "admin_demo",
     },
   ];
 

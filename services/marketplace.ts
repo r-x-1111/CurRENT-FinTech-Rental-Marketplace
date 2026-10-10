@@ -111,9 +111,18 @@ export type Action =
     }
   | {
       type: "requestPlatformReview";
+      id?: string;
       listingId: string;
       start: string;
       end: string;
+      pickupTime?: string;
+      returnTime?: string;
+      durationDays?: number;
+      collectionMethod?: CollectionMethod;
+      location?: string;
+      lenderName?: string;
+      dailyPrice?: number;
+      estimatedRentalFee?: number;
       notes?: string;
     }
   | { type: "message"; bookingId: string; text: string }
@@ -536,21 +545,37 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Platform review request is exclusively for Very High Risk scores (0–29).",
       );
       if (!state.platformReviewRequests) state.platformReviewRequests = [];
+      const reqId = action.id || `REQ-${newId().slice(0, 8).toUpperCase()}`;
       state.platformReviewRequests.unshift({
-        id: newId(),
+        id: reqId,
         renterId: user.id,
         listingId: listing.id,
         title: listing.title,
         image: listing.imageUrl,
+        lenderName:
+          action.lenderName ||
+          state.profiles.find((p) => p.id === listing.ownerId)?.name ||
+          "Lender",
         start: action.start,
         end: action.end,
+        pickupTime: action.pickupTime,
+        returnTime: action.returnTime,
+        durationDays: action.durationDays,
+        collectionMethod: action.collectionMethod || "Meet Owner",
+        location: action.location || listing.location,
+        dailyPrice: action.dailyPrice || listing.dailyPrice,
+        estimatedRentalFee: action.estimatedRentalFee,
         status: "pending_review",
+        statusLabel: "Pending CurRENT Review (Demo)",
         createdAt: now,
-        notes: action.notes || "Pending CurRENT Platform Review (Demo). This request does not reserve inventory and is never sent to the lender.",
+        notes:
+          action.notes ||
+          "Pending CurRENT Review (Demo). Application submitted to CurRENT platform.",
+        contextMode: state.mode || "normal",
       });
       notify(
         user.id,
-        `Platform review request submitted for ${listing.title}. Status: Pending (Demo).`,
+        `Rental request submitted to CurRENT for ${listing.title}. Status: Pending Review (Demo).`,
       );
       break;
     }

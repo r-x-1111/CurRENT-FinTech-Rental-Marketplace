@@ -57,11 +57,21 @@ export interface PlatformReviewRequest {
   listingId: string;
   title: string;
   image: string;
+  lenderName?: string;
   start: string;
   end: string;
+  pickupTime?: string;
+  returnTime?: string;
+  durationDays?: number;
+  collectionMethod?: CollectionMethod;
+  location?: string;
+  dailyPrice?: number;
+  estimatedRentalFee?: number;
   status: "pending_review";
+  statusLabel?: string;
   createdAt: string;
   notes?: string;
+  contextMode?: "normal" | "admin_demo";
 }
 
 export interface Booking {
