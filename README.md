@@ -424,7 +424,7 @@ Prefer **Supabase Auth / Postgres / Storage / Realtime**, reusing safe compatibl
 - Listings, owner ID, **private lender dispatch address**, separate **public general service area**, category/description/prices/replacement values, six-plus photos and one-plus video media manifest for *new* publication, primary cover-photo ID and optional boost period.
 - Independent lender date ranges (Malaysian inclusive dates), at least two valid published rental-start windows, inventory closures and half-open reserved `[start,end)` intervals.
 - Confirmed bookings/possession chains, fixed UTC scheduled start/end, risk/quote/agreement snapshot, **renter private delivery-address snapshot**, selected FPX **simulated** payment/fee/deposit/commission/refund ledger and notifications.
-- **Separate** `Confirm Received` renter delivery receipt; per-party lender/renter check-in and check-out evidence packages (≥6 photos +≥1 video upon clean submission); two independent clean Check-out acknowledgements; evidence-supported actual return completion time vs click times; disputes/claims/appeals and once-only settlement/score.
+- **Separate** renter `Confirm Received` initial delivery receipt; renter-only Check-in and Check-out condition-media packages (≥6 photos + ≥1 video each upon completed submission), lender read-only access to the SAME media, renter `Confirm Return` and lender `End Rental — No Issue` or `Apply for Dispute`; evidence-supported actual return completion time vs click times; disputes/claims/appeals and once-only settlement/score.
 - Real messages, unread state, account favourites; one fictional Sony sample review; logically separated **Admin Demo** personas/transactions/media/score fixtures and isolated reset scope.
 
 ### 12.2 Required enforcement
