@@ -1,83 +1,37 @@
-# CurRENT — MASTER APP DEVELOPMENT PROMPT
+# CurRENT — Master App Development Prompt
 
-**Status:** V2.9 — complete master prompt integrating all previously confirmed rental/FinTech/shared-backend rules and four later catalogue/review/UI changes. **Latest founder corrections:** the Risk Score must use the **original Canva website's semicircular gauge visual design**, never the newer circular `70 STANDARD` graphic; the real display values and entire risk/deposit business logic follow V1.8. When the founder gives a coding assistant a request to build CurRENT from this README, it should **implement the classroom-demo app autonomously across phases without repeated permission requests**. The founder has approved publication of this V2.9 prompt in the GitHub README. App code changes remain separate, initiated when the founder directs a coding assistant to build CurRENT.
+**Version:** V3.15 — founder-approved, consolidated and consistency-reviewed specification  
+**Project:** `r-x-1111/CurRENT-FinTech-Rental-Marketplace` · `main`  
+**Tagline:** *Rent what you need. Earn from what you own.*
 
-**Repository:** `r-x-1111/CurRENT-FinTech-Rental-Marketplace` (`main` is the existing default branch)
+> **Instructions to a coding AI:** This is the single authoritative specification for developing CurRENT. Read the current repository and accompanying source files before implementing. The founder's explicit instruction to **build the app** authorises ordinary in-scope coding, tests, safe demo migrations, commits/pushes and already configured **demo** deployment without a fresh conversational approval at every step, subject to Section 16 and enforced tool permissions. **Reading or publishing this document alone does not authorise work.** The founder has authorised publication of this README. Application implementation requires a separate explicit instruction to build; publication alone is not that instruction.
 
-**Product tagline:** *Rent what you need. Earn from what you own.*
+## 1. Mission, precedence and decision rights
 
-**Intended reader:** An AI software-development assistant tasked with directly implementing and testing the CurRENT classroom demo using this README as the standing technical specification. Work autonomously through development phases after a single founder request to implement, without asking for approval at each step.
+Develop the **existing Expo / React Native Web / TypeScript** project into a polished responsive **classroom demonstration** of CurRENT, a peer-to-peer item-rental marketplace for Klang Valley, Malaysia. Use **one app** with two customer-facing dashboards (**Renter** and **Lender**) and two data experiences (**Normal Mode** and **Admin Demo**). Admin Demo is a **clearly labelled fictional presentation mode**, NOT an Admin Dashboard, staff portal, operational risk-review console or extra role with privileged access.
 
----
+**Authority, once and for all:** CurRENT platform rules govern verification, risk eligibility, instant reservation, deposit rates, cancellations, score adjustments, disputes and final claim outcomes. A lender controls **their own listing description, price, future unreserved availability, pickup time ranges, venue and actual handover/return facts**. A lender **cannot approve, reject, veto, pause or unilaterally cancel a renter's already-confirmed booking**, approve a 0–29 platform request, set a renter's score, decide liability, or control deposit release. The lender's two required physical handover/return confirmations are **factual actions**, not permission to rent. The platform does not guarantee that a lender will physically appear; show an unresolved/problem-report route if they do not, rather than inventing approval power or refund rules.
 
-## 0. Mission, scope and non-negotiable boundaries
+**Precedence:** (1) founder-confirmed requirements in **this V3.15 document**; (2) visual/design reference `CurRENT Website.pdf` where not superseded; (3) the conceptual `CurRENT.pdf` and financial `CurRENT.xlsx`; (4) old repository/README behaviour. Later decisions override old V1.8 and early website figures: first verified score is **75, Medium**, Low begins at **80**, and ordinary bookings never await owner approval. Preserve working software where compatible; **do not append or revive obsolete specifications**.
 
-Act as an experienced full-stack engineer, Expo/React Native specialist, software architect, UI/UX designer, FinTech product designer, business analyst, QA engineer and technical project manager. Improve and complete the **existing CurRENT application** using the Canva website as the primary **visual** reference, `CurRENT.pdf` and `CurRENT.xlsx` as business context, and the founder's **CurRENT V1.8 Risk Score & Deposit Determination specification** plus all later explicit founder clarifications in this document as the authoritative operating rules. Do not invent a different product or blindly retain conflicting GitHub implementation.
+**Real vs simulated:** Real sign-in sessions, shared persisted listings, messaging, calendar availability, booking states, item photos, two-party confirmation, receipts/history and calculations. **Simulate** eKYC outcomes, payment, deposit holding/release, refunds, commission payouts, insurance/referrals, BNPL concepts and claim awards. Never process real cards/transfers, collect real identity documents, imply active insurance, or require credentials for financial services. Use visible but unobtrusive `Demo` disclosures. The app must work across devices via a shared backend, not just local browser storage.
 
-CurRENT is a Malaysian peer-to-peer item-rental marketplace initially focusing on Klang Valley. An account can operate as renter and lender, but the app has **exactly two customer-facing dashboards**, one for each role, and **no Admin Dashboard**. The customer-facing core is discovery, instant booking for eligible renters, simulated checkout, two-sided physical handover activation, 24-hour-block rental pricing, consecutive same-renter rebooking, two-sided return confirmation or dispute, renter risk scoring, refundable risk-based simulated deposits, and rental history.
+## 2. Brand, homepage, navigation and Explore
 
-**Classroom demo boundary:** Provide a polished, meaningful, responsive and interactive classroom demonstration running on Vercel. Do not accept or process money or genuine financial information; no actual eKYC, payment gateway, deposit escrow, bank transfer, insurance issuance or claims submission, BNPL loan, or real insurer valuation. The renter views payment details and explicitly clicks **Simulate Payment & Confirm Booking** to create a demo booking; clicking `Rent` only opens checkout. Label every financial or insurance/claim outcome as **DEMO / SIMULATED**. Use fictional or safe sample accounts/media, not genuine documents or banking data. Keep architecture reasonably extensible, without building costly real integrations.
+Match the supplied Canva aesthetic: warm off-white background, navy `#0B1F3A`, primary blue `#2F6BFF`, pale blue `#EEF5FF`, clean white rounded cards, restrained green **Demo Verified** badges. Keep responsive desktop/mobile navigation with functional **Browse Rentals, How It Works, List an Item, Safety / Help & Trust, Messages and Profile** routes. Header/top-bar **message and bell icons must actually open their respective inboxes**; bottom navigation may expose Home / Explore / Rentals / Messages / Profile. Provide consistent loading, error, success and empty states.
 
-**Post-V2.7 founder UI/catalogue decisions — binding:** Remove the homepage's complete `Recent Rental Reviews` section. The only preloaded product review in the classroom demo is the **Sony A7 III Mirrorless Camera** rental review, displayed in the product detail's `Rental Reviews` section; remove `Owner Reviews`, do not add review forms, and do not seed six unrelated reviews. Keep fictional reviewer Alex Tan, 5 stars, the specified review text, demo/sample label, illustrative `1 completed rental` and coherent illustrative `5.0` rating; this demo display does not create actual bookings or tamper with real statistics. For the homepage **Why CurRENT Is Safer → Renter Rental Risk Score** card, use **only the original Canva website screenshot's SEMICIRCULAR coloured arc/gauge design** (red→amber→green arc, navy card, score/tier centered below the arc and a 0–100 risk scale). **Do not preserve the newer app's circular `70 STANDARD` ring or the `STANDARD` label.** This is a design reference only: ALL numerical values, tier names, scoring events, verification rules, deposits and booking restrictions come strictly from V1.8 and subsequent confirmed README rules. A sample new verified renter may show `70 / Low Risk` rather than copying Canva's arbitrary `82`. Seed exactly **21 website sample items + the existing Bicycle** (22 seed/demo listings total), using only the **eight website main categories**, preserving the Bicycle's real existing demo fields, while protecting any actual user-created items and referenced bookings. These later founder UI instructions override older screenshot arrangements and review/rating seed data.
+**Homepage only:** original hero with tagline, Klang Valley discovery/search, eight quick categories, Browse/List actions; concise **How It Works: Search → Review → Pay → Return**; `Popular near you` catalogue cards; the original Canva-inspired Rental Risk Score explainer/card where appropriate (**real account score, N/A when unverified, or visibly labelled 75/Medium illustrative sample only**); safety explanation; List Your Item / CTA / footer. Correct the return explanatory copy to **both** parties' no-issue confirmations, not lender-only. **Remove the homepage `Stay on top of one active rental` placement, homepage `Questions, answered.` FAQ and six-card `Recent Rental Reviews` section.** Do **not** discard the rental-summary **component**: relocate it to `Your Rentals` per Section 13. Do **not** put a heart/favourites shortcut beside `Popular near you`.
 
-**Latest founder decisions — binding:** If delayed mutual pickup activation would overlap another renter’s already-confirmed reservation, **protect that next reservation**; offer the current renter a **shorter conflict-free period** with a recalculated and clearly displayed demo financial adjustment, and require their affirmative acceptance **before activation**. No automatic rescheduling of someone else’s booking, no silent rental shortening. New verified renters start at 70 (website's 82 is decorative); V1.8 risk tiers/deposits/incident rules replace Canva/GitHub alternatives; Very High Risk (0–29) platform requests **always stay Pending (demo)** and cannot reach payment; preset fictional approved/rejected **damage claim** cases may be showcased, but never fabricate approval of restricted booking requests. Eligible reservations do **not** require lender approval. Rental duration is charged in **started 24-hour blocks**, not calendar-day difference. The rental clock starts from **mutual two-sided handover activation**, not simulated booking payment. When the same renter completes a **new successful consecutive booking** for the same item and there is no scheduling conflict, treat it as continuous physical possession; no intermediate return, new handover, repeat return evidence, or second deposit, but additional rental/service fees apply. At the final physical return, the renter uploads clear photo/video evidence. Both parties must affirm **Return Complete — No Issues** before an undisputed rental can complete and its entire simulated deposit be released. Either party can instead **Raise Dispute / Request Platform Review**, which BLOCKS no-issue completion and automatic deposit release until a properly represented simulated case resolution. Neither party can force the other to agree there is no dispute.
+**Explore / Search:** Display the **keyword search**, **All items/All Rentals** reset and exactly eight main category chips (**Electronics, Gaming, Luxury, Household, Work & Office, Tools, Outdoors, Event Gear**), **Saved only** toggle and real listing grid. Remove **`Refine your search`**, **`Hide filters`** and the entire expandable advanced-filter panel (location, price, date fields, verified filter, rating filter, sort and clear controls). Do not replace it with another hidden/collapsed filter panel. Results appear directly below compact controls, with real keyword/category/saved filtering and a no-results state. **Listing-card hearts** save/unsave; the Explore `Saved only` toggle is the **one entry point for saved listings**, replacing the former Profile Saved-items row and proposed homepage heart shortcut. No separate Cameras chip: camera items belong under Electronics.
 
-**Publication vs development authorization:** The founder has explicitly authorised publication of **V2.9** in `README.md`. Publication does not itself authorise application code changes. Once the founder has published it as the README and later asks a coding AI to **build/implement CurRENT**, that single request authorizes normal in-scope application code changes, test runs, safe demo-data migrations, necessary documentation updates, commits/pushes to the requested repository and Vercel demo deployment where already configured and applicable—**without repeated phase-by-phase approvals**. Inform the founder of progress, but do not ask permission for every file change, refactor, test or routine deployment. Only stop for genuinely blocking missing access/secrets, material contradictory product decisions, real external charges or financial integrations, destructive actions affecting real data, or changes outside the classroom-demo scope. **Cancellation timing is now confirmed:** renter-requested cancellation of a confirmed booking is permitted only **at least 24 hours before the originally scheduled pickup/start timestamp**. For eligible cancellations, return **100% of the simulated rental fee and 100% of the simulated renter service fee** and release **100% of the simulated security deposit**; charge **no cancellation fee**, label all ledger/refund events Demo only, and never transfer real money. **Shared cross-device accounts and central persistence are now CONFIRMED (Option B)** and are part of this classroom demo; real authentication and access permissions protect demo accounts and data. Preserve working code and app functionality wherever practical. Actual payment/deposit custody, real eKYC and insurance compliance remain future-stage matters only.
+**Profile / Your activity:** Remove standalone **Saved items**, **Payment & transaction history**, **Notifications** and **Rental history** rows. Keep **Help & Trust and Safety**, profile/account and verification functions. Payment history and rental history belong in **Your Rentals**; notifications in the working **top-bar bell**. Do not duplicate shortcuts already supplied by main navigation.
 
-## 1. Source-of-truth order and uncertainty policy
+## 3. Exactly 22 seeded marketplace products and their visuals
 
-Before implementation, read: this **approved** master prompt when approved, the founder's complete V1.8 score/deposit rules reproduced in Appendix A, the website screenshots/links in `CurRENT Website.pdf`, the business proposal `CurRENT.pdf`, `CurRENT.xlsx`, and the live current repository and tests. Screenshots are reliable visual references but do not prove unseen interactions are implemented.
+The public browseable demo catalogue contains **21 original Canva items plus the already-existing City Explorer Bicycle** (22 total). This public catalogue is available in Normal Mode even when the new user has **no personal records**; Admin Demo uses the corresponding imagery/listings with isolated fictional activity. Reconcile existing *demo seeds* by stable identity without duplicates; **never delete genuine user-created listings, media, payments or bookings**. Preserve the existing Bicycle identity, photo, price and location. Prices below are daily rental prices, not internal replacement values.
 
-**Resolve conflicts in this order:** (1) latest explicit founder decisions and V1.8 risk/deposit specification; (2) Canva website for *appearance, navigation and non-overridden examples*; (3) PDF and workbook for business intent and forecasts; (4) GitHub as a technical starting point only; (5) clearly identified engineering proposals. **The V1.8 deposit tiers and scoring rules override older website and GitHub values.** The founder has confirmed: `82/100` on the website has **no special meaning**, every newly demo-verified renter instead starts at **70/100**, a listing boost is **RM10 flat** (featured for seven days as the founder's proposed/selected demo rule) rather than a percentage, and **Very High Risk requests stay Pending (demo) without an approval/rejection demonstration**. The founder has now explicitly selected **Option B: real shared cross-device account login, central database, media storage and synchronised renter/lender actions**, while all financial and insurer outcomes remain demo only. The founder also confirmed **delayed-handover conflict Option A**: preserve the next renter’s confirmed reservation, offer the first renter a non-overlapping shorter rental with re-priced demo fees and an explicit renter acceptance step before activation. **Further approved changes after V2.7 override earlier general homepage/review and extra-demo-listing guidance:** 22 demo seed items including original Bicycle; Sony camera review only, no homepage/owner reviews, 1 fictional completed rental and 5.0 sample rating; use the Canva website's **semicircular** multicolour Risk Score gauge as the sole UI visual reference, not the circular `70 STANDARD` app screenshot; actual risk values, tier names and deposit behaviour come from V1.8, with initial verified score 70 (Low Risk).
-
-Keep a `Confirmed / Implemented / Proposed / Needs founder confirmation` decision log. Do not merge strategic forecast assumptions into runtime per-rental pricing. Do not pretend that simulated eKYC, deposit custody or partner insurance is real. Where the V1.8 operational document uses phrases such as `payment`, `held`, `insurer determines` or `backend`, implement the described **business rule** as clearly labelled simulated financial/identity/insurance states and mock partner outcomes; these demo records **must persist to the real shared backend** as necessary for cross-device workflows. Real backend authentication/data synchronisation is required, while external payment/eKYC/insurance services are not. For item valuation, preserve **distinct internal fields for lender-proposed value and internal demo replacement estimate**. Automatically derive plausible illustrative values for seeded and newly listed items based on item category, description, age/condition and proposed value, using transparent deterministic demo heuristics; do not label those as actual insurer results or interrupt the renter with unnecessary insurance-valuation process text. For a future commercial product, insurer acceptance would be a separate process. The PDF and workbook do not define a complete cancellation/refund schedule. The founder has now defined the binding demo policy: cancellation only **at least 24 hours before original scheduled pickup**, with a **full simulated rental-fee and service-fee refund, full simulated deposit release and no cancellation charge**. Do not substitute workbook forecasts for this founder-confirmed transaction policy.
-
-## 2. Product identity, positioning and audience
-
-- Brand: **CurRENT**, prominent `Cur`/`RENT` wordmark styling, tagline **“Rent what you need. Earn from what you own.”**
-- Geographic focus: **Klang Valley**, with examples from Kuala Lumpur, Petaling Jaya, Subang Jaya, Shah Alam, Bangsar, Mont Kiara, Bandar Sunway and Puchong. The workbook additionally discusses Cyberjaya as a target location. Support parent areas and neighbourhood labels; do not incorrectly treat neighbourhoods as separate states.
-- Primary renters: cost-conscious people aged approximately 18–35, particularly students, young professionals, freelancers and creators who need temporary access instead of full ownership. These are business target segments, **not automatic eligibility exclusions**.
-- Primary lenders/owners: approximately 21–45, including professionals, creators, photographers, gamers and owners of underused assets. Also permit one account to act as both renter and lender; no separate app required.
-- Secondary segments: temporary residents, international students, interns and smaller businesses with intermittently used equipment.
-- Value proposition: affordability, trust, transparent fees, reduced uncertainty around damage/non-return, rental records, item evidence and a seamless two-sided marketplace.
-- Language/currency: English-first interface, amounts in **MYR/RM**, Malaysian locations and day/month/year conventions suitable for local users; store date values in a consistent machine-readable format.
-
-## 3. Visual design: preserve the Canva website
-
-Reproduce the current website's **visual character**, not a generic marketplace template:
-- Dark navy hero and footer, bright electric-blue primary actions, light-blue explainer/trust bands, warm off-white listing areas, white cards, muted borders and restrained green verification indicators.
-- Use the existing theme constants as a starting point: navy `#0B1F3A`, accent blue `#2F6BFF`, pale blue `#EEF5FF`, off-white `#F8F7F3`, with legible dark body text.
-- Clear headline hierarchy, compact supporting copy, rounded cards, subtle shadows, item photo thumbnails, visible price per day, owner verification badges and rating stars.
-- Hero copy: **“Rent what you need. Earn from what you own.”** Above/near the fold: search, location dropdown, quick categories, `Browse Rentals`, `List an Item`, and floating sample item cards where space permits.
-- Match the Canva-inspired homepage sequence **with the founder-confirmed review exception**: header → hero/search → **How it works** (Search, Review, Pay, Return — the word Review here means review booking information, not testimonials) → Popular Rentals → Trust/Safety → List Your Item → Dashboard Preview → FAQ → closing call-to-action → footer. **Do not show the old homepage `Recent Rental Reviews` section or six review cards anywhere on the landing page.**
-- Respect Canva's website design as the visual benchmark but adapt spacing/navigation for phones. On narrow viewports use stacked cards, horizontal scroll/chips and obvious tap targets. Do not simply embed the Canva site or use screenshots as the UI.
-- Real interactions: clickable listing cards, navigable sections, search submissions, functional filter controls, expandable FAQ, item gallery, feedback for invalid forms, clear empty/loading/error states.
-- Use actual source-consistent item titles, categories, areas and sample prices, except the explicitly retained Bicycle from the current app. **Do not preserve/reseed the six old Canva homepage review cards.** The founder moved the one Sony-camera testimonial into that product detail page and retired the public Owner Reviews section. Do not fabricate verified reviews or past real rental transactions.
-- **Founder-confirmed Risk Score visual design (strict):** Preserve the website's four-card **Why CurRENT Is Safer** structure, but render **Renter Rental Risk Score** using the **original Canva website reference on page 4 of `CurRENT Website.pdf`**: a dark-navy card with a **semicircular, multicolour red/amber/green arc**, a legible score and correct V1.8 risk-level text in/under the arc, and a simple 0–100 scale with clear risk direction. Keep the original Canva-style spacing and visual hierarchy responsive. **The current app's circular green-ring gauge and `70 STANDARD` text are NOT the desired design and must be replaced.** Replicate the **shape/look**, NOT the screenshot's sample `82` or any older risk thresholds/captions. Actual values are determined by V1.8: unverified = `N/A`; newly verified = `70 / Low Risk`; `70–100 Low`, `40–69 Medium`, `30–39 High`, `0–29 Very High`. Use the same visual language in renter risk views if a gauge is shown, while keeping V1.8 as the one authoritative scoring engine. Never invent a `Standard` tier or change deposit/booking rules for visual reasons.
-- Treat published Canva screenshots as **visual evidence**; interactions not observable from them require a proposal or a founder decision.
-
-## 4. Screens, routes and navigation
-
-Preserve compatible Expo Router patterns unless there is a compelling reason to change. Web navigation should resemble the Canva website; mobile navigation can retain appropriate native-inspired tabs.
-
-**Public/shared:** landing/home **without a Recent Rental Reviews section**; browse, categories, search/filter; listing detail/gallery **with Sony-only sample `Rental Reviews` display and no `Owner Reviews` block**; How It Works, Safety, FAQ; **real account sign-up/sign-in/sign-out and account recovery through the shared auth service**; demo-eKYC profile entry; help/contact. Anonymous users may browse public listings, but account-specific renter/lender operations require authentication.
-
-**Renter Dashboard only:** profile; demo eKYC status and flow; risk-score gauge/tier and score history; applicable deposit rate; rental history and incident details; checkout/payment-info simulation; agreement; confirmed and pending restricted booking/request statuses; **two-sided pickup activation status and renter `Confirm Item Received` button**; effective rental clock and consecutive booking availability; messages; notifications; renter return media upload and **`Confirm Return — No Issues` OR `Raise Dispute / Request Platform Review`**; evidence and appeals; damage claims, confirmed obligations, deposit application/release and restrictions.
-
-**Lender Dashboard only:** list/manage items; published availability and pickup windows; direct confirmed bookings; eligible renter's verification and risk relevant to *that transaction*; messaging; **lender `Confirm Item Handed Over` and two-sided activation state**; linked continuous-booking status, effective return deadline, final return evidence review; **`Confirm Item Received — No Issues` OR `Raise Dispute / Request Platform Review`**; submit incident evidence; relevant claims, calculated commission, payout, deposit and compensation-status displays; reviews.
-
-**Strictly no Admin Dashboard or internal staff interface.** Do not add an admin tab, route, sidebar entry, approval panel, operational console or business analytics dashboard. A 0–29 renter's request is to the **CurRENT platform**, not to the lender; the renter only sees **Pending Platform Review (Demo)** for new Very High Risk booking requests. Only separate predefined fictional damage-claim scenarios may display outcome statuses, clearly marked simulated and controlled outside ordinary customer-facing decision actions. Add no ability for ordinary users/lenders to assign themselves an approval or insurer payout.
-
-Web header should visibly support `Browse rentals`, `How it works`, `List an item`, `Safety`, `Messages`, `Profile`; avoid duplicate dead-end routes, ensure safe refresh/deep links and obvious mode switching.
-
-## 5. Website reference listing catalogue (22-item demo seed: 21 Canva + existing Bicycle)
-
-**Founder-confirmed post-V2.7 replacement rule:** In the **seeded/demo catalogue** keep **all 21 items visible on the CurRENT Canva website** and retain **only the pre-existing Bicycle** from app-specific demo listings. This yields **22 seeded demo listings**. Remove/deactivate other unrelated *old demo-seed* products (such as a drill where that is not the website's Pressure Washer), while **never destructively delete user-created listings, actual booking history, or existing referenced IDs**. If an old seed listing already represents one of the 21 website items, update that seed in place (stable ID) rather than creating a duplicate. `22` is the count for the known seeded sample catalogue, **not a cap on future genuine user-created items**.
-
-The following screenshot-derived **sample prices and locations** apply to the 21 website demo fixtures; user-created listings may have different rates. Main-category assignments below use the founder's eight website category labels; do not introduce extra main categories for camera/audio.
-
-| No. | Website sample item | RM/day | Demo area | Main category |
-| ---: | --- | ---: | --- | --- |
+| # | Listing | RM/day | Demo area | Main category |
+|---|---|---:|---|---|
 | 1 | Sony A7 III Mirrorless Camera | 45 | Petaling Jaya | Electronics |
 | 2 | Portable Projector | 28 | Kuala Lumpur | Electronics |
 | 3 | PlayStation 5 + Gamepad | 35 | Subang Jaya | Gaming |
@@ -99,978 +53,201 @@ The following screenshot-derived **sample prices and locations** apply to the 21
 | 19 | Wedding Arch / Backdrop Stand | 60 | Kuala Lumpur | Event Gear |
 | 20 | LED Event Lighting Kit | 45 | Petaling Jaya | Event Gear |
 | 21 | Photo Booth Setup | 100 | Kuala Lumpur | Event Gear |
-| 22 | **Bicycle — preserve existing app demo fixture** | **Keep existing** | **Keep existing** | Outdoors |
+| 22 | **Existing Bicycle — preserve current data** | Existing | Existing | Outdoors |
 
-**The eight and only eight primary website categories:** `Electronics`, `Gaming`, `Luxury`, `Household`, `Work & Office`, `Tools`, `Outdoors`, `Event Gear`. `All Rentals` is a filter/reset, not a ninth product category. Category chips should produce correct item sets and compose with search, location and pricing filters. Show appropriate names, correct product-gallery image(s), RM/day, location, categories and verified-owner **demo** indicators. Do not use an unrelated image as a Sony A7 III or create duplicate products across filters or pages. Seed illustrative descriptions/accessories conservatively; do not invent proven technical specifications or item warranties.
+**Mandatory exact images:** Review `CurRENT Website.pdf` visually: **page 2** shows the Sony, projector and PS5; **pages 2–3** show catalogue cards; **page 4** includes Sony details. Reuse **the same actual product photographs/compositions**, not generic equivalent stock imagery. The Sony image in Canva has a **bright yellow backdrop**, unlike the wrong dark camera-and-lenses image in the current app. Seek original Canva/site assets or correctly extract sufficiently good-quality embedded image assets from the PDF if available; store stable product-ID → photo mappings. **Keep Bicycle's current image as the exception.** Apply a listing's correct image to homepage, Explore, detail, checkout, favourites, rental cards/history, lender listings and Admin Demo. Never silently substitute unrelated images: if an original cannot be found at usable quality, identify that specific unresolved asset to the founder instead of claiming successful visual matching. Responsive cropping is allowed; no low-quality whole-page screenshot crop when original photo assets are available.
 
-**Bicycle must survive migration:** preserve its existing name/price/media/location/description/owner linkage and IDs as far as compatible; only remap its category to Outdoors if needed for category consistency. Avoid database-reset strategies that erase valid user listings or completed-booking relationships. Ensure the listing's photo, detail route, availability and booking flow remain functional.
+**Ratings/reviews:** Keep **one** fictional review **on Sony product detail only**, reviewer **Alex Tan (Fictional Demo Renter)**, **5 stars**, `Demo / Sample Review`, exact text: **“The camera matched the listing and pickup was smooth. Everything was clear from booking to return.”** Display Sony **5.0** and **1 illustrative completed rental**, explicitly marked sample, with no fictitious real backend rental. No homepage reviews, Sony `Owner Reviews`, owner-wide review-count system, submission form or fabricated star ratings on other products. The original Canva appearance may be followed except where the later founder requirements remove unsupported rating claims. Other products should not show unsubstantiated `4.7`, `4.8` or `4.9` badges.
 
-**Shared-backend integrity:** centralise listings, photos, filters and detail-page lookup; upsert known demo fixtures idempotently using stable keys rather than inserting another 22 on each run; reconcile pre-existing matching items by stable ID; protect real user-created records and their transaction history. Product-detail pages must open the clicked item, not a fallback/hardcoded Sony card. Full browsing and valid demo booking features must work for all 22 items. Internal replacement values may be plausible demo-only estimates according to Section 7/V1.8; preserve the Sony RM4,000 → RM200 demo deposit example when testing the RM295 checkout.
+## 4. Accounts, verification, lender listings and calendars
 
-**Reviews within this catalogue:** seed **exactly one illustrative review on one listing only**: Sony A7 III Mirrorless Camera. Do not seed any of the other five old homepage reviews, do not assign review text to other items, and do not show fake review counts or ratings for the other 21 sample items (they can show `No rental reviews yet`/no stars). Details are binding in Section 17. Do not seed an actual completed payment/booking to artificially support this display-only example.
+Use actual shared account signup/login/logout and (where feasible) recovery. The same account can enter Renter and Lender dashboards; rental scoring applies to renters, not lenders. **Simulated eKYC** goes `unverified → pending_demo → verified_demo / failed_demo`, without collecting real IDs; unverified renters show **Risk Score N/A** and cannot reserve. First successful simulated verification assigns **75/100 Medium**, once only—re-verification must not reset earned scores. The app may show a clearly marked fictional sample score before sign-in **only if identified as a visual sample**, never as that viewer's account score.
 
-## 6. User identities, demo verification and roles
+A **demo-verified lender** can publish/edit/pause a listing with name, item/category/description/condition/accessories, MYR/day, proposed/internal illustrative replacement value, photos, **public general area**, **private exact meeting venue**, collection method, and structured date/time availability. Unverified users may prepare a listing draft, but publication requires completion of simulated verification. Publish only when required fields are valid. A renter cannot rent an item they own. Exact venue is visible only to parties **after confirmed booking** (or authorised demo-persona fixture); before that show general area only. No lender manual booking-approval feature.
 
-- A signed-in profile may be both renter and lender; switching customer dashboards changes the view, not the account identity. Only the **renter role** has a Rental Risk Score; a person operating as lender does not receive a distinct lender risk score.
-- Provide preconfigured safe demo accounts for a renter and lender who can **log in on different browsers/devices** and conduct the same real-time demo booking together. Support genuine application sign-up/sign-in/sign-out using the selected backend authentication service; user identity/session authentication is real for shared data security, while **eKYC status is only simulated**. Allow one authenticated account to switch renter/lender dashboards without changing identity.
-- To be allowed to rent, the renter must be in the **successfully demo-eKYC-verified** state. Before verification: `Rental Risk Score = N/A`, no risk tier and no booking permission. Upon the **first successful simulated verification**, assign score **exactly 70/100 (Low Risk)**. Do not award verification bonus points, start at 50, or make website's former 82 the default. Prevent repeated verification from resetting any existing score.
-- Verification workflow can show `not_verified → pending_demo → verified_demo/failed_demo`; make this transparently a demo using only fictional/no sensitive input. No real KYC provider, document capture or identity check is involved. The visible verification badge must say `Demo verified` or equivalent rather than imply official verification.
-- Lenders also need simulated identity-verification status for the trust badge, but no risk score as lenders. A verified person acting as a renter follows the renter risk rules.
-- Apply access controls consistently: renter cannot rent own item; only owner can edit item; renter sees own score/history; lender sees risk/incident information **only for bookings involving their own items**; neither can change risk-score adjustments, platform decisions, insurance coverage or final claim liability.
-- **Confirmed Option B:** shared cross-device authenticated profiles, bookings, messages, handover/return confirmations and status changes are mandatory. Treat browser local storage as a non-authoritative cache of UI preferences only; do not implement local fictitious account switching as the primary data model. Never claim demo eKYC verifies real identity.
+**Lender calendar:** An intuitive monthly Monday–Sunday, **two-click date-range selector** (`start date → end date`, continuous highlight), previous/next months, `Add Availability Period`, and a list of **unlimited practical separate date ranges** with edit/remove. Minimum **one** saved available period to publish. The lender may add multiple periods (e.g., 1–10 and 15–30 Nov) and close genuinely unreserved future dates. Treat inclusive selected dates as local calendar availability and convert them to exact timestamp intervals for backend conflict checks. Do not silently make gaps available.
 
-## 7. Listing creation and lender tools
+**Pickup time windows:** Alongside the date calendar, use flexible start/end-time controls and **`Add Time Range`**. Require **at least TWO distinct, non-overlapping, valid pickup-time windows per published listing**, with no artificial maximum; editable/removable, each having end after start. Example `10:00–12:00` and `14:00–18:00`. Apply these windows to each published period by default; any per-period override must also have ≥2 valid windows. They describe when **a renter may schedule pickup**, not the hours of possession and not a lender-approval workflow. Renter chooses a particular pickup time and a separate return date/time; the lender does not approve the selection.
 
-Functional lender journey: `Profile → Lender Dashboard → List an Item → form → photo preview → Publish → manage available dates/times/edit/pause`. Listing requires name, useful item description/accessories, category, daily RM price, the lender's **declared current item/replacement value**, item age/condition if practical, relevant location, owner-defined available booking periods and pickup time windows, collection method, listing media and active status. Validate all fields. Owners control the availability they publish, **not acceptance/approval of each normal booking**; the platform checks availability and confirms eligible demo bookings directly after demo checkout.
+**Protected edits:** Listing availability edits must be persisted and visible to renters across devices. Owners may edit **future unreserved** periods, not invalidate any already confirmed or active booking, agreed pickup slot or meeting venue. Block conflicting edits or handle explicit separately confirmed safe changes, never silently displace a renter. Closing a listing to new bookings must not cancel existing reservations. Do not invent late fees, venue-based fees or delivery charges.
 
-**Internal demo value estimation (confirmed):** The owner supplies their proposed item value, while the app can reasonably calculate or choose its own plausible **internal illustrative replacement-value estimate** using item type, age, condition, typical replacement cost and submitted information. Populate reasonable estimates for the entire demo catalogue and allow new owner listings to obtain a deterministic demo estimate automatically, so deposit calculations work without awaiting a real insurer. Keep both values separately in the data model, and never describe the simulated estimate as an actual insurance assessment, actual insurer approval or guaranteed cover. **Do not clutter customer-facing screens with the behind-the-scenes valuation explanation**; show only the applicable deposit amount and fee breakdown unless a specific disclosure is necessary to avoid a false real-insurance claim. Future commercial insurance valuation by the partner is outside scope. Changing an item listing cannot retroactively alter frozen existing booking amounts.
+## 5. Authoritative Rental Risk Score and eligibility
 
-**Lender payout:** Commission is 12% of rental fee; displayed payout = 88% of the rental fee, not counting refundable security deposit. E.g. RM45/day → RM39.60/day. For an additional continuous booking, the newly charged rental fee gets its own 12% commission and 88% payout calculation.
+**Higher score = more reliable; integer 0–100, verified renters only.** These tiers and deposit caps supersede all older 70/Standard and 10%/20%/30% versions:
 
-**Optional Listing Boost (confirmed):** A fixed **RM10 per boost** obtains seven days of `Featured (Demo)` placement for the chosen listing, starting on simulated boost activation. Record activation and expiry timestamps, do not actually charge money, never auto-renew, and remove featured placement on expiry. Featured positions must still honour selected search, date/availability and location filters. The seven-day length is founder-confirmed; the pro forma's 10% is projected uptake, **not** an extra fee rate. The workbook additionally contains an older conflicting 3%-capped description; use the founder's RM10 decision. Boost is a separate lender option, NEVER added to renter checkout.
+| Score | Tier | Booking | Refundable simulated deposit |
+|---|---|---|---|
+| **80–100** | Low | Direct checkout | **5%** of internal replacement value, **cap RM500** |
+| **40–79** | Medium | Direct checkout | **10%**, **cap RM1,000** |
+| **30–39** | High | Direct checkout | **15%**, **cap RM1,500** |
+| **0–29** | Very High | **CurRENT Platform Review Request only** | **No checkout/deposit quoted in this demo** |
+| **N/A** | Unverified | Cannot book or request until verified | N/A |
 
-**Pickup coordination:** The owner publishes pickup availability or suggested time slots; renter chooses a proposed pickup/start date and time at booking, and both may arrange a mutually feasible meeting in the in-app conversation. Coordination messages alone do **not** activate the rental; handover requires both confirmation buttons and a conflict-free state as specified in Sections 9, 13 and 14.
+Newly verified **75 → 77 → 79 → 81** after three separate clean on-time completed rentals at +2 each. A **70** score is **Medium**, not Low. The independent restrictions in Section 11 can still block a score-100 renter; reaching 30 does not override suspensions or bans.
 
-## 8. Discovery, searching and filtering
+**Final outcome per *physical rental/continuous possession chain*:** Clean on-time return with no violation **+2**; late return beyond the first **two grace hours** costs `−min(5, ceil(max(0, hoursLate−2)))` (only if `hoursLate>2`; exactly 4 hours late = −2); confirmed minor damage **−10**; confirmed serious damage/accidental loss **−30**; confirmed intentional theft/fraud produces a **permanent ban**, not an invented stackable numeric penalty. **One most serious confirmed outcome only per chain**: 4h late plus confirmed minor damage = **−10** total, while the late incident remains `Recorded`, not scored again. No +2 for a violating rental. Score changes after final confirmed settlement, not an allegation; appeals can **replace/correct** an adjustment, never double-apply it. Clamp 0–100; keep full dated incident/evidence/outcome audit. Count lateness from separately recorded **actual physical handback time** and the effective, possibly extended deadline, not from when someone eventually presses a button. No RM late-return fine.
 
-Enable meaningful text search (title and, if useful, description), category chips, area/neighbourhood filter, price range or max daily price, verified demo owner, availability/date range, saved/favourites, currently active `Featured (Demo)` boosts and useful sorting (price and rating). Selected filters must change real displayed results, be clearable and work together. Display `No items match your filters` with a reset option when empty.
+**Very High platform requests:** Only a verified score **0–29** renter can submit an item/date-specific **`Request Platform Review`** without checkout. Store `Pending Platform Review (Demo)` visible to **that renter** in **`Platform Review Requests`**; requests remain pending in the classroom app, do **not** reserve inventory, and have **no accept/reject or approval simulator**. They are **never sent to lenders** as requests for permission. This eligibility request is different from a later **damage dispute / claim review**; do not merge their records/tabs. A score **30–39 High** renter still books instantly if otherwise eligible.
 
-Show item photo, name, area, **RM/day**, a rating only where there is actual review data or the explicitly labelled Sony sample rating, owner badge and an accurate time-bounded `Featured (Demo)` indicator for active RM10 boosts. Favourites must persist in the authenticated user’s shared database records and appear consistently after login on other devices. Tapping a card must navigate to that listing's detail page; never show wrong images/prices for the chosen ID.
+**Risk-card design:** Use the original Canva **dark-navy semicircular speedometer**, not the later circular `70 STANDARD` gauge. Four score-proportional segments **red 0–29, orange 30–39, amber 40–79, green 80–100** and markers **0/30/40/80/100**, centered number and Low/Medium/High/Very High tier text. On signed-in screens show the real account value or `N/A`; use **75 Medium** for the specifically labelled initial verified/sample account, not fabricated general user data.
 
-Item detail should include image gallery, description, inclusion notes, owner's display details, location, daily price, **item-specific `Rental Reviews` only where applicable** (the single founder-approved Sony demo review), date pickers, rental duration, quote breakdown, collection options, deposit explanation and a clear **Rent** call to action. **Remove the old `Owner Reviews` section and its empty-state copy**; do not build owner-rating/review features in this demo. Suppress unrelated legacy ratings on other items unless genuinely derived from an actual authorised shared-backend completed-rental dataset; the seed catalogue has only the Sony fictional sample. Ensure a user can't rent their own listing.
+## 6. Charges, deposit calculation, checkout quote and protection
 
-## 9. Rental duration, availability, actual activation time and consecutive bookings
-
-**Founder-confirmed 24-hour model (overrides the prior calendar-day method):** Renter selects proposed pickup/start **date and time**, proposed return **date and time**, in `Asia/Kuala_Lumpur`. Validate that requested end occurs after requested start. Use the exact requested duration in hours for the booking's **agreed occupancy duration** and charge one whole rental day for **each started 24-hour block**, with a one-day minimum:
+Use a **single tested financial rules module**, exact decimals or integer sen, and MYR two-decimal displays. All amounts below are simulated; quote snapshots must be immutable per confirmed booking, including score/deposit tier at booking.
 
 ```text
-agreedDurationMinutes = requestedReturnInstant - requestedPickupInstant  // positive
-chargeableRentalDays   = max(1, ceil(agreedDurationMinutes / (24 * 60)))
-rentalFee              = dailyPrice × chargeableRentalDays
+scheduledDurationMinutes = scheduledReturnAt - scheduledPickupAt  // positive
+billableDays = max(1, ceil(scheduledDurationMinutes / 1440))  // started 24-hour blocks
+rentalFee = dailyRate * billableDays
+renterServiceFee = max(RM5, roundToSen(0.05 * rentalFee))
+lenderCommission = roundToSen(0.12 * rentalFee)
+lenderPayout = rentalFee - lenderCommission    // 88% of rental fee
+securityDeposit = min(roundToSen(itemReplacementValue * riskTierRate), riskTierCap)
+checkoutTotal = rentalFee + renterServiceFee + securityDeposit
+consecutiveExtensionTotal = extraRentalFee + extraServiceFee  // RM0 new deposit
 ```
 
-Examples (daily rate RM90): exactly 24h costs RM90; 31h costs RM180; exactly 48h costs RM180; 55h costs RM270. **The agreed duration in hours and the number of 24-hour blocks billed are separate**: a 31-hour requested rental costs two daily units while its agreed return deadline is 31 hours after actual activation, not silently 48 hours later. Show the cost/duration clearly. **Do not use** `calendarDaysBetween(startDate, returnDate)`; calendar labels alone cannot determine chargeable days. Do not add hourly charges beyond the started-block daily fee.
+**Example:** Sony camera RM45/day, illustrative replacement value **RM4,000**; new verified renter **75 Medium**; **48h** = 2 billable days → rent **RM90**, renter fee **RM5**, deposit **RM400**, total **RM495 (Demo)**; lender commission **RM10.80**, lender illustrative payout **RM79.20**. The older **RM295** example applies **only to an already-Low renter (80+)**, whose deposit is RM200. For an RM12,000 item the deposit caps are **Low RM500 / Medium RM1,000 / High RM1,500**. Never claim the new 75 Medium renter owes RM200 or RM295.
 
-**Reservation vs actual use:** Booking is **Confirmed (Demo)** after explicit simulated payment/checkout, reserving the item for its originally selected interval, but its `Active` rental clock does **not** start until physical handover is mutually confirmed: lender clicks `Confirm Item Handed Over`, renter clicks `Confirm Item Received`, and both confirmations refer to the same booking. Each action records its own timestamp. Upon the second valid confirmation, define **activationTimestamp** as the time the second confirmation is accepted, and derive `effectiveReturnDeadline = activationTimestamp + agreedDurationMinutes`. For example: scheduled Nov 2 10:00 → Nov 5 10:00 (72h) but actual jointly confirmed pickup Nov 2 23:00 → deadline Nov 5 23:00 **only if availability permits**. No extra rental fee solely because handover was delayed. Return lateness uses the agreed **effective** deadline, not the original arbitrary proposed pickup hour. The first two late hours are a grace period for **risk scoring** only; they are not an automatic extra rental allocation or new monetary charge.
+**Workbook planning context, not runtime transactions:** The project forecasts approximately RM200 average rental value, RM2 **platform** insurance-referral income per completed rental, RM5 hypothetical BNPL-referral income, RM1.20 provider cost per rental and RM0.10 per SMS/OTP; illustrative Year-1 registrations ≈4,740 and completed rentals ≈2,795, estimated fixed costs ≈RM977,040/year and annual break-even volume ≈26,990 completed rentals. These are **forecasts**, not app revenue ledgers, operating insurance/BNPL services, extra checkout fees, seeded genuine users or requirements for an investor dashboard. If PDF/Excel forecast totals disagree slightly, don't invent a reconciliation or embed inconsistent totals in checkout; ask the founder if a commercial forecast feature is ever requested.
 
-**Protect confirmed future bookings — founder-confirmed Option A remedy:** Recheck owner-published availability and all confirmed reservations during quote, at demo checkout, **and immediately before activation** using the actual handover time. If the full paid duration shifted to actual handover would overlap another renter's **already confirmed** reservation, do not move or invalidate that reservation. Show `Scheduling Conflict — Revised Rental Offer Required (Demo)` to the current renter, and compute a **shorter available occupancy period** ending no later than the first conflicting reserved start (and respecting any other owner availability limits). This is an offer, **not an automatic shortening or activation**. Display the exact proposed actual start, revised return deadline, original vs revised duration, started-24-hour rental-day count, original vs revised rental fee and renter service fee, the **difference/refund (which may be RM0)**, and the retained initial security deposit. Recompute amounts **only from the approved started-24-hour formula**; no improvised hourly proration, penalty, compensation fee or change of deposit. The renter must explicitly **Accept Revised Rental** before the app can activate it; lender booking approval is still not required. If the renter declines, the offered interval is infeasible, or availability changes before acceptance/activation, keep the rental inactive in an honest `Conflict Unresolved` state and do not falsely issue a new deadline, settle a refund or affect other reservations. Require a new valid conflict-free proposal rather than fabricating an outcome. After the renter accepts, recheck availability **transactionally** at final two-sided activation and commit the accepted interval, activation time, adjusted fees/commission, and any simulated refund **exactly once**. A revised quote expires/refreshes if delay means its availability no longer holds. A booking may not use ordinary >24h cancellation as a substitute for this delayed-handover conflict flow. Never treat an unaccepted offer as active. For example, originally 72 hours for 3 chargeable days but shortened to 63 hours remains 3 chargeable days under this billing rule; display `RM0 fee adjustment` honestly, not a fictitious refund. Quotes and pending Very High Risk requests do not reserve inventory.
+**Fee exclusions:** The deposit is refundable security, **not revenue**. Lender 12% commission is *deducted from rent*, not added to renter checkout. **Remove the unsupported `Demo item protection · RM5/day` toggle** and every associated calculation; the PDF/XLSX do not approve an RM5/day renter premium. A small `Item Protection (Demo Information)` explainer may describe a *future, conditional* partner concept (up to RM60,000 for eligible high-value items) without guaranteeing cover. The workbook's **RM2** hypothetical insurer referral and **RM5** BNPL referral are *platform forecasts*, not customer premiums. **BNPL is not live**; no actual credit/insurance/payments. Optional **RM10 Listing Boost / seven days** is lender-side, not part of renter checkout. No rental late fine or other invented charges.
 
-**Consecutive booking is the only V1 extension mechanism:** The SAME renter can use the app to make a NEW eligible booking for the SAME item starting **exactly at the previous effective return deadline**, provided the owner's published availability and all other confirmed bookings allow that additional interval. There is **no independent owner-approval extension request or owner override**. A successful simulated checkout for the additional interval recognises a **continuous possession chain**, automatically extends the current effective return deadline by the agreed additional hours, and notifies both users. Renter **does not** physically hand back the item, upload intermediate return media, or press the two activation buttons again at the prior end time. If any gap, item mismatch, renter mismatch, failed checkout or unavailable time exists, the app MUST NOT call it a continuous extension, and the old return deadline remains in force. Do not give away another confirmed renter's reserved dates.
+## 7. Renter calendar, precise availability and dynamic cancellation notice
 
-**Deposit and scoring for a continuous chain:** Keep the FIRST chain booking's simulated security deposit as the one continuing held deposit. Charge **only additional rental fee plus its 5%-minimum-RM5 service fee** for each successful consecutive booking; **zero additional deposit**. Keep one linked chain/physical-possession record with all chargeable booking segments and financial snapshots. Release/adjust the original deposit only after the **final** two-sided return or completed dispute process. Treat the final return and its incidents as **one continuous physical rental outcome**, thus **one final risk-score adjustment** for the chain, never one +2 or penalty per payment segment. Apply late-return timing against the chain's latest valid effective return deadline, with all segment history retained. This does not authorise any separate unapproved extension or second deposit.
+Replace the app's old small `Next 21 days` chips/date-only fields with a **responsive Airbnb-style monthly calendar**. Weekday headers Mon–Sun; navigate months. **First click chooses pickup date; second chooses return date**; highlight both endpoints prominently in blue and the **entire selected period** softly in blue. Allow same-day start and end when chosen end clock time is later. Users can change/clear selections. Display separate **pickup and return time pickers**, selected interval, billable days, rental quote and helpful validation. Date clicks do not create a booking. `Rent` becomes usable only when date **and** time inputs form a valid interval. A time selection is for scheduling—not the actual rental start, which is defined in Section 9.
 
-**Confirmed booking-cancellation eligibility — founder decision:** A renter may cancel a **confirmed, not-yet-activated** booking only if the request timestamp is **at or before** `scheduledPickupStartAt - 24 hours` (Asia/Kuala_Lumpur). Calculate the cutoff from the **scheduled booking pickup/start timestamp captured at simulated confirmation**, not the later physical handover or two-sided activation timestamp. Display the exact cancellation deadline, and disable/hide the cancellation action once the cutoff has passed or the rental is already active/completed. If a new booking is confirmed fewer than 24 hours before its scheduled pickup, it has no eligible cancellation window; disclose this during its simulated checkout. Do not allow chat negotiations, owner/lender actions, or delayed pickup to silently reset the cancellation window. Do not treat abandonment of an unpaid quote as cancellation of a confirmed booking.
+**Availability:** Use the owner's multiple published date ranges and pickup windows, closed intervals and all **same-context confirmed/active** bookings. Mark past/fully booked/closed days disabled, partial-day booked days distinctly, and valid return-day boundaries selectable even where new pickup is unavailable. Do not wrongly block an entire date for a few reserved hours. The selected occupancy interval must be fully covered by available published periods (contiguous ranges can join; gaps cannot), have an allowed scheduled **pickup** time, and not overlap reserved/closed time. Backend is authoritative; validate time intervals at quote and **atomically again at confirmation**. Use local time `Asia/Kuala_Lumpur`, store unambiguous backend timestamps; define bookings as **half-open `[start, end)`** so one renter may end exactly when another begins. Example 31h: **2 charged days, exactly 31h occupied**, not 48h. Disallow concurrent double booking. Reserved periods in Admin Demo are isolated from Normal Mode and vice versa.
 
-**Cancellation settlement — founder confirmed Option A:** Upon a valid cancellation **at least 24 hours before the original scheduled pickup**, reverse/refund **100% of the simulated rental fee and 100% of the simulated renter service fee**, release **100% of the original simulated security deposit**, and charge **RM0 cancellation fee**. Display distinct Demo-only refund/deposit-release ledger entries (no actual transfer). Mark the booking Cancelled (Demo), make the cancelled time range available again, notify relevant renter/lender, record an audit trail and prevent duplicate simulated refunds/releases on repeated clicks. Current repo's 1–90 day rental-length limit, if retained, is provisional and not a founder-confirmed business rule.
+**Pickup location/time:** Lender publishes pickup windows and private venue, renter selects a specific valid pickup time, and **both parties see the exact location after confirmed booking**; public listing shows area only. No messaging-only alternative and no owner approval. Messages may coordinate logistics, but they do **not** themselves change stored booking times, deposit, cancellation cutoff or activation. If a scheduled arrangement is explicitly changed in-app, persist and revalidate it without silently invalidating other reservations; **free-cancellation cutoff remains based on the originally scheduled pickup**.
 
-## 10. Financial calculations and deposit ledger — canonical formulas
+**Date-specific cancellation notice:** Show **nothing before BOTH pickup and return calendar dates are selected**. Thereafter display one short live sentence beside the rental quote such as **“Free cancellation until 1 Nov 2026, 10:00 AM (Demo)”** for a scheduled **2 Nov 2026, 10:00 AM** pickup (regardless of the selected return date). On date or pickup-time edits, recompute; if pickup time is not yet chosen, use a clearly provisional message **“Free cancellation until 1 Nov, at your selected pickup time.”** Never imply all of 1 Nov is eligible. If the now-relative deadline has passed, say **“Free cancellation is unavailable for these pickup dates (Demo)”**, not an expired promise. Clear selection → hide notice. The full terms stay in **Help & Trust**, not a duplicate booking-page FAQ. The actual policy is in Section 11.
 
-Use ONE tested financial/booking domain service for quotes, checkout, deposit, booking snapshots, lender payouts, extensions, dashboards and test fixtures. Work in integer MYR sen or exact-decimal arithmetic; round consistently to two decimals. Quoted money never changes due to a screen refresh.
+## 8. Instant booking, agreement and reservation
 
-```text
-agreedDurationMinutes    = requestedReturnInstant - requestedPickupInstant // > 0
-chargeableRentalDays     = max(1, ceil(agreedDurationMinutes / 1440))
-rentalFee                = dailyRentalPrice × chargeableRentalDays
-renterServiceFee         = max(RM5.00, roundToSen(rentalFee × 0.05))
-lenderCommission         = roundToSen(rentalFee × 0.12)
-estimatedLenderPayout    = rentalFee - lenderCommission
-securityDepositFirst    = min(roundToSen(demoReplacementValue × tierRate), tierCap)
-checkoutTotalFirst      = rentalFee + renterServiceFee + securityDepositFirst
-checkoutTotalConsecutive = additionalRentalFee + max(RM5.00, roundToSen(additionalRentalFee × .05)) + RM0 extra deposit
-revisedFeeIfLateHandover = dailyRentalPrice × max(1, ceil(acceptedShorterDurationMinutes / 1440))
-revisedServiceFee       = max(RM5.00, roundToSen(revisedFeeIfLateHandover × 0.05))
-refundOnActivatedRevision = (originalRentalFee + originalServiceFee) - (revisedFeeIfLateHandover + revisedServiceFee) // normally ≥ RM0; demo ledger only
-```
+A **verified, unrestricted 30–100 renter** selects a valid interval → clicks **Rent** → reaches the **payment-information checkout directly** → reviews item, pickup method and **public general area only** (keep the exact private meeting venue hidden until confirmation), original pickup and planned return timestamps, billable days, fees, tier, deposit and total → acknowledges a **demo digital rental agreement** (parties, accessories, condition/evidence expectations, use/return timing, cancellation cutoff, risk/deposit and dispute rules; retain agreement version and acceptance timestamp). Then **`Simulate Payment & Confirm Booking`** performs an authoritative atomic recheck and, if valid, writes **`Confirmed (Demo)`** reservation, simulated payment record and frozen quote. **Only this final action reserves inventory.** Notify the lender; **no owner acceptance/rejection**. No real charge, fund transfer or bank details. Failures/conflicts never create an accidental booking; double-click/retry is idempotent.
 
-**V1.8 authoritative deposit table (supersedes old website and GitHub):**
+**Do not display:** `Waiting for owner approval`, `Approval` booking step, `Request to Rent` for eligible 30–100 renters, `Cancel request` for a normal booked transaction, owner booking Accept/Reject, lender pending-approval inbox or an ordinary `Requests` tab. A 0–29 **CurRENT Platform Review Request** is its separate pending-only eligibility path, with no checkout or reservation (Section 5).
 
-| Score | Tier | Deposit basis | Booking route |
-| --- | --- | --- | --- |
-| N/A | Unverified | No rental/deposit quote | Booking blocked |
-| **70–100** | Low | **5% of internal demo replacement value, capped RM500** | Direct demo checkout |
-| **40–69** | Medium | **10%, capped RM1,000** | Direct demo checkout |
-| **30–39** | High | **15%, capped RM1,500** | Direct demo checkout |
-| **0–29** | Very High | Platform determines if ever approved | **Pending platform review only** in this classroom demo; no checkout |
+A confirmed booking appears **Upcoming** with clock **OFF**. The lender is notified but has no booking-decision action. Show a clean simulated checkout receipt and deposit `Held (Demo)` ledger state. Cancellation of qualifying confirmed, not-yet-activated bookings follows Section 11.
 
-At illustrative RM12,000 replacement value, deposits are RM500/RM1,000/RM1,500 for Low/Medium/High. Boundary scores 29, 30, 39, 40, 69 and 70 must be tested. The website's illustrative camera checkout can still read **Sony A7 III RM45/day × 2 started 24-hour periods = RM90 rental + RM5 minimum service + RM200 Low Risk deposit = RM295**, with an internal illustrative replacement-value estimate of RM4,000. This is a scenario fixture rather than a real insurer's valuation. Corresponding lender commission = RM10.80 and payout = RM79.20. For the website-style 2-day example, choose timestamps **exactly 48 hours apart** to demonstrate the same RM295 total. No additional lender/owner commission or optional protection charge is imposed on the renter.
+## 9. Scheduled handover, two-party activation and delayed-start conflict
 
-**Founder-confirmed late-handover revision is an explicit exception to otherwise frozen amounts:** A renter-accepted shortened occupancy period due to a next confirmed booking requires recomputation of **rental fee, renter service fee, lender commission and payout** using canonical started-24-hour pricing. Preserve original and revised snapshots and a separate idempotent **Demo Adjustment / Refund** record upon successful revised activation only. Do not refund or change the original deposit solely because the period shortened. If the original and revised durations fall in the same chargeable-day band, show a **RM0 fee change**, not a false promise of a refund. Never automatically shorten or finalize amounts without renter acceptance.
+The scheduled pickup time facilitates meeting; it **does not** start the rental clock. At real physical exchange, lender presses **`Confirm Item Handed Over`** and renter presses **`Confirm Item Received`**. Authenticated actor/time is persisted for each; one button click leaves `Awaiting Other Party`. **After BOTH valid confirmations**, set `activatedAt` once, turn the clock on, and set `effectiveReturnDeadline = activatedAt + agreedOccupancyDuration`, with agreed duration measured from the confirmed initial booking timestamps, not rounded billable days. The final confirmation timestamp is the effective activation timestamp (or a subsequent explicit accepted revised-offer timestamp, when required). Never activate via chat, scheduled time alone or demo payment.
 
-**Freeze amounts:** Revalidate quote/eligibility and availability just before `Simulate Payment & Confirm Booking`, then fix booking's rental rate, chargeable days, fee, commission, relevant risk score/tier, replacement-value estimate, deposit and demo confirmation timestamp. Later score changes affect future ordinary rentals, not the already-frozen deposit. Every continuous-chain additional booking freezes **its own rental/service-fee** and commission, but uses **the initial held deposit** with no second simulated deposit charge (even if the person's current score later changes). The refundable deposit is never platform revenue. The RM10 owner boost is not in renter checkout. Do not include the repository's unsupported optional RM5/day protection fee.
+**Example:** scheduled 2 Nov **10:00** → 5 Nov **10:00** = **72h**. Actual joint confirmation **2 Nov 23:00** would shift return to **5 Nov 23:00** if it doesn't infringe the next reservation. No extra late fee from this delayed start itself.
 
-**Deposit release is CONDITIONAL, not automatic on upload or unilateral confirmation:** In the clean return path, the renter must upload clear final item-condition images/video, both parties must have physically met and both press `Confirm Return — No Issues` on the same physical handback. **Only then** mark the entire original simulated deposit `Released (Demo)`, close the continuous rental and apply the single final risk-score adjustment. If **either** party raises `Dispute / Request Platform Review` before both no-issue confirmations, block issue-free completion and retain `Held for Dispute (Demo)` until a predefined, explicitly fictional case resolution or future platform process determines properly confirmed liability, deposit application and release. Record each deposit change exactly once. No real funds are held, deducted or refunded.
+**Delayed-start collision safeguard — mandatory:** If `[activatedAt, activatedAt + plannedDuration)` overlaps a **later confirmed booking** or other protected reserved interval, preserve the later booking. Calculate the **maximum safe shortened duration** for the current renter and show an exact revised return deadline, hours, billed started-24h days, rental/service changes, lender commission and any **simulated refund (including RM0)**. **The renter must explicitly accept** the changed period before activation; the lender cannot unilaterally choose an outcome. Revalidate the adjusted interval atomically on acceptance; if unavailable, declined or physically impossible, show **`Conflict Unresolved / Inactive`** and a problem-report path; don't shorten silently, force other bookings to move or invent automatic cancellation. E.g. 72h→63h still charges 3 days, hence **RM0** rental refund; 72h→47h changes from 3 to 2 charged days. Preserve the original deposit. If an exchange hasn't actually happened yet, present the resolution before the physical handover.
 
-## 11. Rental Risk Score — mandatory V1.8 rules
+## 10. Consecutive reservations — the only extension
 
-**This section and Appendix A supersede all earlier Canva risk examples and GitHub's base-50/rating-based scoring logic.** The website's former `82/100` was a visual demo number **with no required significance**. It must not dictate a new user's initial score or an artificial computation. **Only renters** receive a score, only **after successful demo-eKYC**, initially **70**; unverified users show **N/A**. All scores are integers in `[0,100]`, higher = better, and tier mapping is 70–100 Low, 40–69 Medium, 30–39 High, 0–29 Very High.
+While holding an **active** rental, the same verified, eligible renter may book **additional continuous time for that same item** beginning **exactly at its current effective deadline**. Recheck listing availability for the added occupancy interval, protected reservations, eligibility and payment; charge **additional rent + renter service fee**, **RM0 additional deposit**, no owner approval. **Do not require the new segment's boundary timestamp to fall inside the lender's pickup-time windows**, because there is **no second physical pickup**. It must still lie within published item availability and not overlap another reservation. This explicit exception prevents the time-window rule for *new pickups* from wrongly blocking valid consecutive extensions.
 
-**Adjustments per completed rental after final confirmation/resolution:**
+On success, append a paid segment to **one physical possession chain**, extend the deadline, notify parties and keep the **original simulated deposit held until the final return**. No intermediate return, no new condition-photo upload and no second activation click. If there is a gap, different renter/item, payment failure or availability conflict, it is **not** an extension; leave the original deadline unchanged. After the final return, calculate **one score outcome for the whole chain**, not a score change on each paid segment. Do not invent an unlimited extension right over another renter's reservations.
 
-| Final outcome | Risk score consequence |
-| --- | --- |
-| Completed on time, no confirmed issues | **+2** |
-| Unapproved late return more than 2 hours | **−min(5, ceil(max(0, hoursLate − 2)))** |
-| Confirmed minor damage | **−10** |
-| Confirmed serious damage **or accidental loss** | **−30** |
-| Confirmed intentional theft/fraud | **Permanent booking/account ban**, separately from score |
+## 11. Return, disputes, claims, overdue debt and cancellations
 
-**Late returns:** two-hour grace measured from the **effective deadline after mutual handover activation and any successful consecutive same-renter rebookings**, NOT from initial reserved pickup or late lender-click timestamp. V1 extensions require fresh availability-checked consecutive bookings; no owner approval. The final physical return time (confirmed/recorded independently of delayed button clicks) is the lateness endpoint. Late penalty is minus 1 per *additional started hour* after grace and maximum −5 per continuous physical rental: up to 2h = 0; >2 to 3h = −1; >3 to 4h = −2; >4 to 5h = −3; >5 to 6h = −4; >6h = −5. At **exactly 4 hours late, −2**. Calculate from actual physical handback and the latest valid effective deadline, including confirmed consecutive bookings; no confirmed dispute outcome means no score deduction yet.
+**Physical return:** At the **final** handback, renter uploads clear contemporaneous item-condition photos/videos (accessories/critical sides), with upload/preview/retake guidance; record actual physical handback time separately from delayed app confirmation. Renter chooses **`Confirm Return — No Issues`** or **`Raise Dispute / Report a Problem`**; lender independently chooses **`Confirm Item Received — No Issues`** or dispute. **BOTH no-issue actions and required renter evidence**, and no open dispute, are necessary for `Completed — No Issues (Demo)` and full simulated deposit release **once**. A unilateral clean click leaves `Awaiting Other Party`. `No Issues` refers to item/deposit disagreements: a confirmed late physical return may still incur its separately calculated score consequence.
 
-**Exactly one adjustment per physical rental, including the full continuous same-renter booking chain.** If there is more than one confirmed violation, record **all** incidents but apply **only the most serious confirmed penalty**, not their sum. E.g. 4h late plus confirmed minor damage: late shown **`Recorded`**, minor damage **`−10`**, **final adjustment `−10`**, 70 → 60. A violating rental gets **no +2** reward. Pending complaints, normal wear and tear, unproven allegations, ordinary failed payment attempts, inactivity and unpaid damage obligations **never** automatically change score. There are no streak bonuses. Confirmed intentional fraud results in a ban even if no additive risk-score deduction is defined. Late/non-return allegation alone is **not fraud**.
+**Dispute:** If either side reports a genuine issue **before final clean settlement**, prevent ordinary completion and deposit release, collect evidence, and show `Under Platform Review (Demo)` with deposit `Held for Dispute`. Only CurRENT's rules/scripted fictional outcome may settle a **demo** claim; owners may report facts, not decide liability or deposit transfers. Keep damage disputes in `Disputed`, **not** `Platform Review Requests` (the latter is exclusively a 0–29 renter eligibility path). A newly filed issue normally stays pending. Predefined, visibly fictional claim fixtures may demonstrate an approved/rejected case, loss estimate, conditional future protection, deductible/exclusions, renter liability, deposit application, remaining simulated balance/refund and appeal. Do not double-recover loss or call real insurers; never classify uninvestigated non-return automatically as fraud.
 
-**Corrections and appeals:** score changes only when final outcome is confirmed and disputes resolved. Maintain an immutable/auditable incident history, a **single effective adjustment** per booking and before/after scores. If a later outcome is more serious or an appeal succeeds, **replace/recompute the earlier booking adjustment**, never append duplicate penalties. Retain the earlier incident/correction history. Clamp scores to `[0,100]`; do not double-adjust on refresh, reload or duplicate event handling. Consider rebuilding score deterministically from verified base 70 plus effective per-booking adjustments in chronological order, including corrections, so intermediate prior/new values remain coherent.
+**Debt restriction:** Only *after* a fictional case has **confirmed** renter liability, applied its deposit, notified a remaining **confirmed** unpaid obligation, and **7 full days** have elapsed without settlement, block further bookings **regardless of score**. Mere pending allegations do not start the clock. Full simulated settlement or successful appeal cancels this particular restriction; an independent fraud ban remains. Do not apply a second risk-score deduction just for debt.
 
-**Renter history UI:** per booking show item, location, start date, scheduled/agreed return deadline, actual return timestamp, all incidents and evidence, dispute confirmation status, actual penalty **only on winning incident**, other incidents marked **`Recorded`**, one final adjustment, before/after score and appeal status. Lender sees only records concerning **their own item bookings** and cannot change risk-score outcomes. A renter with a score 0–29 must request **CurRENT platform** approval for each specific booking; no owner approval or customer-facing admin interface.
+**Cancellation (distinct from dispute):** A renter may self-cancel a **confirmed, not yet activated** booking when `now <= originalScheduledPickupAt − 24 hours` (exact cutoff inclusive). Record **full simulated rental-fee and service-fee refunds**, **full deposit release**, **zero cancellation fee**, and restore only that released reservation slot. After cutoff, normal self-service cancellation unavailable; do not promise an invented late-cancellation refund or impose a new fee. Activation and agreed later pickup never move the original 24h cancellation cutoff. The short booking notice in Section 7 shows the *actual date and time*, not the whole policy.
 
-The gauge must update dynamically from the actual demo score. Show plain-language rationale without describing it as a credit score, statistical underwriting or genuine fraud detection. See Appendix A for V1.8's full detailed requirement list and example.
+## 12. Shared backend, security, transactional integrity
 
-## 12. Booking confirmation, payment-information screen and restricted requests
+Prefer **Supabase Auth / Postgres / Storage / Realtime** (reuse compatible existing scaffolding) for cross-device persistence, and deploy the responsive web demo through the existing configured **Vercel** project. Assess current code/config before replacing backend pieces. Browser storage may hold UI preferences/cache only, **not authoritative bookings, risk, deposits, receipts or chats**. Never commit secrets, invent connected insurer/payment providers or claim mock data are synchronised across devices if they aren't.
 
-**Eligible booking path:** renter chooses an available item and valid scheduled pickup/return timestamps → app computes `ceil(agreedHours/24)` billed days, service fee and V1.8 deposit → renter clicks `Rent` to open a **payment-information/checkout screen**, NOT to confirm a reservation → renter presses **Simulate Payment & Confirm Booking** → store a `Confirmed (Demo)` reservation and notify lender. Booking becomes active **only later**, after a real-world-meeting demo handover and both activation buttons. The lender receives notice but has **no approval button** for eligible renters. Display `No money charged — classroom simulation` and never request real card/FPX/bank details. Store frozen quote, booked duration, original planned collection interval and later activation. Confirmation must be idempotent and recheck availability.
+**Key records:** profiles/verification; renter score + immutable adjustment/audit; listings with owners, photo manifest, public/private location, replacement values and boosts; multiple available date ranges, minimum 2 pickup time windows; reserved interval ledger; bookings/rental chains/quote snapshots/acceptance; handover confirmations and activation; returns/evidence and disputes/claims/appeals; simulated payments/deposits/refunds/commissions; debt restrictions; messages/unread state; notifications; favourites; Sony sample-review fixture; **isolated Admin Demo personas, data and reset scope**.
 
-**Checkout requires:** fictional verified eKYC (new verified score 70), account not suspended/banned, no confirmed overdue damage balance 7 days after notice, listing active, dates/times valid and not conflicting, and score tier permitting direct checkout (30–100). The system also blocks renting one's own item and duplicate booking submissions. **Very High Risk 0–29** cannot enter checkout: they submit a CurRENT platform request tied to that item/dates, get `Pending Platform Review (Demo)` and remain pending indefinitely. Do not demonstrate approvals/rejections, fake payment unlocks, customer admin buttons or owner booking approval. Fictional approved/rejected **damage claim** cases are allowed independently and must never unlock these requests.
+**Server-side safeguards:** RLS/authorisation by actor and mode; separate access to public listing vs private pickup address; only booking parties read their media/messages; only owner edits their unreserved listing; neither party can approve their own claim or alter arbitrary scores. For booking confirmation, cancellation, revised activation, consecutive extension, dual return settlement, score replacement and ledger events: enforce **transactional**, concurrency-safe, **idempotent** state changes with server timestamps and stable idempotency keys. No overlapping `[start,end)` reservations in the same inventory context—even under simultaneous confirm clicks. Historical `Pending owner approval` demo rows should be explicitly migrated/retired safely, **never** silently declared paid or confirmed. Don't delete unrelated live user data when reconciling seeds.
 
-**Consecutive booking payment:** From an active rental, same renter may select fresh adjacent availability that **begins exactly at the current effective return deadline**. If available, checkout shows **additional rental fee + additional service fee + RM0 additional deposit** because the original simulated deposit carries forward. After explicit simulated confirmation, link the extension segment to the active physical rental, update final effective deadline, notify both users; no new handover or middle return media is required. If it is not consecutive or cannot be booked, normal booking/deposit rules and an appropriate new handover apply, subject to policy. There is no special owner approval extension flow.
+**Demo isolation:** Admin Demo can reuse public product information/photos, but its fictional private reservations, favourites, deposits, chats, actions and scoring must use a **separate data namespace/tenant or securely isolated fixture records**. Demo reservation locks must **not** prevent legitimate Normal Mode reservations, and normal private records must never appear in Admin Demo. A publicly discoverable Admin Demo button may open sandbox **fictional personas only**; enforce their capabilities server-side. No actual administrator/staff or platform-review decision API is granted.
 
-**Cancellations:** Quote abandonment before confirmation is free and creates no booking. After simulated payment confirms a booking, permit cancellation requests only **at least 24 hours before the original scheduled pickup/start** (not actual two-sided activation). Show the exact cutoff and lock the action after the cutoff. There is **no separate cancellation fee**. When eligible cancellation is confirmed, mark **Cancelled (Demo)**, restore availability, record **full simulated rental-fee refund + full simulated service-fee refund + full simulated deposit release**, and charge **no cancellation fee**. Do not process real money. An unpermitted late cancellation or no-show is **not** automatically eligible for this full-refund treatment; any additional no-show remedy is not founder-specified.
+## 13. `Your Rentals`, both dashboards and functional messaging
 
-## 13. Explicit booking/activation/return/dispute state machines and actor permissions
+**One canonical renter rental hub:** Tabs `All`, `Upcoming`, `Active`, `Return Due`, `Completed`, `Cancelled`, `Disputed`, **`Payment & Transaction History`** (immediately after `Disputed`). **`Platform Review Requests`** is an additional, *conditionally visible renter-only* tab **only if that renter has a Very High 0–29 pending request**, never a generic owner-permission queue. `Return Due` is a **derived subset of Active**, so seeing a due rental under both Active and Return Due is intentional; do not confuse that with two distinct rental bookings. `All` similarly aggregates states. Lender view can show own relevant booking/financial details, but not a lender approval queue.
 
-Use persistable, tested domain states rather than merely visual status chips. Treat naming below as an implementation guide; it may be mapped to existing types after repository audit.
+**Relocate the old homepage card, don't delete it:** Preserve the layout and useful fields of **`Dashboard Preview / Stay on top of one active rental`** inside `Your Rentals → Upcoming` for a real *confirmed, not activated* booking: correct item/photo, scheduled pickup and planned return, status **`Confirmed — Upcoming`**, computed deposit amount/`Held (Demo)` status, plus **`Messages:` with a working message icon immediately beside that label** and an accurate unread counter/sender (when present). Clicking icon or unread summary must open **that rental's authorised conversation thread**; clicking card opens rental details. After both valid handover confirmations, **the same booking** appears under `Active` with badge `Active rental`, genuine activation time and effective due time/countdown. Never hardcode the screenshot's contradictory Sony/RM200/Sarah combination—**Sony owner Aiman**, while Sarah must appear only when actually attached to that renter's listing/booking (e.g., Bicycle). A new Normal Mode user sees **honest empty Upcoming/Active states**, while Admin Demo contains separate valid upcoming and active fixture bookings. Remove the **homepage placement only**, not this card design.
 
-```text
-Eligible booking:
-  quote -> payment_info_demo -> confirmed_demo (dates reserved, rental clock OFF)
-         -> pickup_arranged -> handover_awaiting_both
-  handover_awaiting_both -> one_side_confirmed -> both_handover_confirmed
-         -> availability_rechecked -> active (activationTimestamp recorded, clock ON)
-  availability_rechecked -> activation_scheduling_conflict (protect next confirmed booking)
-  activation_scheduling_conflict -> revised_shorter_offer_demo (price/interval shown; rental still inactive)
-  revised_shorter_offer_demo -> renter_accepts_revised_terms -> recheck_availability_atomically
-  recheck_availability_atomically -> active_at_mutual_confirmed_handover (activate once; adjusted demo ledger once)
-  revised_shorter_offer_demo -> renter_declines / no_conflict_free_interval -> conflict_unresolved (no activation)
-  recheck_availability_atomically -> availability_changed -> renewed_conflict_offer_required (no activation)
+**Renter dashboard:** own verification/risk gauge, booking history, confirmations, dates, exact post-confirmation venue, messaging, notification, saved-item results via Explore, checkout and **Payment & Transaction History**, risk history/appeals/restrictions, return evidence, disputes and deposit events. No classroom `+2/−2/−10/−30` controls or fictional incident history in Normal Mode. The existing `Renter Reliability & Incident History` classroom simulator and example incident records belong **only** in Admin Demo; actual users may view their **own real earned score history** after real actions.
 
-Same-renter consecutive availability-checked booking:
-  active -> new_consecutive_quote -> additional_demo_checkout -> additional_confirmed_demo
-         -> active_chain_deadline_extended (original deposit continues; no 2nd handover)
-  missing availability / different renter / gap / failed checkout -> no extension
+**Lender dashboard:** owned listings, **calendar add/edit of multiple availability periods**, **≥2 pickup windows**, own bookings and meeting arrangements, renter messages, real two-sided factual actions, return evidence, disputes, fictional earnings/payout/12% commission view, optional **RM10, 7-day** featured listing. Owner is **not** an approving party for rental eligibility or deposit outcomes. Always show the proper renter/lender counterpart, and no unrelated private risk history.
 
-Physical return (final chain segment only):
-  active -> return_evidence_required -> physical_handback -> return_awaiting_both_no_issue
-  return_awaiting_both_no_issue -> one_side_no_issue_confirmed
-         -> both_no_issue_confirmed -> completed_issue_free_demo
-         -> full_original_deposit_released_demo (once)
-  [from any incomplete no-issue return state]
-         -> dispute_raised_by_either -> return_under_platform_review_demo
-         -> original_deposit_held_for_dispute_demo
-  return_under_platform_review_demo -> preconfigured_fictional_claim_outcome
-         -> liability_applied_demo / deposit_remainder_released_demo / appeal_demo
-         -> closed_after_demo_settlement (not labelled no-issue)
+**Messages and notifications:** Real inbox via header/bottom message icons and exact booking-thread deep links via card icon; unread state calculated per authorised conversation and cleared/updated when opened. Bell opens a real notification inbox; no Profile Notifications row. Relevant events include confirmed booking, pickup/return, dispute, score update, cancellation, debt restriction and fictional payout. Chats **never count as formal booking changes or activation**, and messages must persist/sync across devices. Do not add a second homepage activity-preview copy.
 
-Cancellation gating (confirmed booking, not yet activated):
-  confirmed_demo_booking -> cancellation_eligible (now <= scheduledPickupStartAt - 24h)
-  cancellation_eligible -> cancelled_demo + full_rental_fee_refund_demo + full_service_fee_refund_demo + full_deposit_release_demo + release_reserved_inventory
-  now > cancellationCutoff / active / completed -> cancellation_not_available
-  Note: all cancellation/refund/deposit-release transitions must be idempotent, actor-authorised, auditable and strictly simulated (no real funds).
+## 14. Help & Trust — the ONLY FAQ destination
 
-Very High Risk booking request (class demo only):
-  quote -> platform_request_pending_demo
-  [no approval/rejection transitions, no checkout unlock]
-```
+Delete homepage Questions, answered. Keep **one canonical Help & Trust / Safety page** reachable from Profile/header/footer, retaining trust/safety guidance, disclaimer and readable Q&A layout. Merge same-meaning existing questions: include **all six prior homepage topics**, plus the distinct Help & Trust topics below, without multiple conflicting FAQ sources. Canonical answer content:
 
-**Late-handover conflict guard:** Offer the current renter a shorter collision-free period with transparent original/revised demo price comparison and require acceptance before the two-sided activation is finalised. Both confirmations can be recorded as pending while resolution is required, but no rental timer starts, no revised refund posts and no booking is marked Active until explicit acceptance plus a successful final conflict/authorization check. Activation timestamp is the time the last required condition (both valid handover confirmations **and** renter acceptance) is committed; calculate the deadline from the **accepted shortened duration**. If physical exchange already occurred before the app detected a conflict, avoid pretending the rental was active before acceptance; the UI should encourage settling the revised offer before handing over. Never double-activate or modify the later renter’s reservation.
+1. **How does CurRENT verify users?** CurRENT demonstrates simulated eKYC verification before a renter can book; no real identity documents or external eKYC checks are performed. A newly demo-verified renter starts with a **75/100 Rental Risk Score (Medium Risk)**. Shared-app login is real authentication, but verification badges are explicitly demo-only.
+2. **How is the security deposit handled?** The app calculates and displays a **simulated refundable deposit** at checkout; no real money is collected or held in escrow. It remains marked *Held (Demo)* during the rental. After physical return and **both renter and lender confirm “No Issues”**, the full amount is marked *Released (Demo)*. If either party raises a dispute first, release is paused pending review; the demo never promises actual transfers.
+3. **How is the security deposit calculated?** Based on the item's **internal illustrative replacement value**, not its daily rental price, and the renter's score: **Low 80–100: 5%, max RM500; Medium 40–79: 10%, max RM1,000; High 30–39: 15%, max RM1,500.** **Very High 0–29** must request CurRENT platform review and cannot check out in this demo; such requests remain Pending. A first-time verified renter starts at 75/Medium, therefore normally owes a **10%** deposit subject to the cap. A consecutive booking by the same renter for the same item keeps the existing deposit; it does not charge another.
+4. **Can I rent out my own items?** Yes. A demo-verified lender can publish and edit their own listings, prices, future availability, pickup times and location. **CurRENT confirms eligible bookings automatically after simulated checkout; lenders cannot accept/reject bookings, overturn confirmed reservations, review platform eligibility, assign risk scores or decide claims.** They still coordinate real handover/return and can raise a dispute. A user cannot rent their own listing.
+5. **How much does CurRENT charge borrowers and lenders?** Renters pay the quoted rental fee plus a service fee of **5% of rental fee (minimum RM5)**, plus a separately shown **refundable demo deposit**. The lender pays a **12% commission deducted from rental revenue**, receiving **88% of the rental fee** as an illustrative payout. Optional lender **Listing Boost costs RM10 for seven days of demo featured placement**. No other real fees or payments are processed.
+6. **Is Buy Now Pay Later (BNPL) available?** BNPL is a **future concept only**, not a working payment or credit facility in this classroom demo. It must not issue credit, ask for financial credentials or imply a live BNPL provider.
+7. **How do I book a rental, and does the owner have to approve it?** Pick an available **start/end date and time** using the two-click calendar; the rate uses **every started 24 hours**. Click **Rent** to review the payment-information page, then **Simulate Payment & Confirm Booking** to reserve immediately if eligible and still available. No owner approval is required, including for **High Risk 30–39** renters otherwise eligible. **Only Very High Risk 0–29** may submit an item/date **CurRENT Platform Review** request that stays Pending (Demo) without checkout; it appears only in their `Platform Review Requests` history and is **never sent to an owner for approval**. A confirmed booking becomes *Active* only after the lender and renter both confirm actual handover.
+8. **How does the Rental Risk Score work?** A demo-verified renter starts at **75/100 (Medium Risk)**. **80–100 Low, 40–79 Medium, 30–39 High, 0–29 Very High**; unverified = N/A. An on-time issue-free rental earns **+2**; lateness beyond the 2-hour grace period earns **−1 per additional hour or part, maximum −5**; confirmed minor damage **−10**, serious damage/accidental loss **−30**, and confirmed intentional theft/fraud can lead to a permanent ban. **Only one final score adjustment applies per rental/continuous rental chain**, after confirmation or dispute resolution. This is a demo rental-reliability score, not a credit score or real fraud-detection service.
+9. **What happens if an item is damaged or not returned?** The parties upload photos/videos and choose **Raise Dispute / Report a Problem**, **not** the No-Issues completion action. This remains a **dispute** attached to the rental, not an entry in `Platform Review Requests` (which is reserved for Very High Risk 0–29 renter eligibility). The simulated deposit remains held during review; only confirmed liability can be applied after an outcome. New disputes stay **Under Review (Demo)**, while clearly labelled predefined fictional examples may demonstrate approved/rejected outcomes and appeals. Loss/non-return must be investigated rather than automatically labelled theft. Any possible insurance coverage is **illustrative and conditional**, not guaranteed or live.
+10. **When and how is the item returned?** The renter uploads clear condition photos/videos, physically hands back the item, and both parties independently press their **No-Issues** return-confirmation buttons *only if they agree there is no item or deposit dispute*. Both confirmations complete a clean return and release the simulated deposit; either party can instead raise a dispute to stop ordinary settlement. A later click must not falsely count as a late physical return.
+11. **Can I cancel a confirmed booking?** Cancellation is available only **at least 24 hours before the originally scheduled pickup time**. An eligible cancellation generates a **full simulated refund of the rental fee and renter service fee**, plus full simulated deposit release, with **no cancellation charge**; dates become available again. After the cutoff, the normal self-service Cancel option is unavailable. Actual refunds are not processed.
+12. **Can an item be delivered?** Collection methods depend on what the lender offers. The demo supports arranging available collection/pickup options and discussing details in messages; **no real delivery partner or automatic delivery payment** is integrated. Do not promise logistics coverage or introduce an unsupported delivery fee.
+13. **Can I extend my rental?** A renter can book **new, immediately consecutive available time** for the same item, subject to the app's availability checks and another simulated rental/service payment; the owner does **not** approve the new eligible booking. The original simulated deposit remains held, **no second deposit** is charged, and no physical return or repeat handover is needed at the join. If the next period is booked by somebody else, the extension is unavailable.
 
-**Mutual handover:** Lender button `Confirm Item Handed Over`; renter button `Confirm Item Received`. Neither alone activates rental. Both button states, actor IDs and timestamps must be visible/persisted. Record activation exactly once using the accepted second confirmation timestamp, not the simulated payment timestamp. Physical item-condition pickup evidence may be attached by the parties. Before scheduling activation, guard against overlaps created by lateness and flag unresolved conflicts without altering someone else's confirmed booking.
+**How CurRENT Works on Help & Trust** (separate brief explanatory steps): `Discover listing → simulated verification/eligibility → pick pickup/return dates/times → Rent → review agreement and simulated payment → automatically Confirmed (Demo) without owner approval → both physical handover confirmations activate → upload final return evidence → both no-issue confirmations release demo deposit OR a dispute holds it`. Do not retain `submit a request → wait for owner → after approval pay` as the normal path. All disclosures must be accurate: no live eKYC, real deposit escrow, BNPL, insurer, protection premium or actual money movements.
 
-**Mutual clean return:** Renter first uploads clear return photos/videos and marks item physically handed back; lender confirms actual receipt. Each party is given **two honest choices**: `Confirm Return — No Issues` OR `Raise Dispute / Request Platform Review`. Clicking the no-issues button is an affirmative statement of **both physical handback/receipt AND no item/deposit dispute**. If there is any issue, do **not** use the no-issues button. A single unilateral no-issue click never closes the rental or releases the deposit. If **either** party raises dispute before the second no-issue confirmation, their dispute state prevails and blocks ordinary completion/release even if the other already agreed. Renter and lender cannot finalize the other's button state. Preserve timestamps for actual handback vs upload/confirmation to prevent a late-click causing false late-return point deductions.
+## 15. Two experiences, isolated records and presentation coverage
 
-**Insurance/claims vs platform request:** Damage/loss dispute review may show PREDEFINED clearly fictional `Claim approved / rejected / appealed / corrected` outcomes; no new user claim automatically receives a positive outcome. This is NOT approval for Very High Risk platform booking requests, which must stay Pending (demo). Neither public renter nor lender may edit scored outcomes, insurer coverage, ban decisions or liability. No Admin Dashboard, regardless of internal scenario states.
+**Normal Mode:** A genuine new registered user's **personal** rental history, incoming/outgoing chats, owned lender listings, earnings, claims, favourites and incident records start **empty**; pre-verification risk N/A, after eKYC 75 Medium. Public catalogue remains **22 browsable listings**, and the Sony single **sample** review remains visibly illustrative. Once that user performs actual in-demo actions, their own persisted histories naturally populate. No fictional example current rental on home, no fake messages, no internal V1.8 implementation banner, **no classroom scoring simulator** and no special reset/scenario buttons.
 
-**Financial/incident transitions:** Never double-confirm checkout, activate twice, apply a score twice per continuous physical rental, charge a second chain deposit, settle the same deposit twice or show funds as real. Only after final dispute decision/review should one effective risk adjustment be applied. For a clean return, both no-issue confirmations release the simulated deposit in full and allow the +2 reward if returned on time/no violation, or a single late penalty if the physical return was actually late and confirmed. **Do not award +2 to a confirmed late-violation case simply because no item damage occurred**; the no-dispute return affirmation is distinct from risk/timeliness assessment.
+**Admin Demo mode:** One obvious **`Admin Demo`** button in the classroom build switches to **`Demo Mode — Fictional Sample Data`**, **not** a third dashboard or real elevated account. Default to a populated **Renter Demo**; switch to **Lender Demo** using safely authorised fictional demo personas; show a persistent visible mode badge, `Exit Demo` (returns to normal context) and safe **`Reset Demo Data`**. No long onboarding is required just to inspect the presentation fixtures. Retain the two normal Renter/Lender dashboard structures in this mode, with an additional isolated **`Classroom Demo — Live Scoring Simulator`** on the incident-history screen: `+2 clean`, `−2 four-hour late`, `−10 confirmed minor damage`, `−30 serious damage/loss`, and the *winning-rule* combined case; only on fictional test fixtures, with correct one-adjustment logic. **Show at least one already-recorded fictional incident** before any button press, never an empty incident screen accompanied by test controls. Simulator output must remain separate from independently preseeded production-like outcomes.
 
-**7-day overdue clock:** Starts only when confirmed liability is determined, relevant mock protection outcome known, deposit applied, remaining balance notified and notification timestamp recorded. At seven days unpaid, an independent booking restriction applies even at 100/100; disputed/unproven claims cannot create this restriction. Mock settlement or reversal removes only that restriction, not valid historical penalties or separate bans.
+**Preseed coherent, cross-linked fictional records for the lecturer:**
 
-## 14. Two-sided physical pickup/activation, item evidence, checkout/return and dispute
+| Feature | Immediately inspectable Admin Demo fixture |
+|---|---|
+| Lender | At least one owned listing, its real Canva product image, public/private location, **multiple availability ranges**, **≥2 pickup windows**, a featured RM10/7-day boost state and illustrative earnings/commission. |
+| Rental statuses | One valid **Upcoming** confirmed booking (relocated rental-summary card), **separate Active** booking with both activation confirmations (including an example qualifying for the **Return Due** filter), **Completed** rental with evidence/dual clean confirmations, **Cancelled** and **Disputed** examples. Don't assign conflicting primary statuses to one booking; Return Due may overlap Active intentionally. |
+| Financial | Sony-style 75 Medium 48h **RM495** checkout/receipt example, simulated held and released deposits, lender 12% fee/88% payout, cancellation refund, **Payment & Transaction History** row(s), and an eligible consecutive extension with **RM0 new deposit**. |
+| Verification / risk | An inspectable **verified_demo** fictional identity and at least one **unverified** state, an internally consistent score/incident audit (+2, late, damage, winning rule), four-band gauge, separate example of confirmed 7-day unpaid obligation blocking eligibility, and presentation-only simulator. |
+| Restricted request | Exactly typed **0–29 Pending CurRENT Platform Review** case, renter-visible only, **never** approved, denied, reserved or sent to lender. |
+| Return/claims | Renter evidence media, waiting for second confirmation, completed full release, pending dispute/deposit hold, and **separate scripted fictional** settled damage-claim example with a demonstrable appeal record and liability ledger. |
+| Communication/other | Actual linked renter–lender conversation with unread message badge and functional icon, at least one saved listing for Explore Saved only, and meaningful notification(s). |
+| Review | **Only** the one labelled Sony Alex Tan five-star sample; no new fabricated review of other items. |
 
-**Customer screen design (mandatory, implementation details flexible):** Provide easy-to-find actions in both renter and lender dashboards, and appropriate booking detail screens. Payment checkout and rental **return checkout** are different concepts and must not share confusing labels. Use clear real-world nouns; every action must have an appropriate active/disabled state and make the other party's confirmation status visible.
+Demo fixtures use **valid internally non-overlapping intervals and dates relative to the presentation**, so upcoming is truly upcoming, active is currently active, and completed remains historical; use separate bookings/scenarios where states cannot coexist. Same IDs/amounts/photos/owners must agree on all pages. Fictional sample activity must **not contaminate or reserve Normal Mode inventory**. `Reset Demo Data` resets only the sandbox, never genuine users or catalog owner data. The lecture should be understandable with one click and functional drill-downs, not screenshot-only fake content.
 
-### 14.1 Arrange pickup and activate rental
+## 16. Development procedure and terminal auto-approval
 
-1. On a **confirmed simulated booking**, show scheduled pickup and return, agreed paid duration, pickup options and a secure message thread. Owner may publish suggested meeting slots; renter selects a proposed date/time; parties can coordinate actual meeting details. The lender does **not** approve the booking.
-2. At physical handover the lender inspects/records item condition as appropriate and presses **`Confirm Item Handed Over`**. The renter inspects/receives the item and presses **`Confirm Item Received`**. Use identity-specific access and timestamps. A single click alone leaves the rental in `Awaiting Other Party`.
-3. When **both** confirmations exist, check that full agreed occupancy duration starting now is compatible with previously confirmed reservations/owner availability. If clear, persist activation once, switch to `Active`, and set effective return deadline = second-confirmation timestamp + original requested/paid agreed duration hours. This is the moment the **rental-use clock begins**, not booking checkout payment.
-4. If actual start is later than scheduled, shift the full agreed duration only when it remains available. E.g., Nov 2 10:00–Nov 5 10:00 (72h), with handover Nov 2 23:00, means proposed Nov 5 23:00 return **only if free**. If another renter is already confirmed starting Nov 5 14:00, preserve that reservation and **offer this renter a shorter Nov 2 23:00–Nov 5 14:00 period (63h)**. Recalculate the revised quote using started 24-hour blocks; in this 72h→63h example both periods cost **3 rental days**, so display the unchanged rental/service fees and **RM0 refund** transparently. If a shorter period changes the number of charged days, show corresponding lower rental/service fees and the demo refund difference. The initial simulated security deposit remains held and unchanged. The current renter must select **Accept Revised Rental** before activation; if declined, no valid shortened interval exists, or another reservation/owner availability changes, remain `Conflict Unresolved` rather than activating or overwriting a booking. Only finalize revised duration, actor confirmation and any financial adjustment transactionally after acceptance and revalidation. Do not force lender approval or manufacture hourly credits. Both parties' clicks alone cannot override a scheduling conflict.
-5. Persist user and event IDs, planned collection timestamp, first and second actual confirmation times, final activation and effective deadline. Avoid requiring an intermediate meeting if this is an authorised consecutive same-renter chain continuation.
+1. **Audit** existing routes, component design, mock state, Git status, shared-backend configuration, seed fixtures and tests; determine which code can be reused. Do not overwrite unrelated work.
+2. **Build/reconcile** shared auth, RLS, listing IDs/media, calendars, live messaging, isolated Normal/Admin Demo context, idempotent seed and safe fixture reset.
+3. **Correct UI**: Canva styling and exact product images; remove redundant homepage sections; move real summary card into Upcoming/Active; simplify Profile/Explore; single FAQ; four-colour semicircular gauge.
+4. **Implement/test** instant checkout, exact interval reservation, lender windows, payment/deposit functions, dual activation and collision offer, consecutive extension, return/dispute, score audit, cancellation, ledger, notifications and boost.
+5. **Verify** cross-device two-person demo, backend restrictions, screenshots and Section 17 tests. Fix failures and safely deploy **only the already authorised demo project**; document outcomes and blockers rather than inventing a success report.
 
-### 14.2 New adjacent booking during an active rental (automatic continuity)
+**Avoid repeated approvals during coding:** After the founder explicitly asks the coding assistant to implement CurRENT, handle normal repository reads/edits, dependency installation, typecheck/lint/test/build commands, routine safe migrations, running dev servers, commits/pushes and already-authorised demo deployments **without conversational confirmation before every command**. Use the coding agent's **supported terminal auto-approval or scoped trusted-command allowlist** when available. For Gemini CLI, `--approval-mode=auto_edit` can still prompt for shell commands; `gemini --approval-mode=yolo` approves all tool calls and must be **explicitly enabled by the founder in a trusted isolated workspace** if they choose that broader mode. Do not silently enable unrestricted access, bypass sandbox policies or claim README text changes CLI settings. If enforced prompts remain, tell the founder the one-time supported permission setting they need rather than repeatedly asking for each routine command.
 
-- A renter who wants to keep an item must check **available additional dates** published by the owner. If the additional slot **starts exactly at the active chain's latest effective return deadline** and passes normal eligibility/availability checks, they may make a **new simulated payment-information checkout** directly; no owner permission is sought.
-- Once confirmed, automatically link the payment/booking segment to the same continuous physical rental, extend final agreed deadline, and display a notification on both dashboards. Renter keeps possession, with **no return visit, no original-deadline photos, no lender/renter reactivation clicks**, and **no new deposit**. The original deposit stays outstanding until final completion.
-- Extra booking costs include its separately calculated additional rental and service fees. No automatic extension exists unless the new booking is actually confirmed. Unavailable consecutive dates leave the original deadline unchanged.
+**Pause only for material risk or genuine ambiguity:** real personal data deletion/destructive migrations, force-push/unrelated source replacement, secrets, new paid service or real payment/eKYC/insurance operations, out-of-scope production deployment, irreconcilable business-rule change or missing essential authorised source assets. Never trade security for fewer permission prompts. Provide progress and final summary of changed files, tests and demo URL if genuinely deployed.
 
-### 14.3 Physical final return and no-dispute completion
+## 17. Acceptance tests — required, not optional
 
-1. At the end of the **final** rental segment, renter physically brings/returns the item to the lender. Renter must upload **clear photos and/or videos of actual returned condition**, showing sufficiently useful views (e.g. all sides, known problem areas and included accessories). The app should provide framing guidance, preview, replacement/retake and basic file-format/size validation; do **not** claim perfect automatic truth or image clarity detection. At least one usable photo/video item must be required for issue-free confirmation. If upload fails, retry and do not bypass evidence requirement.
-2. Show the renter **`Confirm Return — No Issues`** only when they truthfully confirm physical item handback AND have no outstanding issue/dispute. Show lender **`Confirm Item Received — No Issues`** only after lender physically receives and examines the returned item AND has no damage/deposit dispute. Both labels may share the conceptual action `Confirm Return — No Issues`, but visible roles should remain distinct. **Both** must press their own no-issues button to complete the issue-free path.
-3. If the renter presses no-issues first, show `Awaiting Lender Confirmation`; if lender presses first, show `Awaiting Renter Confirmation`. **No full refund, no completion and no risk event** from just one click. If both clean confirmations are valid and **no dispute is pending**, mark the physical rental complete; record `Deposit Released (Simulated)` in full exactly once. If the return is on time and no violations are confirmed, apply one +2 score. If physical lateness is established, use V1.8's grace/penalty even if both agree there is **no item condition or deposit dispute**; a no-dispute return is not an automatic guarantee of a +2 reward.
-4. Record **actual physical handback timestamp** distinctly from media upload time and either click. Let renter submit the physical handback time and lender explicitly verify/agree to it as part of the no-issue return confirmation; if they disagree about the return time, use the **dispute route** rather than forcing clean completion. Do not simply set physical handback time to the second button-click time. A lender who presses the button late cannot automatically cause renter late points. Actual late physical handback may still produce the appropriate score penalty once the outcome is finalised.
+Implement automated unit/integration/E2E checks as appropriate and manually test two authorised sessions/devices. At minimum:
 
-### 14.4 Any issue → separate dispute path, never fake a clean checkout
+1. **UI/navigation:** 22 correct catalogue items and Canva images; Bicycle preserved; only eight categories; Explore keyword/category/Saved only works **without Refine/Hide filters or advanced panel**; no home risk of fake current rental, homepage FAQ/review blocks or homepage extra heart. Profile contains **Help & Trust**, no Saved/Notifications/Rental History/Payment History duplicate rows. Bell and message icons open real pages.
+2. **Reviews & score UI:** Sony only Alex Tan sample and illustrative 1 completed rental; no fake other-item ratings/Owner Reviews; four-band semicircular gauge ticks **0,30,40,80,100**, N/A unverified and 75 Medium new verified; thresholds 29/30/39/40/70/79/80/100 map correctly.
+3. **Pricing & checkout:** 48h Sony initially verified: rent RM90 + service RM5 + deposit RM400 = **RM495**, payout RM79.20; RM12,000 value caps correct. 24h/24h+1min/31h/48h/55h become 1/2/2/2/3 billed days. No RM5/day protection toggle, real cards, owner-approval flow or payout as renter extra fee.
+4. **Calendars:** Lender 2-click monthly ranges, unlimited practical availability periods and **at least 2 non-overlapping pickup windows**; future edits cannot disturb reserved intervals. Renter calendar highlights all days, has separate clocks, handles same-day, adjacent boundaries, partial-day bookings, closed gaps, concurrency and distinct mode inventories.
+5. **Cancellation notice:** Hidden before **both** calendar dates, exact booking-specific cutoff after selection, updated when pickup time changes, hidden again on reset; post-cutoff language correct. Cancellation exactly 24h before original pickup succeeds, one second later blocked; eligible cancellation refunds all simulated rent/service and releases deposit only once.
+6. **Authority and requests:** Eligible score 30–100 `Rent` goes straight to simulated checkout, final confirmation immediately reserves and notifies lender with **no accept/reject**. Very High 0–29 request remains Pending-only, without checkout or inventory lock, visible only to its own renter and never to owner. No generic booking Requests approvals UI.
+7. **Handover and extension:** Two independent handover clicks required; clock starts at valid joint activation; effective deadline uses agreed exact duration. Delayed collision preserves later booking and requires accepted shorter offer; 72→63h produces RM0 rental refund and 72→47h recalculates charged days. Consecutive same-renter/item period adds only rent/service, **no new deposit, handover or pickup-window requirement** at join; one chain score.
+8. **Return/disputes/score:** Evidence and both No-Issues confirmations required for clean completion/full deposit release; any dispute blocks release, recorded actual physical return determines lateness; exact 4h late = −2, late + minor damage only −10, +2 three times yields 81 from initial 75; appeals replace score adjustment; confirmed unpaid debt after 7 days blocks independently from score.
+9. **Rentals and messages:** Original home summary card is **preserved inside Upcoming**, then appears in Active after activation. Correct item/photo/deposit/owner, message icon **beside `Messages:`** deep-links to the exact authorised conversation with real unread state. `Return Due` intentionally subsets Active; `Payment & Transaction History` beside Disputed; no duplicated home card.
+10. **Normal vs Admin Demo:** Normal new user empty private histories/no scoring simulator, yet sees public listings. Admin Demo one-click populated renter/lender fixtures (every area in Section 15), real drilldowns, isolated records, only fictitious score simulator; reset only sandbox and exit back to unchanged Normal Mode. Presenter fixtures do not block normal user dates. No third dashboard/admin permission.
+11. **Operational:** RLS prevents cross-user data access, no duplicate financial entries/booking overlap under retries, images stay mapped by product ID, real backend sync across two devices, typecheck/build/tests pass, Vercel smoke test only when genuinely deployed.
 
-- If **either** party identifies damage, missing accessories, disputed condition, incomplete return, disputed deadline, loss or deposit-related disagreement, they must use **`Raise Dispute / Request Platform Review`** instead of claiming no issues. The app lets each upload evidence, describe their concern and see `Under Platform Review (Demo)`; preserve a physical-return-occurred flag if the item was actually handed back.
-- Raising a dispute **before both no-issue confirmations** immediately **blocks ordinary return completion** and **holds the entire original simulated deposit** pending relevant confirmation/resolution. This remains true if the other participant already clicked no-issue. Do not release a deposit or award a successful-return bonus automatically based on one click, mere photos or the platform receiving a new allegation.
-- New claims normally remain `Under Review (Demo)`. Separate, explicitly chosen **predefined fictional claim scenarios** can demonstrate confirmed/rejected claim outcome, illustrative protection, appropriate deduction, remainder release and appeal. Any final penalty must follow V1.8's one-per-continuous-rental rule and confirmed final facts. Lenders cannot unilaterally deduct deposits; renters cannot unilaterally force release.
-- Clear no-dispute completion and a **disputed/claim-resolved closure** must remain visibly distinct. No actual money is transferred, secured, refunded or paid.
+## 18. Delivery and definition of done
 
-**Availability caution:** Record when the item physically comes back and whether it is safe/available for future renters. Do not silently advertise damaged or unreturned items as ready. Claim liability and physical possession may have different statuses; do not conflate them.
+Deliver a functioning responsive classroom demo whose **Normal Mode** is a clean new-user experience and **Admin Demo** immediately illustrates all major customer features with coherent fictional records; maintain **only Renter/Lender dashboards**. No owner booking approval, no real-money or insurer/eKYC operations; exact Canva product imagery; correct calendars, score/deposits/fee rules; safe lifecycle and readable navigation. Submit a concise changed-file report, verified commands/results, implementation decisions, any unresolved original image assets, safe migration/seed notes, and a working Vercel demo link **only if actually deployed**. Do not fabricate test success or claim live services where there are none.
 
-## 15. Item protection, claims, deposit application and overdue obligations — V1.8
-
-**This is an educational representation of a proposed real-world insurance workflow, NOT active coverage.** The startup proposes eligible high-value item protection **up to RM60,000 through a future authorised partner**, subject to eligibility, exclusions and policy. CurRENT is **not** an insurer and must not guarantee coverage or payouts. Potential exclusions include intentional misuse, prohibited use, gross negligence, unauthorised subletting and partner-policy conditions. The app may explain possible coverage, but all shown sample coverage decisions/amounts must say `Illustrative demo scenario — no claim submitted/no compensation paid`.
-
-**Damage-claim lifecycle:** lender reports damage and uploads images/video/description → renter sees claim and can submit evidence/dispute → CurRENT's **simulated platform review** records incident confirmation and renter responsibility → optional **illustrative insurer outcome** (eligible amount, deductible, exclusions), not an actual claim submission → calculate confirmed renter liability separately → apply available **simulated deposit** to that liability → calculate remaining **simulated** payable amount → notify renter → track dispute, appeal and settlement states. Preserve coverage, renter liability, deposit deductions and remaining balance as **distinct quantities**; **prevent double recovery** for the same loss (coverage + renter liability must not exceed properly established loss). No real funds move. Never treat allegation as settled claim, or payment as completed when not actually processed.
-
-**Loss/non-return:** report and investigate accidental loss, third-party theft, unresolved non-return and confirmed intentional renter theft/fraud separately. An overdue item is **not automatically theft**. Confirmed accidental loss: −30 risk penalty; intentional theft/fraud: permanent account ban (demo account restriction). A lender report alone never establishes guilt. Allow appeals and corrections. Eligibility for illustrative insurer coverage is separate from risk scoring and renter accountability.
-
-**Independent unpaid-damage restriction:** Only after liability is assessed, indicative protection outcome determined, available deposit applied, remaining payable amount **confirmed and notified**, start the seven-day clock. If unpaid **7 days after notification**, prevent *all* new bookings/checkout regardless of score (including 100/100). Automatically lift this specific restriction after **confirmed simulated full settlement** or overturned/cancelled obligation. Keep historical valid score penalties; no additional score deduction for nonpayment. Pending/disputed claims do not trigger this confirmed-overdue restriction. Platform approval at score <30 cannot bypass overdue-payment restriction. Model bans/suspensions separately.
-
-**Deposit view:** quote amount fixed at simulated first booking confirmation, carried over for an eligible same-renter continuous chain; full no-issue release only after BOTH renter and lender clean return confirmations, while any timely dispute blocks release; status can be `calculated_demo`, `recorded_demo`, `held_for_review_demo`, `applied_to_liability_demo`, `partially_released_demo`, `released_demo`. Apply a deposit only to **confirmed** renter liability and show any remaining refundable portion. Document all decisions, claim changes, deposit applications, appeal outcomes, notification times and restriction changes in an audit trail. The lender may view claims for their own rental only, not decide coverage or liability.
-
-**Operational delivery without an admin dashboard:** customer-facing app provides intake/evidence and request/claim tracking. **Very High Risk platform requests remain `Pending platform review (demo)` with no outcomes demonstrated.** **For damage/loss claims only**, enable a small library of **predefined demo fixtures** to illustrate: claim reported → evidence → demo review outcome `Approved (fictional example)` or `Rejected (fictional example)` → any illustrative insurer-covered amount/exclusion → renter liability → simulated deposit deduction/release → appeal/reversal. These scenarios are expressly **founder-authorised**; they must never be conflated with platform approval of Very High Risk bookings. New real-time demo submissions remain `Under review (demo)` unless a fictional scenario is explicitly used. No real insurer has valued an item, reviewed a claim or paid compensation; label those states unequivocally. Do not expose insurer/claim-decision authority to ordinary renter or lender. Review Appendix A for detailed claim, restriction and fairness rules.
-
-## 16. BNPL, listing boost and other optional monetisation
-
-- Real BNPL cannot be offered. The proposal includes optional BNPL for eligible higher-value rentals; any current repo threshold (such as RM200 rental fee) is not verified founder policy. Keep it an **informational/simulated future possibility**, not an approval, financing obligation or live instalment agreement.
-- **Confirmed flat RM10 optional lender listing boost**, treated as an entirely separate **simulated** lender purchase, provides **seven days of visibly featured placement** after demo activation. Display activation/expiry and a clear `Featured (Demo)` badge; do not automatically renew; never charge money. This seven-day duration is a **founder-selected new feature, not found in the finance workbook**. The workbook's pro forma uses **RM10 per boost with assumed 10% uptake**, while the older `6. Key Resources` row B36 contains a conflicting **3% (max RM100)** historical model. **Use RM10 flat only**. Never add it to renter checkout or calculate 10% of item price as a user fee.
-- RM2 per rental insurance referral and RM5 BNPL referral, together with 10% uptake assumptions, belong **only to forecasts**, not active user fees or demonstrated actual earnings.
-- Event bundles, loyalty credits and enhancements other than the **approved RM10/seven-day featured placement** require separate founder approval.
-
-## 17. Messaging, in-app notifications, reviews and social trust
-
-Enable private renter/lender messages (per booking) with timestamps, read/unread and **shared database-backed, cross-device synchronised history**; only booking parties can see them. No actual courier dispatch, SMS or email gateway. Notification triggers should include: verification result, booking confirmation (not rental activation), pickup meeting coordination, lender handover confirmed / renter receipt confirmed / awaiting second confirmation, actual activation and deadline, scheduling conflict, successful consecutive additional booking and moved deadline, final return evidence submitted, first and second clean-return confirmations, dispute raised and normal completion blocked, deposit release only after BOTH clean confirmations, claim review/resolution, score change or appeal, liability notification, seven-day restriction activation/removal and simulated settlement.
-
-**Founder-confirmed product review scope — display-only, one item:** Remove the **entire homepage `Recent Rental Reviews` section and six global review cards**. On **Sony A7 III Mirrorless Camera ONLY**, below the owner/product information, replace `Owner Reviews` with a single `Rental Reviews` section containing ONE white Canva-style review card:
-
-- Rating **★★★★★ (5/5)**; product displayed rating **5.0** *where this refers to the seeded review*, not the previous `4.9` sample star value.
-- Reviewer **Alex Tan (Fictional Demo Renter)**, visibly tagged **Demo / Sample Review**.
-- Exact review text: **“The camera matched the listing and pickup was smooth. Everything was clear from booking to return.”**
-- Existing verified-demo owner card can continue saying **Meet Aiman Rahman**, but replace `0 completed rentals` with **`1 completed rental`** for this **illustrative fixture only**, and remove `0 community reviews`, Owner Reviews heading and its empty-state message. This is fictional display data, not evidence that a real booking occurred.
-- No seeded review cards or sample review-based star counts on the other 21 demo listings; do not add review forms, an owner review/rating system, a separate review dashboard, or invented historical completed rental records. Retain owner name/verification status and existing communication actions.
-
-**Real booking data safety:** Persist the Sony demo review as a clearly tagged *demo fixture* keyed to the Sony listing (or compatible deterministic display seed), not a fabricated real completed rental. The illustrative count/rating should be derived consistently from the fixture at display time and must never inflate live account earnings, payout balances, transaction history, risk scoring or genuine database `completed` bookings. If real completed rentals later exist, true counts should derive from their confirmed records and must be distinguished from seed illustrations. Review stars must **never modify the renter's V1.8 Risk Score**. Future real review submission is out of scope for this classroom edit without new founder authorisation.
-
-FAQ must explain verification, four risk tiers, capped deposits, Very High Risk platform approval, separate 7-day payment restriction, claims and appeals, 12% lender commission, 5%-minimum-RM5 renter service fee, optional RM10 boost and non-operational insurance/BNPL.
-
-## 18. Exactly two dashboards, profiles, history and access limits
-
-**Renter Dashboard** must show: scheduled vs actual pickup/activation time, lender and renter confirmation flags, booked vs chargeable duration (started 24h units), current effective return deadline and any linked consecutive paid bookings; renter upload/retake of mandatory return evidence, own no-issue return confirmation and dispute-action state; own profile; `Verified (demo)` state; current **70–100/40–69/30–39/0–29** tier and score (or `N/A`); applicable deposit rate/cap or case-by-case review; complete own rentals and booking details; detailed rental behaviour including *every* reported incident, evidence/confirmation status, agreed and actual return times, applied adjustment on only one winning incident and `Recorded` on others, before/after scores, appeals/corrections; pending Very High Risk platform-review request (no decision outcome shown in this classroom demo); deposit amount/status/deductions; damage/loss claims, illustrative insurer coverage, confirmed liability, outstanding amount, 7-day due/restriction status; demo settlements and notifications. May submit own evidence and appeals but **cannot change final decisions**.
-
-**Lender Dashboard** must show: manage listings/availability, published meeting windows, direct confirmed rentals (no lender approval), both handover-confirmation statuses and activation timestamp, linked same-renter consecutive rentals, lender final receipt/no-issue confirmation OR dispute action, final deposit status tied to BOTH clean clicks, relevant renter demo verification and risk information for *their own booked items*, messages, handover, return confirmation, report damages and upload evidence, incident and claim progress limited to own rentals, deposit status and illustrative compensation details, 12% platform commission, estimated **88% simulated rental payout**, and optionally selected **RM10 demo listing boosts**. Lender cannot change renter risk score, platform approval, insurer outcome or claims liability.
-
-There must be **no admin dashboard, staff portal or staff business-management interface anywhere in app navigation**. The current demo shows **pending-only Very High Risk requests**; no customer can see or trigger a fabricated approval/rejection. Any other scenario-based claims demonstration must be visibly simulated and separately authorised. No unrestricted disclosure of other renters' histories or unrelated claim evidence. Simulated financial figures must not appear as real balances.
-
-## 19. Business-plan assumptions versus app transaction calculations
-
-Preserve the workbook as business/forecast context, not runtime pricing configuration:
-
-| Business-plan measure | Source assumption / figure | Required app treatment |
-| --- | --- | --- |
-| Typical rental transaction value | RM200 | Planning assumption; real demo listing totals use actual date × daily price |
-| Owner commission | 12% rental value | Implement per confirmed booking |
-| Borrower service fee | 5%, website minimum RM5 | Implement per quote |
-| Insurance referral | RM2 per completed rental | Business-plan illustration only; no live policy/revenue |
-| BNPL referral | RM5, assumed 10% uptake | Forecast illustration, not live charge |
-| Listing boost | RM10 with 10% uptake in pro forma | Optional simulated UI; separate workbook description conflicts |
-| Payment processing cost | RM1.20 per completed rental | Forecast/cost assumption; no real processor |
-| OTP/SMS cost | RM0.10/message; two onboarding + one transaction | Forecast only; no actual SMS required |
-| eKYC cost | RM0 while under assumed free monthly tier | Forecast only; no provider integration |
-| Registered users (Year 1) | 4,740 | Not fabricated real sign-ups |
-| Completed rentals (Year 1) | 2,795 | Not fabricated real transactions |
-| Annual fixed cost | RM977,040 | Forecast only |
-| Contribution margin / break-even | RM36.20 / ~26,990 rentals per year | Forecast only; not a live revenue KPI |
-
-**Model-data caution:** the uploaded PDF refers to **RM104,813.50** annual revenue, while the workbook's total in the pro forma table is **RM104,812.50**; the workbook's variable-cost sheet also shows a total of **RM4,581.10** while its pro forma summary shows **RM4,581.50**. Do not silently “correct” business documents or make the application reproduce those discrepancies. If an optional investor/financial-model screen is proposed, obtain founder confirmation of the canonical figures first. The default rental app does **not** need an internal break-even simulator.
-
-## 20. Existing stack and founder-confirmed shared backend (Option B)
-
-**Keep the compatible frontend:** Expo / React Native / React Native Web, Expo Router, TypeScript, existing services (`services/booking.ts`, `services/deposit.ts`, `services/riskScore.ts`, `services/marketplace.ts`), screens/components, tests and Vercel web build. **Replace AsyncStorage/local-only user/booking persistence as the source of truth**. The repository contains Supabase scaffolding; inspect and verify it rather than assuming its existing wiring, migrations or policies work.
-
-**Selected classroom-demo architecture:** Prefer **Supabase Auth + Postgres + Storage + Realtime** with the existing Expo client, because it supports founder-required accounts on separate devices without building a separate custom server. This is a technical implementation recommendation within the confirmed **shared backend** choice, not a claim that Supabase is already configured or commercially approved. If the current repository requires a materially different backend, explain the trade-off and obtain founder approval before substituting it. Configure backend credentials as deployment secrets/environment variables; never commit privileged/service-role keys to the repository or expose them to the browser. Enable appropriate Row Level Security (RLS) and storage access policies; verify privacy against both normal client access and maliciously modified requests. Public/anon keys alone are not authorisation.
-
-**Actual account authentication, simulated FinTech:** Use genuine per-user login sessions with safe test/demo accounts for multi-device demonstration. Keep the eKYC badge, risk engine, checkout/payment, payout, insurer eligibility, claim status, deposit and refund amounts **explicitly simulated**: backend records describe demo events, not monetary transfers or genuine identity verification. Do not request real identity documents, banking details, card numbers or medical/sensitive data. Maintain exactly two customer-facing dashboards (Renter and Lender); no Admin Dashboard.
-
-**Central data and authorisation:** Persist users/profiles, role choice, demo verification, risk-score and incident audit, listings, time-based inventory availability, reservations/segments, physical rental chains, messages, notifications, item media and return evidence, two-sided handover and clean-return confirmations, disputes, demo claims, demo-deposit ledger and demo payment/refund events in a shared database/storage. Apply transaction-level access restrictions: a renter views/acts on their own rentals; a lender only on listings/bookings they own; neither can impersonate the other, change scores/claim decisions, or read unrelated private messages/evidence. Uploaded private evidence should use private storage with signed or authorised access, not unprotected public URLs.
-
-**Backend-authoritative business transitions:** Client displays may calculate preview quotes from central pure domain functions, but booking creation, availability checks, instant reservation, cancellation-cutoff evaluation, deposit snapshots, payment simulation recording, activation, chain continuation, dispute blocking, score updates and settlement must be revalidated and committed atomically by authenticated server-side functions/transactions (Supabase RPC, Edge Functions or equivalent). Server timestamps determine event time and 24-hour cancellation/late-return boundaries; UI clocks are illustrative only. Use unique constraints, exclusion/overlap safeguards where applicable, conditional state transitions and idempotency keys. Never let two simultaneous renters reserve an overlapping interval, activate a chain with an incompatible next reservation, double-spend a demo deposit, or bypass a 0–29/overdue-account restriction by modifying browser state.
-
-**Cross-device synchronisation:** Renter and lender using different sessions must see newly confirmed bookings, each other's activation actions, final effective deadlines, return media, independent no-issue confirmations versus disputes, deposits, messages and notifications consistently. Subscribe to scoped Supabase Realtime channels or use a reliable polling/refetch fallback; refresh/refetch after mutations and recover from reconnects/duplicate events without losing an accepted state. On device B, another party's confirmation must be visible promptly; completion occurs only after both authorised persisted events. Display clear loading/offline/retry errors; do not claim confirmed operations while an upload, mutation or connection fails.
-
-**Schema/migration and deployment plan:** Prefer incremental migrations and typed data access over rebuilding everything. Provide migration scripts, indexes, RLS/storage policies, env-key templates (no real secrets), safe sample account/seed provisioning, a development/test data isolation/reset strategy and web deployment environment configuration. Use production-style permission boundaries even though checkout, eKYC and insurance are demo-only. Do not keep separate per-device mock ledgers as an alternative source of truth; AsyncStorage may cache non-sensitive presentation preferences only.
-
-**Architecture principle:** Central pure domain functions for tier, fees, deposit, score, deadline and event checks are reused by the frontend and trustworthy server validation. FinTech/insurer third-party results remain named mock adapters and visibly fictional fixtures, not real integrations. Future commercial deployment would additionally need regulated partner services and compliance; this is outside the classroom scope and does **not** make the shared backend optional.
-
-## 21. Typed data model, occupancy chains and event audit (extend existing entities)
-
-Prefer extending current types/services rather than inventing an unrelated new app/database. Support:
-
-- `Profile`: stable ID, fictional verification state/date, renter/lender role choice, score `null` until demo verified then initial 70, independent ban/suspension/confirmed overdue-obligation restriction.
-- `Listing`: owner ID, title/category/photos/location/rate in sen, **owner-entered value**, internal sensible **demo replacement estimate**, category/condition, owner-published availability and pickup time slots; RM10 featured boost start/end/state; consistent stable demo-seed identifier and **the eight website categories**. Keep the original Bicycle fixture's existing identity/fields when reconciling demo seeds.
-- `DemoRentalReviewFixture` or equivalent **read-only seeded display object**: single Sony listing ID, fictional reviewer `Alex Tan`, text, `5` stars, visible `Demo / Sample Review` badge, demo-only illustrative completed count `1`, and `isDemo=true`. It does **not** require or create any actual `completed` booking/transaction, transfer, score event or owner-review entity. Actual complete-rental counts later come from authoritative booking records; do not mingle seed fixture statistics with real transaction reporting.
-- `BookingSegment`: same renter/listing as a full payment segment, planned pickup and planned return instants, **agreedDurationMinutes**, **chargeableRentalDays = ceil(minutes/1440)**, rental/service/commission snapshots, deposit applicable or `0` for approved adjacent chain segment, price/risk snapshot, demo checkout confirmation status and order/reference ID. Do not mistake confirmed reservation for active possession.
-- `RevisedHandoverOffer` (or compatible event): original scheduled and intended actual start/end, conflicting confirmed reservation reference (private), candidate conflict-free end, original/revised duration and chargeable days, original/revised rental fee, service fee, lender commission, payout, **demo refund (possibly RM0)**, renter acceptance/refusal state, expiry/revalidation timestamp, server-side conflict check and auditable actor ID. The accepted revision becomes effective only at successful final two-sided activation; preserve the initial deposit and never edit the next renter’s confirmed booking.
-- `PhysicalRentalChain` (or compatible existing booking aggregate): linked first and optional later consecutive segments for the **same renter + same listing**, initial deposit reference, planned reservations, activation status, **actual two-sided confirmed activation timestamp**, effective return deadline (latest if chain extended), physical item possession/return timestamp, final condition/dispute status, one terminal scoring result. A chain is linked only if truly gap-free and availability-checked; one physically continuous chain means **one scoring opportunity**, not one per segment.
-- `HandoverConfirmation`: `bookingChainId`, actor role, actor ID, action (owner handed over/renter received), authenticated demo timestamp, attachment refs if any, idempotency key. Do not activate at the first confirmation; prevent replay/unrelated user confirmation. If actual handover shifts into a different person's reservation record conflict, do not overwrite that booking.
-- `ReturnEvidence`: chain ID, uploader renter, photo/video media reference(s), upload time, readable preview/retake status, optional condition note and physical return timestamp separate from confirmation timestamps. Required for clean completion.
-- `ReturnConfirmation`: role-specific renter handed back/no issues and lender received/no issues, individual timestamps and actor IDs, physical-return agreement, no-issue declaration, dispute-block flag. Deposit release gated on **both** clean confirmations, valid evidence, no pending dispute and idempotent settlement operation.
-- `RentalDispute`/`RentalIncident`: reporting side, disputed aspect, relevant physical return status, description, media, reported/confirmed/rejected/corrected states; multiple incidents allowed but only the most serious confirmed one drives the single final score adjustment per chain. Escalation can pre-empt one-sided no-issue status.
-- `RiskScoreEvent`/`Ledger`: physical rental chain ID, winning effective adjustment (at most one), before/after scores, incident linkage, finality, corrections, appeal audit and replay protection.
-- `PlatformApprovalRequest`: per renter/listing/requested dates, score snapshot, **pending only** in demo; no approved/rejected outcomes or public decision power for 0–29 requests.
-- `DemoPaymentTransaction`: per booking segment, simulated checkout/boost no-real-charge reference and timestamp, consistent financial snapshot; no real payment credentials.
-- `DemoDeposit`: **one carried-forward first-chain deposit**, frozen rate/cap and amount, status with audit events; only settle once on mutual no-issue return or separately concluded fictional dispute liability/release; never part of rent revenue.
-- `Claim`, `ClaimEvidence`, `ClaimOutcome`, `Appeal`, `DamageObligation`: separately represented confirmed loss, hypothetical coverage, deductible, renter liability, deposit applied, notified remaining confirmed balance, seven-day due time/restriction, predefined fictional scenario ID, permitted correction/appeal; no invented live insurer decisions.
-- `Message`, `Notification`, `Review`, `Favourite`, `AuditEvent` with participant/role permissions.
-
-Use consistent canonical instants and local `Asia/Kuala_Lumpur` formatting. Never store timestamps as ambiguous date strings. Enforce transition guards, stable IDs, no double booking, media accessibility, double click idempotency, exactly-once deposit closure/score updates, and maintain client-friendly fictional demo fixtures while enforcing trusted server-side permissions, transaction guards and row-level policies in the **confirmed shared backend**. Financial and identity-provider operations remain simulated even though authentication/data synchronisation are real.
-
-## 22. Classroom-demo quality, security honesty and privacy
-
-Support responsive desktop/mobile, accessible keyboard actions, consistent focus/contrast, readable fee tables, working controls, helpful empty/loading/error states and bounded photo/video handling. Use imaginary/demo identity information; **never ask for real bank details, real card numbers, CVV, passwords reused elsewhere, biometric scans or genuine identity-document photos**. Demonstration eKYC is a visibly fictional simulation.
-
-Never show `Payment successful`, `Deposit held in escrow`, `Refund issued`, `Insurer paid RM…` or `Officially eKYC verified` as real outcomes. Use explicit `Demo only — no funds transferred, no deposit held, no insurance policy issued or claim sent to an insurer.` Risk scoring is rules-based classroom logic, not a real consumer credit score or fraud determination. Serious theft/fraud or damage classification must require explicit independently configured confirmed decisions and allow appeals.
-
-Client-side-only checks are not a security boundary. Enforce shared-backend authentication, row-level access permissions and server-trusted domain transitions for genuine multi-device data integrity, while remaining truthful about simulated FinTech outcomes. Do not expose unrelated users' evidence, conversations or rental histories in UI. Validate text, prices, dates, timestamps and state changes; avoid exposing partner branding as an actual endorsement.
-
-## 23. Mandatory end-to-end demonstration journeys
-
-**A — Normal renter, money and full handover/return:** Fresh demo-eKYC renter has score N/A until verified, then **70 Low**. Book an item at RM45/day for **exactly 48 hours** (two started 24-hour blocks), with internal replacement estimate RM4,000: rental RM90 + service RM5 + first deposit RM200 = **RM295**. Click Rent → checkout details (not yet booked) → explicitly confirm simulated payment → `Confirmed (Demo)` but rental clock OFF. At physical handover lender clicks `Confirm Item Handed Over`, renter clicks `Confirm Item Received` → only after both and availability recheck, `Active`; clock begins at second confirmation timestamp. At final return renter uploads clear condition media, both physically meet and independently confirm **no issues** → full simulated RM200 deposit released, completed on-time event **+2 once** (70→72).
-
-**B — Late owner meetup does not steal renter duration:** Book Nov 2 10:00–Nov 5 10:00 = 72 hours (3 × 24h). Both confirm physical pickup at Nov 2 23:00 → actual deadline Nov 5 23:00 if availability permits; no new fee just for the late meetup. If another renter is confirmed to start Nov 5 14:00, protect that booking and show renter A the revised **63-hour** offer Nov 2 23:00–Nov 5 14:00; it remains **three charged days** under started-24h pricing, so show **RM0 refund** in this example and require acceptance before activation. For any shortened interval that lowers charged days, show the correctly recomputed rent/service fee, reduced lender commission/payout and a single simulated refund. Renter declines/no available interval → unresolved and inactive; no displacement or fabricated settlement.
-
-**C — Same-renter consecutive rental/continuity:** First booking Nov 1 10:00–Nov 3 10:00 (48h), physically activated Nov 1 10:00; original deposit **RM200**. Before deadline same renter selects a genuinely available next Nov 3 10:00–Nov 5 10:00 interval for same item; succeeds at new demo checkout. Charge extra rental fee + its service fee **without second deposit**; keep item, no original-deadline physical return/photos, no new activation; deadline moves to Nov 5 10:00, and one final physical return and **one score event for entire chain**. Adjacent-but-unavailable, gap, different item or different renter must not become continuous booking.
-
-**D — Mutually disputed return:** Renter uploads return evidence and physically returns item. Renter presses clean confirmation but lender sees damage and presses **Raise Dispute** (or reverse roles). Do NOT complete as issue-free, release deposit or award +2; flag review and retain deposit. A separate PREDEFINED fictional claim scenario (not a fabricated new-staff action) can illustrate claim upheld/rejected, insurer-style illustrative coverage/deductible, renter liability, application of deposit, any remainder released and an appeal. Only after final facts confirmed apply ONE most-serious risk adjustment; 4h late plus minor damage = −10 once, late incident marked `Recorded`. Lender's delayed confirmation alone must not falsely increase measured lateness.
-
-**E — Restricted request:** Score 29 seeks item → no checkout, submit Very High Risk platform review → status stays `Pending Platform Review (Demo)`, across refresh; no approved/rejected outcome, no fake auto approval, no lender approval, no Admin Dashboard. Confirmed unpaid damage balance seven days after notification blocks a renter with even score 100, independent of score.
-
-**F — Lender/discovery and catalogue:** Show eight Canva category chips, 21 verified screenshot-derived listings + preserved original Bicycle = 22 distinct demo seed items, correct images/prices/locations, real composed search/filters and valid detail links. Confirm old unrelated demo seeds are absent from the *seeded catalogue* (without deleting legitimate user-created data). The Sony camera alone displays its single fictional `Rental Reviews` card (Alex Tan, 5/5, tagged Sample), with 1 illustrative completed rental, rating 5.0, and no `Owner Reviews`; other products show no seeded fake review stars. Homepage has **no Recent Rental Reviews** collection but retains the **static 70 STANDARD** risk safety card unchanged. List item with owner-entered item value; obtain sensible internal demo deposit value without interrupting with simulated-insurer valuation explanations; optionally activate RM10/7-day boost and see featured placement obey filters. Lender sees normal instant reservation, handover action, renter's corresponding confirmation, linked consecutive slots, actual deadline, return evidence, clean acknowledgement or dispute action, 12% commission and 88% payout; cannot authorise score/claim/insurer actions.
-
-**G — Error cases:** Past/backwards/zero-length timestamps, a 24h boundary vs 24h+1m, simultaneous checkout, overlapping reservations, delayed activation overlap, second confirmation replay, one-sided return completion attempts, return evidence failure, dispute raced against second clean click, duplicate claim settlement, score rerun/appeal, chain gaps and changed score between segments must never corrupt authoritative demo states.
-
-**H — Reduced-day shortened-rental fixture:** If a 72h originally paid reservation must be shortened to **47h** to protect the next confirmed booking, repricing is 3 days → **2 started 24-hour days**. Recalculate both rental and minimum-5%-based renter service fees, adjust the lender commission/payout, preserve the original deposit, and issue only a **simulated** rent/service difference on final accepted activation. If the renter does not accept, do not activate or post any adjustment.
-
-## 24. Automated tests, state invariants and manual QA
-
-Adapt and extend existing unit/integration/end-to-end tests; never delete failing tests to green-light deployment. Mandatory invariants:
-
-**Catalogue/review/homepage regression:** After idempotent shared seed reconcile, assert **21 Canva items + one unchanged existing Bicycle** = 22 demo seed records with no duplicates; only eight main category chips, `All Rentals` reset, item-specific routes, prices, locations, gallery images and availability; exclude old unrelated demo seeds without destroying real users' data. Search, filters and favourites must remain functional. Homepage **must not show six Recent Rental Reviews cards**. Sony detail displays one explicitly fictional Alex Tan 5/5 review, `Rental Reviews`, owner `1 completed rental` illustrative count, `5.0` demo-based rating; **must not show `Owner Reviews`, `0 completed rentals`, `0 community reviews`**, a review form, or fabricated completed booking. Other items must not inherit Sony review/star ratings. The homepage Risk Score visual test must match the **original Canva semicircular red/amber/green gauge**, NOT the app's circular `70 STANDARD` graphic. Verify unverified `N/A`, newly verified `70 / Low Risk` and 5%-capped deposit, and actual tier boundaries from V1.8. The old screenshot's `82` is merely an illustration, not a required score. Across both accounts, demo display statistics must not affect real booking history, commissions, risk decisions or finance ledgers.
-
-**Duration/pricing:** `exactly 24h→1 billable day`; `24h+1min→2`; `31h→2`; `exactly 48h→2`; `55h→3`; 72h→3; zero/negative duration rejected. Clock display in Malaysia zone and unambiguous timestamps. RM45/day × exactly 48h = RM90; service max(RM5,5%) = RM5; demo first deposit 5% × RM4,000 = RM200 → **RM295**. 12% lender commission RM10.80, payout RM79.20. Deposit caps at assessed value RM12k → RM500/RM1,000/RM1,500, tiers at 29/30/39/40/69/70/100, unverified N/A, rounded sen, no added optional protection or owner's RM10 boost to renter cart.
-
-**Cancellation window:** At exactly 24h before the original scheduled pickup, the cancel action is eligible; at 23h59m59s it is unavailable. Shifting actual activation later must not change cutoff. A booking confirmed within 24h of its scheduled start has no cancel window. For an eligible cancellation, assert full simulated refund of rental fee and service fee, full simulated deposit release, RM0 cancellation fee, restored item availability and a single idempotent ledger settlement; assert no real money movement.
-
-**Booking versus activation:** Clicking Rent only opens payment information; only explicit no-money demo payment confirms reservation. Booking remains NOT ACTIVE after simulated checkout. Only both role-specific physical handover confirmations activate, with latest accepted timestamp; 1 click shows waiting status. Delayed pickup shifts effective deadline by the agreed booked hours, not starting at simulated payment or earlier message time; lender late example 72h at 23:00 returns 23:00. A shift that overlaps the next confirmed booking triggers a proposed shortened period **without moving the other booking**, with a visible original/revised fee comparison and a required explicit renter acceptance **before activation**. Validate that 72h→63h still costs 3 days (RM0 refund), while 72h→47h costs 2 days (appropriate simulated rent/service refund). Renter refusal, invalid shortened period or new overlap prevents activation and financial posting. All final checks and event/refund commits are idempotent and backend-authorised.
-
-**Consecutive bookings:** New adjacent availability checked for same renter and same item; successful new demo checkout extends exactly from **current effective deadline**, no owner approval, no new intermediate handback/photos, no second activation, **RM0 extra deposit**, original held until final return, new rental/service fees charged only in simulation, one final risk-score event for chain. Unavailable/gapped/different-renter/date-mismatched booking does not extend. Freeze and test each segment's prices. If second booking fails, original return deadline remains.
-
-**Return/dispute:** At least one usable renter photo/video evidence submission and preview required before clean completion; both sides must physically hand back/receive, accept the actual physical return timestamp and press separate no-issue buttons. First no-issue click = Waiting, no deposit release/completion. Second click when no dispute = `Completed (Demo)` and **full original deposit `Released (Demo)` once**. Either party dispute before both confirmations preempts clean completion, holds deposit and opens review even if one party clicked clean. Lender delay in pressing button does not automatically add lateness: use independently recorded physical return time. Dispute resolution fixture may show simulated deduction/remainder/appeal but must never claim live insurer paid. Repeated clicks cannot double-release. Clean return can still incur confirmed late points without falsely implying a damage/deposit dispute; no +2 on a confirmed late violation.
-
-**Scoring & restrictions:** Initial verified score 70 exactly, N/A unverified; successful on-time no-issue +2 only once; exactly 2h late 0, >2h −1 started-hour increments, exactly 4h −2, >6h cap −5; 4h late + confirmed minor damage −10 ONLY, non-winning late row `Recorded`; serious damage/accidental loss −30; theft/fraud ban independent. Corrections and appeals replace rather than stack penalties. Seven-day confirmed outstanding damage obligation independent of score; unproven and pending disputes do not trigger it; full fictional settlement lifts payment restriction without erasing valid penalties or bans.
-
-**Two-device shared-backend tests:** Create/log into renter and lender accounts in different sessions. Verify RLS prevents direct reading/editing of each other's unrelated bookings, profile, messages, evidence and demo deposit ledger. Confirm that an authenticated renter books an available listing and the lender sees the reservation after sync; two role-specific handover clicks on different devices activate **exactly once**; both parties see the authoritative activation/deadline; a renter can upload private return media which the booking lender can access but a third party cannot; first no-issue click does not release the deposit and second clean click does; a dispute from either side blocks settlement; simultaneous attempted overlapping bookings admit at most one; reconnect/refresh preserve data and statuses; duplicate mutations do not create repeated charges/refunds/score events. Use only fictional demo payment/eKYC/insurance records.
-
-**Role security and presentation:** Exactly two dashboards. Renter/lender can only confirm their own role and access relevant own rental media; no fake platform/insurer decision control, no public Admin Dashboard. Score 0–29 pending-only, no approvals/rejections. Expiring RM10/7-day Featured boost honours filtered results. Confirmed-booking cancellation must use the **founder-confirmed at-least-24h-before-scheduled-start cutoff**, with a confirmed full simulated rental-fee and service-fee refund, full deposit release and no cancellation fee. Verify accessible responsive web, compile/typecheck, existing test suite and later authorised Vercel smoke checks; report observed outputs, not assumptions.
-
-## 25. GitHub implementation phases, permissions and quality gates
-
-**Execute the development task autonomously once assigned.** When the founder asks the coding AI to build CurRENT according to this approved README, treat that ONE request as permission for the full in-scope classroom-demo implementation, including ordinary code edits, refactors, local tests, safe demo-only database/schema setup or migrations, git commits/pushes and existing-config Vercel demo deployment as appropriate. **Do not ask for approval before every phase, file change, component, test or commit.** First inspect actual source, routes, TypeScript services, fixtures, tests, Supabase environment and Vercel project; preserve working features. If access or configuration prevents an action, report the blocker and continue with unrelated feasible work. Only ask the founder to decide genuinely unresolved business-policy choices, credential/access grants, out-of-scope real payment/insurer/eKYC services, paid integrations, irreversible deletion of non-demo data, or major destructive operations. This draft README still needs the founder's separate authorisation before *its own publication*; that publication condition is not a recurring coding-phase approval gate.
-
-- **Phase 0 — Baseline & shared-backend plan:** Inspect existing Expo/React Native Web repository, Supabase scaffolding and Canva references; run baseline typecheck/tests/web build; document GitHub vs source contradictions, schema/RLS requirements and incremental migration strategy. Set up or configure an isolated/demo Supabase project using already-authorized access; if credentials/project access are missing, clearly report the blocker and continue other implementation steps rather than asking to reapprove the entire build.
-- **Phase 1 — Canva-faithful browsing and shared account foundation:** Configure Supabase Auth/session handling, protected routes and RLS, plus homepage **without the six-review Recent Rental Reviews section**, with the original Canva-style **semicircular red/amber/green Risk Score gauge** and V1.8-correct score/tier labels; real listing navigation, **all 21 screenshot items + existing original Bicycle (22 seed fixtures)** stored centrally and reconciled idempotently, **eight website categories**, owner availability, text/category/location/date filters, galleries, favourites synced by account, and **only the Sony camera's one labelled demo Rental Review / 1 completed rental / 5.0 rating**. Remove the obsolete `Owner Reviews` UI, other seeded review cards and unnecessary review submission features. Preserve FAQs, messaging-ready structure and responsive desktop/mobile.
-- **Phase 2 — Roles, financial and risk model:** Exactly two dashboards on real authenticated accounts; simulated eKYC verification → score 70; shared DB profile and risk/incident ledger with authenticated server validation; V1.8 deposits/caps; internal sensible demo replacement estimates; first booking and additional chain quote math; RM295 camera example; lender 12% commission; optional RM10/7-day boost. Tests for all formulas and cross-user permissions.
-- **Phase 3 — Backend-backed booking & activation:** Date+time scheduling and `ceil(durationMinutes/1440)` charges; transaction-safe no-owner-approval booking; eligibility/0–29 pending-only enforced server-side; no-real-payment checkout and centrally persisted confirmed reservations; **two-sided actual item handover buttons on separate devices**, recorded activation time and shifted deadline, collision detection with future confirmed bookings; synced booking messages/time-slot coordination.
-- **Phase 4 — Synced consecutive rental and final physical return:** Additional **adjacent** fresh server-checked same-renter booking; fee/service fee only and keep original deposit; continuous chain; authorised private evidence uploads; two-sided return UI requiring clear renter photo/video evidence; **both clean confirmations on distinct authenticated devices OR a separate dispute action**, with server-atomic deposit gate, physical return timestamps and synchronised notification/status flows.
-- **Phase 5 — Claims, score and financial state reconciliation:** Multiple incidents with one final score adjustment per physical rental chain, renter/lender auditable history, predetermined fictional claim approval/rejection and appeal examples, hold/apply/release simulated deposit, seven-day confirmed damage-balance restrictions, bans/appeals, and review-state privacy.
-- **Phase 6 — Class presentation & Vercel:** Safely provision/reset demo fixtures and two logged-in devices; verify Supabase-backed sign-up/sign-in, RLS/storage policies, event synchronisation and reconnect handling; accessible polished app, video/photo testing, loading/error paths, regression suite, Vercel demo deployment built and verified as part of the founder-assigned implementation task, where the existing connected project configuration supports it; report any missing credentials or platform blockers. Keep actual payment, KYC, insurer providers and financial custody out.
-
-After each development phase, provide concise progress and objective test/build results **without waiting for the founder to reply**; continue to the next logical phase until the requested classroom-demo scope is implemented or a real blocker prevents progress. Make commits/push/deploy changes when available, relevant to the task and within the same project, and verify the actual rendered Vercel demo. The shared backend is already a founder-confirmed implementation requirement. Do not expand into bundle/loyalty products or genuine financial/insurance provider integrations without a separate founder request.
-
-## 26. Vercel deployment and classroom presentation readiness
-
-Retain the existing Expo/React Native Web setup, working web output (e.g. `npm run build:web` / `dist` where verified), `vercel.json` configuration and route refresh handling. When the founder requests the full build (including the connected web demo), implement, deploy via the existing configured Vercel project and verify the published URL on desktop and mobile where access permits; do not assume GitHub push guarantees a successful build. The live class demo must clearly show that no money was moved, no genuine insurance/claims or eKYC took place.
-
-Prepare the **22-item seed catalogue with eight categories**, a **Canva-style semicircular red/amber/green Risk Score gauge** with V1.8-correct values/tier names, and a Sony-only sample `Rental Reviews` card/`1 completed rental` and 5.0 illustrative rating. Show **no homepage Recent Rental Reviews** or Owner Reviews section. Prepare reliable fictional demos for verified 70-score renter → 48h camera RM295 → simulated booking confirmation → both handover activation buttons → clock based on actual meeting → both clean return buttons and full deposit release/+2, as well as a delayed meeting/availability conflict, successful adjacent same-renter extension keeping deposit, lender-reported damage via **dispute path** and fictional claims/appeal, and the 0–29 Pending-only restricted request. Include a separate example of confirmed balance seven days overdue blocking booking. Reset classroom fixtures with confirmation; do NOT create an Admin Dashboard. Presenter must be able to navigate/show both customer dashboards and their distinct permissions without external financial or insurer providers.
-
-## 27. Classroom-demo acceptance criteria
-
-A phase/build is acceptable only if all applicable agreed behaviours are verifiably functional:
-
-1. Canva-style brand, sections, galleries, search, filters and responsiveness preserved; **21 exact screenshot-derived demo listings plus the existing original Bicycle** (22 unique sample seed records), **exactly eight main Canva categories**, all correct item routes/images/prices/locations and safe idempotent seed reconciliation; RM10 boost features eligible listings for seven days without overriding filters. **Homepage six-card Recent Rental Reviews section removed; homepage `70 STANDARD` trust/risk-score graphic visually unchanged. Sony product detail alone carries one clearly fictional 5-star Alex Tan Rental Review with a consistent illustrative one-completed-rental count and 5.0 rating. No Owner Reviews section, no sample reviews/star scores on other listings, no new review-submission system, and no fabricated real completed bookings.**
-2. Exactly **Renter and Lender** customer dashboards, no Admin Dashboard; owner can publish listing/availability; demo-estimated item replacement values are internally plausible and distinct from owner-entered values, never represented as genuine insurer valuations.
-3. Fictional eKYC gates rental, newly verified renter score 70, unverified N/A. Risk tiers 70–100/40–69/30–39/0–29 and deposits 5% ≤RM500 / 10% ≤RM1,000 / 15% ≤RM1,500; 0–29 request Pending-only and cannot check out.
-4. Booked duration and money based on **started 24-hour blocks**, not calendar-date differences; chosen date+time interval preserved; deposit separate from revenue, service fee 5% min RM5, lender commission 12%, camera RM295 fixture consistent.
-5. Clicking **Rent** leads to payment-information page, while only separate explicit **simulated checkout confirmation** creates booking; no money or usable payment credentials. Lender does not approve standard eligible bookings.
-6. **Two-sided physical pickup buttons** mandatory: lender handed over and renter received. Booking does not become Active or start rental clock until both accepted, with valid availability. Delayed pickup conflict must protect the next confirmed renter and offer a shortened conflict-free period with transparently recalculated (possibly unchanged) fees. The first renter must explicitly accept this offer before activation; original and revised amounts/intervals and any simulated refund are audited. Declined/infeasible offers cannot activate or move the next booking.
-7. Active same-renter SAME-item **consecutive booking** checks the owner's published availability and other reservations, requires new simulated checkout, charges only additional rental/service fees, retains first deposit, and requires **no intermediate return media, physical handover or second activation**. One continuous possession chain gives one final scoring opportunity.
-8. Final return requires **renter's clear photo/video evidence** and actual physical handback. Both parties separately press role-appropriate **Confirm Return — No Issues** for ordinary completion, **full simulated deposit release only after BOTH**. A dispute raised by EITHER party blocks no-issue completion and release and opens platform-review status; no one-sided owner claim can unilaterally settle funds.
-9. Actual physical return time is stored separately from confirmation clicks, preventing unfair late-return deductions for delayed responses. V1.8 grace/penalty, incident `Recorded` display, one most-serious adjustment, appeal/correction, accidental loss vs fraud distinction, and independent seven-day unpaid-damage restrictions work.
-10. Damage claim **predefined fictional** accepted/rejected/appealed examples may display clearly labelled illustrative coverage/liability/deposit deduction; newly reported cases stay Under Review unless a fictional scenario is selected. Never portray demo outcomes as real claims or use them to approve 0–29 booking requests.
-11. Genuine cross-device authenticated users with shared database/storage, correctly scoped RLS and server-side transition guards, synchronised booking/activation/return/dispute/message state, reliable retry/offline error feedback, idempotent mutations, private photo/video uploads, end-to-end two-device tests, TypeScript/build/tests and authorised Vercel web deployment behave as observed.
-12. A renter may cancel only **at least 24 hours before original scheduled pickup/start**, and never after activation. Full simulated rental-fee and service-fee refund plus full deposit release and RM0 cancellation fee are now confirmed; shared cross-device backend/account synchronisation is confirmed as Option B; no GitHub edits before explicit final approval.
-
-## 28. Founder decision register — definitive and deferred matters
-
-**Binding decisions (do not ask again unless founder changes them):**
-
-- **Demo scope:** Interactive, classroom-ready, Vercel web experience; no real bank/card processing, actual deposit custody, identity-provider eKYC, insured claims or lender transfers; honest demo labels and only **Renter** / **Lender** dashboards.
-- **Normal checkout:** Eligible user directly rents without owner approval; `Rent` opens payment info, only **Simulate Payment & Confirm Booking** creates `Confirmed (Demo)`. Confirmation reserves a period but **does not start the rental-use clock**.
-- **Risk/verification/deposit:** V1.8 authoritative, initially verified renter **70/100** (website 82 arbitrary), 70–100 Low 5% max RM500, 40–69 Medium 10% max RM1k, 30–39 High 15% max RM1.5k, 0–29 Very High needs CurRENT approval but all new classroom requests **stay Pending**, no checkout approval demonstrated. Only renter role gets risk score.
-- **Behaviour and claims:** 2h late grace, −1 per further started hour capped −5; on-time no issue +2; confirmed minor −10, serious/loss −30, intentional fraud ban; only one effective score change per continuous physical rental and all other incidents separately `Recorded`; appeals/corrections, independently confirmed obligations unpaid seven days restrict new bookings. Predefined fictional **damage-claim** approved/rejected and appeal outcomes permitted, separate from restricted booking approvals.
-- **Financial:** Daily rental units calculated as **ceil(actual requested booking duration / 24h)**, minimum 1; user selects **date and time**. Rent fee = daily price × started 24h periods; 5% renter service minimum RM5; 12% lender commission; first risk-based deposit; optional **RM10** lender listing boost yields seven days Featured. Workbook 10% refers to boost uptake, and its older 3% capped model is superseded.
-- **Value assessment:** Owner enters their proposed replacement value. App assigns sensible internal illustrative replacement values for demo items and newly listed items, without claiming or displaying a live insurance-company valuation process. In a real business an insurer would be responsible for approved item valuation; not built now.
-- **Two-sided activation and delayed-handover conflict Option A (confirmed):** At physical pickup lender presses `Confirm Item Handed Over` and renter presses `Confirm Item Received`; rental clock starts only when both valid confirmations and any necessary **renter-accepted revised offer** are complete. Normally deadline shifts by agreed booked hours. If that infringes a later confirmed booking, **protect the later booking**, calculate a non-overlapping **shorter available rental period**, show exact revised deadline and comparison of original/repriced rental fee, service fee and **possible RM0 adjustment**, retain original deposit, and require **renter acceptance before activation**. Recheck at commit, apply any demo refund and lender commission adjustment once. Renter refusal/infeasibility → inactive conflict state, not automatic change to someone else’s booking.
-- **Consecutive booking / extension:** Same renter + same item + new separate successful simulated checkout beginning EXACTLY at previous effective deadline + owner published availability + no overlap → automatic continuous possession/updated deadline, no new owner approval, no second physical handover, no original-deadline evidence, **retain original first deposit, add only rental and service fees**. One final physical return and risk outcome for whole chain. If unavailable, no extension.
-- **Two-sided return/checkout:** Renter takes/uploads clear photos or videos and physically returns item. Renter and lender EACH must affirm `Confirm Return — No Issues` **after meeting**. This affirmative action means physical handback accepted AND **no deposit/condition dispute**. Only both confirmations cause clean completion and **full simulated deposit release**. If EITHER party raises `Dispute / Request Platform Review`, they **must not** click clean completion and the system holds deposit and awaits review instead. Predefined fictional claim outcomes can separately demonstrate a resolved case. Actual handback time is stored independently of clicks to prevent false lateness.
-- **Cash penalties and cancellation:** No extra monetary late-return fine; V1.8 score consequences only. No cancellation fee. **Eligible cancellation requires at least 24 hours before original scheduled pickup/start; full simulated rental-fee and service-fee refund, full deposit release and RM0 cancellation charge are mandatory.**
-- **Shared backend (confirmed Option B):** Separate device sessions and real account login, central shared Supabase-style Auth/Postgres/Storage/Realtime, server-authenticated business transitions, RLS/privacy and synchronised two-sided actions; no actual financial provider integration.
-- **Latest UI/catalogue edits (four founder requests after V2.7, with latest correction):** (1) remove six homepage Recent Rental Reviews cards and place **one Sony camera Rental Review** inside that item page, removing `Owner Reviews` and owner community-review counts; (2) display fictional example **1 completed rental**, 5-star Alex Tan review and related **5.0** rating only as labelled sample, not invented real bookings; (3) **restore the original Canva website's semicircular Risk Score gauge design**, NOT the newer circular `70 STANDARD` app UI; display all numeric scores, labels, deposits and restrictions based exclusively on V1.8; (4) seed **21 website items + only the existing Bicycle** from legacy demo seeds, with the **eight named Canva main categories**, protecting genuine user-created items/bookings.
-- **Development execution:** Once the founder assigns coding work based on this README, make routine in-scope code changes, test/fix, commit/push and deploy to the configured demo project autonomously; no repeat permission requests at each phase. Ask only for genuine missing credentials, materially unresolved rules, significant destructive actions, external costs or real FinTech services. Publication of this README version is founder-approved; subsequent coding begins when the founder assigns it.
-
-**Outstanding/queued questions (not license to invent):**
-
-| Priority | Topic | Decision handling |
-| --- | --- | --- |
-| Resolved — founder Option A | Remedy when late two-sided actual handover conflicts with a later confirmed reservation | Protect later renter; offer shorter available period and show started-24-hour repricing/any simulated refund; first renter must explicitly accept before activation. If declined/infeasible, keep inactive conflict state. |
-| Optional later-stage detail | Real-time videos, max rental length, delivery charge, address disclosure, BNPL threshold, optional bundles | Implement only supported classroom behaviour; use sensible UI defaults as clearly provisional or omit unconfirmed commercial charges. |
-
-**No longer open:** Shared backend/account synchronisation (**Option B confirmed, not local-only**); how to assign demo item values (**internal reasonable estimates confirmed**); owner extension approval (**none; consecutive rebook only**); base score (**70**); payment/booking distinction (**confirmed only at demo payment**); double deposit on adjacent rebooking (**not allowed**); renter/lender activation buttons (**required**); two-sided clean return gate and dispute button (**required**); boost price/duration (**RM10/7 days**). Do not ask these questions again.
-
-### Source-reconciliation notes
-
-- The **later founder app-edit screenshots and prompts** intentionally override the older Canva homepage's `Recent Rental Reviews` arrangement and older repository `Owner Reviews` placeholder. The new single Sony demo review, demo-only one completed rental, 5.0 stars, Canva-style semicircular risk gauge and **Bicycle kept as the only extra old app sample** are founder-authorised, not independently established by the original PDF/workbook. Do not restore six global reviews due to older screenshots.
-- Business PDF/workbook provide concept, assumptions, deposit and trust motivations, but do not spell out the founder's later **two-button activation**, **24h started-block pricing**, **consecutive rental chain**, or **two-sided no-issues/dispute and deposit gate**. These are later founder-authorised rules with highest precedence.
-- `9. Proforma income statement` describes RM10 boosts with assumed 10% uptake, whereas `6. Key Resources` contains an alternative 3%-capped boost model. Use founder-confirmed **RM10/7-day** behaviour.
-- PDF and workbook contain no fully specified confirmed-booking cancellation fee/refund matrix. The founder has confirmed a cutoff of **at least 24h before the scheduled start** and full simulated rental/service-fee refund plus full simulated security-deposit release on eligible cancellation, with no cancellation fee. Do not confuse the normal booking simulation payment with a late monetary fine, deposit release or cancellation reimbursement.
-- V1.8's references to authorised insurer and payment partners are future business policies; all implementations here are **clearly labelled classroom simulations**. Keep owner-entered and internal demo replacement values distinct without presenting the app as a real insurance assessor.
-
-## 29. Instructions for a future coding AI — autonomous full implementation
-
-**One request starts execution; do not keep asking for approval.** When the founder sends this README together with an instruction such as **"Develop/build CurRENT based on this README"**, begin implementing the **complete classroom-demo application** directly in the connected CurRENT repository. Treat that initial task assignment as standing authorization for routine changes **within this product and project** (read files, modify source/config/docs as needed, create/update safe demo migrations, run tests, commit/push and publish to the already-connected CurRENT Vercel demo if it is part of the requested build and access exists). **Do not stop after each phase to request permission or repeatedly ask questions already answered by this document.** For *read-only review* or *prompt-drafting* requests, do not make code changes: the user's actual task still determines whether implementation is authorized.
-
-1. **Start by inspecting:** Read this entire README, especially Appendix A (authoritative V1.8 score/deposit specification), Appendix B (rental execution rules), Appendix C (latest review/catalogue/gauge corrections), current repository code, existing tests, Supabase configuration, attached Canva website references and relevant PDF/workbook. Use the source precedence in Section 1.
-2. **Make an execution plan, then begin immediately:** Explain the implementation sequence briefly, then implement in small testable phases without waiting for a reply. Reuse working React Native/Expo code. The founder has already settled 24h billing, simulated checkout, two-sided handover and return, consecutive rental with retained original deposit, V1.8 thresholds and claims, eligible cancellation full refund ≥24h before scheduled pickup, Option B shared Supabase-style backend, Option A delayed-handover conflict remedy, 21 Canva items + existing Bicycle, eight categories, one Sony demo review/illustrative completion/rating, and the Canva **semicircular Risk Score gauge appearance only**. Do not ask to reconfirm any of these.
-3. **Implement and verify:** Code actual data-backed behaviour, avoid decorative dead ends, enforce authorization/RLS and idempotent financial-state transitions on the backend, keep all financial/identity/insurance effects explicitly **demo-only**, preserve existing valid user data and working features, run tests/typecheck/build and fix failures. Record real progress and blockers accurately.
-4. **Commit, sync and demo-deploy as appropriate:** For an assigned build in the connected repository, routine commits/pushes and configured demo Vercel deployment are part of the workflow, not separate permission gates. Verify the deployed UI and important two-device flows when credentials and resources exist. Do not claim to have deployed, tested or connected a service unless verified. If a live service is unavailable, implement a safe isolated/demo fallback where appropriate and explain what remains blocked.
-5. **Only interrupt for genuine high-impact decisions:** Ask narrowly if **essential credentials/access are unavailable**, the founder's requirements contain a material ambiguity that cannot be resolved safely, implementing would require **real payments, genuine eKYC/insurance, paid third-party services**, irreversible deletion or migration of **real** user data, or changes to an unrelated/production system. Do not fabricate approvals or credentials. Do not request permission for routine repository edits, normal safe migrations on isolated demo data, ordinary commits, bug fixes, tests or the specified project demo deployment.
-6. **Keep moving and report outcomes:** Share short updates at natural milestones without blocking work. Finish with changed files/commits, tests and build evidence, deployment link if actually verified, known limitations, and which demo features remain simulated. The master prompt's business rules are not permission to collect real funds or expose customer private data.
-
-**Definition of success:** A complete 22-seed-item (21 Canva + original Bicycle), eight-category demo with one fictional Sony five-star product review/illustrative one-completed-rental/5.0 display and no homepage/Owner Reviews UI; the original Canva **semicircular red–amber–green Risk Score visual design** (NOT circular `70 STANDARD`), with *all actual numbers and tiers from V1.8*; accurate started-24-hour rental pricing and lender/renter fees; two-sided activation, confirmed booking protection and renter-accepted shorter offer when handover is late, paid adjacent continuous rental with no second deposit, two-sided issue-free return or dispute with correctly gated simulated deposit settlement; exactly two customer dashboards, real cross-device authenticated shared backend, and a working/verified CurRENT classroom demo on the configured web project, without real payment processing or insurer/eKYC integrations.
-
-## Source-reference note (for maintainers)
-
-- **`CurRENT Website.pdf`:** Canva site links and page images: visual layout, **21 sample item listings and eight website categories**, RM295 camera example, FAQ and trust cards. **Founder post-V2.7 decisions supersede the old six-review homepage section and other sample reviews; preserve only one Sony detail-page sample review.** The **original Canva semicircular coloured risk gauge** is the locked visual reference; **V1.8 alone determines actual score, tier labels and deposit rules**.
-- **`CurRENT.pdf` and `CurRENT.xlsx`:** concept, target market, financing/monetisation projections and assumptions; forecasting is not genuine transaction logic or active insurer/payment services.
-- **Existing repository / ZIP:** `README.md`, implementation notes, relevant TypeScript domain services, context, seed data, app screens, tests and Supabase scaffolding. They are reusable code, not the final source of policy.
-- **Founder app-edit instructions after V2.7:** move one Sony camera sample review into its own product detail and remove homepage Recent Reviews and Owner Reviews; sync demo completed count to 1 and 5.0 rating with Alex Tan fictional reviewer; use the original Canva website screenshot's **semicircular coloured gauge design** for the homepage Risk Score card (NOT the newer circular `70 STANDARD` app design), with all labels, scores and calculations following V1.8; import all 21 Canva sample products/eight categories, preserve only existing Bicycle from app-specific demo listings. These override earlier generic reviews, item-rating fixtures and seed-reconciliation text.
-- **Founder clarification:** classroom demo; no actual payment execution; click Rent → checkout → explicit simulated confirmation before booking; selected pickup/return times; proposed value distinct from fictional demo-assessed value (future insurance partner assessment); direct booking for eligible renters; V1.8 scoring/deposits/claims override earlier rules; RM10/seven-day featured boost; **predefined fictional claim outcomes allowed**, no real approvals or payments; exactly Renter/Lender dashboards; shared-backend cross-device accounts confirmed as Option B; Very High Risk review stays Pending only (Option A); V2.9 has replaced the previously published V2.7 README with founder authorisation; future coding assistants should proceed autonomously once explicitly tasked to build CurRENT.
-
-## Appendix A — Authoritative founder-supplied CurRENT V1.8 Risk Score and Deposit Specification
-
-**Integration note / demo-language interpretation:** The following appendix preserves the founder-supplied V1.8 business policy and granular requirements for reference. **Later founder decisions in Sections 9–14 and 28 override older operational assumptions in this appendix for the CURRENT CLASSROOM DEMO**: rental days are started 24-hour blocks; actual rental time starts only after BOTH handover confirmations; a separately checked successful same-renter contiguous booking is the V1 extension mechanism (no owner approval); the initial simulated deposit continues without a second charge; both physical-return no-issue confirmations (with renter-uploaded media) are necessary before full clean deposit release, while either party may open a blocking dispute. None of these changes alters V1.8 risk tiers, score deductions, claim fairness or independent payment restrictions. It was originally written with **commercial payment, eKYC and insurance-provider operations** in mind. For the **current class demo only**, any reference to successful payment, holding/releasing actual funds, approved insurer payouts, real eKYC, or secure backend external decisions means a **clearly labelled simulated status stored in the shared demo backend, or pre-seeded fictional demonstration status**; no financial/insurance/identity-provider integration exists. “Direct payment” means the **demo payment-information/checkout flow**, not a real transfer. The booking's financial snapshot is frozen on **Confirm Demo Booking** rather than actual payment capture. “Platform approval” is not lender approval. **Founder-confirmed classroom-demo rule: new 0–29 platform requests stay Pending with NO demonstrated Approved or Rejected outcomes and cannot proceed to checkout.** The original V1.8 commercial policy describes what a future approval process could involve; it does not authorise implementing one now. This note changes the *implementation medium* to a truthful demo, **not** any V1.8 thresholds, deposit caps, score adjustments, rights, bans or restrictions. Sections 0–29 incorporate and operationalise these rules.
-
----
-
-**Founder-supplied policy source: CurRENT V1.8.**
-
-**Dashboard scope:** renter and lender only; platform decision processes remain conceptual and must be represented truthfully in the demo.
-
-# PART 1 — CurRENT Rental Risk Score System
-
-**Version 1.8 — Final Customer-Facing App Development Specification**
-
-## 1. User Verification & Initial Score
-
-- Every user must successfully complete eKYC identity verification before being eligible to rent.
-- Unverified users have no Rental Risk Score (N/A) and cannot rent.
-- Every newly verified renter starts at **70/100 (Low Risk)**.
-- Scores range from 0 to 100. Higher scores represent better rental reliability.
-- Risk scores change based on confirmed rental outcomes and behaviour.
-- Only renters have a Rental Risk Score. Lenders have eKYC verification, ratings and reviews, but no separate risk score.
-
-## 2. Risk Levels
-
-| Risk Score | Risk Level     | Booking Permission         |
-| ---------- | -------------- | -------------------------- |
-| 70–100     | Low Risk       | Direct payment             |
-| 40–69      | Medium Risk    | Direct payment             |
-| 30–39      | High Risk      | Direct payment             |
-| 0–29       | Very High Risk | Platform approval required |
-
-Security deposit percentages and caps are defined in Part 2.
-
-## 3. Risk Score Adjustments
-
-| Rental Event                                  | Score Adjustment                                   |
-| --------------------------------------------- | -------------------------------------------------- |
-| Successful rental (on-time return, no issues) | +2                                                 |
-| Unapproved late return exceeding 2 hours      | −1 per additional hour or part thereof, maximum −5 |
-| Confirmed minor damage                        | −10                                                |
-| Confirmed serious damage or accidental loss   | −30                                                |
-| Confirmed intentional theft or fraud          | Permanent account ban                              |
-
-### Late Return Penalty
-
-- The first 2 hours after the scheduled return time are a grace period.
-- After exceeding 2 hours, deduct 1 point for each additional hour or partial hour.
-- The maximum late-return penalty is −5 points per rental.
-- Approved rental extensions do not incur late-return penalties.
-- Record the actual late-return duration in the rental behaviour history.
-- Calculate lateness using the agreed return deadline, including any approved extension.
-
-**Formula:**
-
-Late Return Penalty = −min(5, ceil(max(0, Hours Late − 2)))
-
-| Actual Late Return Duration | Score Deduction |
-| --------------------------- | --------------- |
-| Up to 2 hours               | 0               |
-| More than 2 to 3 hours      | −1              |
-| More than 3 to 4 hours      | −2              |
-| More than 4 to 5 hours      | −3              |
-| More than 5 to 6 hours      | −4              |
-| More than 6 hours           | −5 (maximum)    |
-
-**Example:** An item returned exactly 4 hours late receives a −2 adjustment, provided there is no more serious confirmed incident.
-
-### Scoring Rules
-
-1. **Only one score adjustment per rental.** If multiple incidents happen during the same rental, apply only the most serious confirmed penalty, not the sum of all penalties.
-2. For example, a 4-hour late return (−2) and minor damage (−10) during the same rental result in a total adjustment of −10, not −12.
-3. If an investigation later confirms a more serious outcome, replace the earlier adjustment instead of applying another deduction.
-4. A rental with any confirmed violation does not receive the +2 successful-rental reward.
-5. No additional score deduction for unpaid damage obligations. Outstanding payment restrictions operate separately from the risk score.
-6. Normal wear and tear, unproven complaints and ordinary failed payment attempts do not affect the score.
-7. Score updates occur after the rental outcome is finalised and relevant disputes are resolved.
-8. Renters can appeal incorrect penalties. The platform can correct or reverse score adjustments following review.
-9. Scores are capped between 0 and 100.
-10. No inactivity penalties or consecutive-rental bonuses.
-11. Approved rental extensions do not count as late returns.
-
-## 4. Very High Risk Renter — Platform Review (Score Below 30)
-
-Renters scoring 0–29 cannot make direct rental payments. They must obtain CurRENT platform approval for each booking.
-
-### Booking Process
-
-1. Renter selects an item and clicks "Rent".
-2. The system checks eKYC verification, account status, overdue damage obligations and risk score.
-3. If the risk score is below 30, direct payment is blocked.
-4. The renter submits a rental request to CurRENT for review.
-5. CurRENT reviews the renter's rental history, incidents and requested item through its internal operational process.
-6. **Approved:** The platform determines the applicable security deposit and unlocks payment for that specific booking.
-7. **Rejected:** The booking cannot proceed, and the renter receives a notification.
-
-### Additional Rules
-
-- Every new rental request made while the score remains below 30 requires separate platform approval.
-- Approval of one rental does not automatically approve future rentals.
-- Platform approval does not automatically increase the risk score.
-- Renters with overdue confirmed damage-payment restrictions, suspended accounts or permanent bans cannot bypass these restrictions through platform approval.
-- Lender approval is not required for normal direct rental transactions.
-- The customer-facing app only needs to display request submission, approval status, rejection status and relevant notifications. **Do not develop an Admin Dashboard.**
-- Platform decisions must be recorded through a secure backend or separate operational process. Do not automatically approve restricted bookings merely because no Admin Dashboard exists.
-
-### Renter Notification
-
-"Your Rental Risk Score requires additional platform review before this rental can proceed. Please submit your request and wait for CurRENT's approval. You will be notified once the review is complete."
-
-## 5. Non-Return, Accidental Loss & Fraud
-
-- Late or unreturned items trigger investigation, not automatic fraud classification.
-- CurRENT may temporarily restrict new bookings during serious non-return investigations.
-- Confirmed accidental loss results in a −30 score penalty and applicable compensation procedures.
-- Confirmed intentional non-return, theft or fraudulent behaviour by a renter results in permanent account removal, regardless of their risk score.
-- Serious incidents require investigation and confirmation. A lender's allegation alone is insufficient.
-- Appeals and corrections must be supported.
-- Insurance eligibility for theft, damage or loss is handled separately under Part 2.
-
-## 6. Rental Behaviour History & Score Transparency
-
-### Record All Rental Behaviour
-
-Every completed rental must have a detailed rental behaviour history record.
-
-Record all incidents separately, even when multiple issues happen during the same rental.
-
-Each rental record must include:
-
-- Item name and rental location.
-- Rental start date and scheduled return date/time.
-- Actual return date/time.
-- All reported incidents and relevant details.
-- Late-return duration, if applicable.
-- Damage description and supporting evidence, if applicable.
-- Incident confirmation or dispute status.
-- Actual risk score adjustment applied.
-- Previous and updated risk scores.
-
-All confirmed incidents remain in rental history, including those that do not affect the final risk score.
-
-Pending or unverified incidents must be clearly labelled and cannot affect the risk score until confirmed.
-
-### Penalty Display Rules
-
-1. Display a numerical score adjustment only beside the incident that actually affects the renter's score.
-2. For other confirmed incidents within the same rental, display **"Recorded"**, without a numerical penalty.
-3. Show the final risk score adjustment only once per rental.
-4. Do not display unused penalties as crossed-out or hypothetical deductions.
-5. Preserve all incident records, even if no additional deduction is applied.
-6. If an appeal changes the confirmed outcome, update the applied adjustment while retaining the original incident and correction history.
-
-### Example — Rental Behaviour Record
-
-**Item:** Camera\
-**Location:** Puchong, Selangor\
-**Return Date:** 12 December 2026\
-**Status:** Issues Confirmed
-
-| Rental Behaviour | Details                         | Score Impact |
-| ---------------- | ------------------------------- | ------------ |
-| Late Return      | Returned 4 hours late           | Recorded     |
-| Minor Damage     | Confirmed damage to camera body | −10          |
-
-**Final Risk Score Adjustment: −10**
-
-Previous Score: 70\
-New Score: 60
-
-Both incidents remain visible in the rental history. Only the confirmed minor damage affects the score because it has the more serious penalty.
-
-The late return is recorded without displaying its unused −2 penalty.
-
-## 7. Customer-Facing Dashboard Requirements
-
-### Renter Dashboard
-
-Renters must be able to view:
-
-- Current Rental Risk Score and risk category.
-- Applicable security deposit rate.
-- Complete personal rental history, including item names, locations and dates.
-- Detailed rental behaviour records.
-- All recorded incidents, including incidents without score deductions.
-- Actual score adjustments, previous scores and updated scores.
-- Damage claim and outstanding payment status.
-- Booking restrictions and platform approval-request status.
-- Notifications about claims, penalties, payments, restrictions and booking approvals.
-- The ability to submit supporting evidence and appeals for relevant disputes.
-
-### Lender Dashboard
-
-Lenders must be able to:
-
-- View verification status and relevant renter risk information for confirmed bookings.
-- View detailed rental behaviour records for rentals involving their own listed items.
-- See all recorded incidents, including late returns, damage details, confirmation status and actual score adjustments.
-- Confirm item returns and report damage.
-- Access relevant incident evidence and dispute outcomes for their own transactions.
-- Submit photos/videos and descriptions for damage claims.
-- Track claim progress and relevant compensation status.
-
-Lenders cannot manually change renters' risk scores or incident outcomes.
-
-Renters have access to their own rental history. Lenders have access to transactions involving their own items, without unrestricted access to other lenders' private records.
-
-### Dashboard Scope
-
-- Develop only the **Renter Dashboard** and **Lender Dashboard**.
-- Do not build an Admin Dashboard, admin portal, internal staff interface or business management dashboard.
-- Platform approvals, dispute decisions and other operational outcomes remain part of the backend business logic, but are not managed through a customer-facing administrator interface.
-- Display the outcomes and relevant statuses to renters and lenders when appropriate.
-
-## 8. Backend Requirements
-
-- Store user verification status and risk score separately.
-- Assign the initial score of 70 only after successful eKYC.
-- Store every rental incident separately from the actual score adjustment, linked by rental ID.
-- Preserve all confirmed incidents, including those that do not affect the score.
-- Calculate progressive late-return penalties accurately using the actual return timestamp and agreed deadline.
-- Apply only one final score adjustment per rental.
-- Prevent duplicate deductions.
-- Maintain audit records of incidents, scoring decisions, corrections and appeals.
-- Enforce risk-based booking eligibility and account restrictions on the backend.
-- Recheck booking eligibility before payment.
-- Enforce appropriate permissions for renter and lender access.
-- Support secure processing of platform decisions without developing an Admin Dashboard.
-
----
-
-# PART 2 — CurRENT Deposit Determination
-
-**Version 1.8 — Risk-Based Security Deposits, Item Protection & Claims**
-
-## 1. Risk-Based Security Deposit Structure
-
-The security deposit depends on the renter's current Rental Risk Score and the item's current replacement value.
-
-| Risk Score | Risk Level     | Security Deposit                     | Booking Permission       |
-| ---------- | -------------- | ------------------------------------ | ------------------------ |
-| 70–100     | Low Risk       | 5% of item value, capped at RM500    | Direct payment           |
-| 40–69      | Medium Risk    | 10% of item value, capped at RM1,000 | Direct payment           |
-| 30–39      | High Risk      | 15% of item value, capped at RM1,500 | Direct payment           |
-| 0–29       | Very High Risk | Determined by platform if approved   | Platform review required |
-
-### Deposit Formula
-
-**Security Deposit = min(Item's Current Replacement Value × Applicable Deposit Rate, Deposit Cap)**
-
-### Example — Item Valued at RM12,000
-
-| Risk Level | Calculation                  | Final Deposit             |
-| ---------- | ---------------------------- | ------------------------- |
-| Low        | 5% × RM12,000 = RM600        | RM500                     |
-| Medium     | 10% × RM12,000 = RM1,200     | RM1,000                   |
-| High       | 15% × RM12,000 = RM1,800     | RM1,500                   |
-| Very High  | Platform assessment required | Determined after approval |
-
-### Deposit Rules
-
-1. Calculate the deposit automatically at checkout based on the renter's risk score.
-2. Use the item's reasonable current replacement value, not its daily rental price.
-3. Apply the relevant deposit percentage and maximum cap.
-4. Fix the calculated deposit for that booking once payment is successfully completed.
-5. Subsequent changes to a renter's score affect future bookings only.
-6. Renters scoring below 30 cannot pay before platform approval.
-7. For approved Very High Risk bookings, the platform determines the deposit individually.
-8. The deposit is held securely through the platform's authorised payment/deposit-handling arrangements.
-9. At rental completion, release the refundable deposit after return confirmation and resolution of any applicable claims or disputes, deducting only confirmed amounts properly payable by the renter.
-
-## 2. Item Protection & Insurance
-
-CurRENT integrates item protection through an authorised external insurance partner.
-
-### Coverage Principles
-
-- Eligible high-value items may receive protection of up to **RM60,000**, subject to the insurance partner's eligibility criteria, coverage limits, exclusions and policy terms.
-- Eligible accidental damage may be covered under the applicable protection policy.
-- Theft or loss may be covered where expressly included in the insurance partner's policy.
-- Insurance protection is not guaranteed for every item, rental or incident.
-- Claim eligibility and the approved payout amount are determined by the insurance/protection partner under the applicable policy.
-- CurRENT must not promise automatic insurance payouts or guaranteed compensation before claim approval.
-
-### Potential Insurance Exclusions
-
-Insurance may exclude loss or damage resulting from:
-
-- Intentional misuse.
-- Prohibited use.
-- Gross negligence.
-- Unauthorised subletting.
-- Other excluded behaviour or circumstances specified by the insurance partner.
-
-If coverage is excluded, the renter may remain liable for uncovered repair or replacement costs, potentially up to the full current value of the item, subject to the rental agreement and applicable law.
-
-The platform must clearly distinguish between insured amounts and renter liabilities.
-
-## 3. Damage Claim Process
-
-When an item is damaged during a rental, use the following process:
-
-1. **Damage Reported:** The lender reports damage and submits supporting photos/videos and descriptions.
-2. **Claim Assessment:** CurRENT assesses the incident and renter responsibility, including any dispute or evidence submitted by the renter.
-3. **Insurance Claim:** Where eligible, the claim is submitted to the authorised external insurance/protection partner.
-4. **Insurance Coverage:** The partner determines and covers the approved eligible amount, subject to policy terms and coverage limits.
-5. **Renter Liability:** Any applicable excess, deductible or excluded amount is assessed as the renter's responsibility, subject to the rental agreement and applicable law.
-6. **Deposit Application:** Apply the available security deposit towards the renter's confirmed liability.
-7. **Outstanding Balance:** Notify the renter of any remaining confirmed payable amount.
-8. **Payment Settlement:** Record payments, deposit deductions, approved insurance coverage and any remaining outstanding balance.
-
-Insurance payouts and renter payments must be reconciled to prevent recovering the same loss twice.
-
-## 4. Theft, Non-Return & Accidental Loss
-
-### Investigation Process
-
-1. Theft, accidental loss or non-return is reported with supporting evidence.
-2. CurRENT investigates the incident to determine the circumstances and renter responsibility.
-3. Distinguish between:
-   - Accidental loss.
-   - Third-party theft.
-   - Unresolved non-return.
-   - Confirmed intentional theft or fraudulent non-return by the renter.
-4. Where eligible, submit the incident to the authorised insurance/protection partner.
-5. The insurer determines whether the loss is covered and the amount payable under its policy.
-6. Any uncovered renter liability is assessed separately, subject to the rental agreement and applicable law.
-7. Apply the available security deposit towards confirmed renter liability and record any remaining payable amount.
-
-### Enforcement Rules
-
-- An overdue or unreturned item must not automatically be classified as theft.
-- Serious unresolved non-return incidents may result in temporary booking restrictions during investigation.
-- Confirmed accidental loss results in a −30 risk score adjustment.
-- Confirmed intentional theft or fraudulent non-return by the renter results in permanent account removal.
-- Permanent account removal is independent of whether an insurance claim is approved.
-- Insurance coverage and renter accountability must be assessed separately.
-- Confirmed fraudulent behaviour may be excluded from insurance coverage, depending on the policy.
-- Appropriate appeal and correction procedures must remain available.
-
-## 5. Outstanding Damage Payments & Independent Booking Restrictions
-
-**Important: Outstanding damage-payment restrictions must operate independently from the Rental Risk Score.**
-
-### When an Outstanding Obligation Arises
-
-An unpaid damage obligation exists when:
-
-1. A damage claim has been assessed.
-2. Insurance/protection coverage, if applicable, has been determined.
-3. The renter's remaining liability, including applicable excess, deductible or excluded amounts, has been confirmed.
-4. The available security deposit has been applied towards that liability.
-5. A confirmed outstanding balance remains and the renter has been notified.
-
-If the confirmed balance is still unpaid **7 days after notification**, an automatic booking restriction applies.
-
-### Booking Restriction Rules
-
-- Any renter with a confirmed damage balance overdue by 7 days is blocked from making new rental bookings, regardless of their risk score.
-- No new bookings or rental payments are allowed while the overdue balance remains.
-- This restriction applies even to Low Risk renters with scores as high as 100.
-- The restriction is removed automatically once full payment is confirmed.
-- The restriction is also removed if the underlying obligation is cancelled or corrected after a successful review or appeal.
-- Paying the outstanding amount does not automatically reverse a valid historical damage-related score penalty.
-- Unresolved or disputed claims must not be classified as confirmed overdue obligations.
-- No additional risk score penalty is imposed solely because a damage obligation remains unpaid.
-- Suspended or permanently banned accounts remain restricted independently of payment settlement.
-- Platform approval for Very High Risk renters cannot override an overdue damage-payment restriction.
-
-### Example
-
-A renter has a Rental Risk Score of 90 (Low Risk) but also has a confirmed overdue damage balance of RM300.
-
-**Result: The renter cannot make new bookings despite having a Low Risk score.**
-
-After the RM300 is fully settled, the outstanding payment restriction is lifted. Their original risk score and any valid historical incident penalties remain unchanged.
-
-### Key Principle
-
-**Risk Score = Rental behaviour and reliability history.**
-
-**Payment Restriction = Whether the renter has unresolved confirmed overdue damage-payment responsibilities.**
-
-These are independent mechanisms.
-
-## 6. Claim & Deposit Information in Customer Dashboards
-
-### Renter Dashboard
-
-Display:
-
-- Security deposit amount and applicable percentage for each booking.
-- Deposit status and refund information.
-- Damage/loss claim status.
-- Approved insurance/protection coverage, where applicable.
-- Confirmed renter liability.
-- Deposit deductions.
-- Outstanding payment amount and deadline.
-- Payment settlement history.
-- Booking restrictions linked to overdue damage balances.
-- Claim and dispute notifications.
-- Ability to submit relevant evidence and appeal an incorrect claim or liability decision.
-
-### Lender Dashboard
-
-Display for the lender's own rental transactions:
-
-- Security deposit status.
-- Return confirmation and damage-reporting functions.
-- Claim details and supporting evidence.
-- Insurance/protection claim status and approved coverage.
-- Confirmed deductions, liabilities and compensation status.
-- Relevant dispute outcomes.
-- Ability to submit incident evidence and track claim progress.
-
-Lenders cannot directly determine risk score adjustments, insurance coverage or final claim liability.
-
-### Dashboard Scope
-
-- Develop only the Renter Dashboard and Lender Dashboard.
-- No Admin Dashboard or internal staff-facing claim management interface is required.
-- CurRENT's internal decisions must be reflected in the customer-facing app through claim statuses, payment records, approval results and notifications.
-- The app must not present pending claims, approvals or insurance payouts as confirmed before the relevant decision is received.
-
-## 7. Backend & Payment Requirements
-
-- Store security deposits, insurance/protection claims, renter liabilities and outstanding balances separately from Rental Risk Scores.
-- Record all claim decisions, deposit applications, payment settlements and restriction changes.
-- Enforce deposit calculations and caps on the backend.
-- Enforce booking restrictions before checkout and payment.
-- Prevent duplicate claims, deductions or compensation for the same loss.
-- Apply deposits only towards confirmed renter liability.
-- Support pending, approved, rejected, settled and disputed claim/payment statuses.
-- Automatically activate booking restrictions when confirmed damage balances become overdue by 7 days.
-- Automatically remove overdue-payment restrictions after confirmed settlement or cancellation of the obligation.
-- Preserve complete audit records and appropriate user-access permissions.
-- Make insurance eligibility, external claim decisions and coverage limitations clear in the app.
-- Use the authorised payment/deposit-handling and insurance partner workflows rather than treating CurRENT itself as an insurer.
-- Support the receipt and processing of platform decisions through secure backend mechanisms without creating an Admin Dashboard.
-
----
-
-## Final Integration Requirements
-
-The CurRENT app must integrate Part 1 (Rental Risk Score System) and Part 2 (Deposit Determination) into one consistent booking, payment, return, dispute and claim-management process.
-
-The system must ensure that:
-
-1. Only eKYC-verified renters receive a risk score and become eligible to rent.
-2. Risk scores influence security deposits and booking permissions.
-3. Late returns exceeding 2 hours incur progressive penalties of 1 point per additional hour or partial hour, capped at 5 points.
-4. Every rental incident is recorded, but only the most serious confirmed incident affects the score for that rental.
-5. Both renter and lender dashboards display detailed records for transactions they are authorised to view.
-6. Insurance eligibility, approved coverage and remaining renter liability are assessed separately.
-7. Confirmed overdue damage obligations block new rentals independently of the risk score.
-8. Very High Risk renters must receive platform approval before payment.
-9. Confirmed intentional theft or fraud results in permanent account removal.
-10. All booking permissions, financial calculations, score updates and account restrictions are enforced securely on the backend.
-11. The app includes **only two customer-facing dashboards: Renter and Lender**.
-12. No Admin Dashboard, staff portal or internal business management interface should be developed.
-13. Platform approval, dispute resolution and claim decisions must still be supported through secure backend statuses and operational workflows.
-14. Do not simulate successful approvals, claim settlements or insurer payouts as genuine completed transactions.
-
-**Development Scope:**
-
-Build the customer-facing CurRENT experience for renters and lenders, including risk scores, rental behaviour history, risk-based deposits, booking restrictions, payments, item protection information, damage reporting, claims tracking and relevant notifications.
-
-Keep the application simple, clear, transparent, fair and practical to implement. Do not introduce unnecessary scoring factors, dashboards or complex features beyond this specification.
-
----
-
-## Appendix B — Latest founder-confirmed rental-activation and return policy (binding addendum)
-
-This appendix is an easy-to-locate **binding digest** of the additions in Sections 9–14 and 28. It is not an extra dashboard or future-work idea.
-
-1. **Pricing and dates:** Date and clock-time selection are mandatory. Price per day applies to each started 24-hour period: `ceil((requestedReturn - requestedPickup)/24h)`, minimum 1. A paid 31-hour requested period is charged as 2 daily units but retains an agreed 31-hour occupancy duration; the later actual activation shifts its end by 31 hours. No calendar-date subtraction or invented money late fee.
-2. **Booking is not activation:** Completing the clearly simulated payment step confirms an item reservation, not physical possession or rental start.
-3. **Both activate, subject to collision-free availability:** Lender clicks **Confirm Item Handed Over**, renter clicks **Confirm Item Received** when they actually exchange the item. Normally clock begins when the second authorised confirmation is recorded and deadline = activation + agreed booked duration. If a shifted deadline would overlap another confirmed booking, **protect it**; the renter sees and must accept a shorter available rental with original/revised duration and started-24-hour fee differences (including an honestly displayed RM0 adjustment if unchanged) **before activation**. Upon acceptance and final atomic recheck, activate once using the timestamp when all conditions are satisfied, with accepted shortened duration; apply any demo rent/service refund exactly once, keeping the initial deposit. Otherwise remain inactive and unresolved. Record individual timestamps; never override another renter’s slot.
-4. **Automatic consecutive rental:** If the SAME renter newly rents the SAME item beginning at the EXACT current deadline and the owner has published available dates, successful second simulated checkout extends current possession without another lender approval, handover, interim return or photo upload. No second security deposit. Additional fee/service fee still owed in simulation; first deposit continues until FINAL physical return. Exactly one final risk-score adjustment for entire continuous chain.
-5. **Both must confirm clean return:** At final physical meeting renter takes/uploads clear photo/video evidence of returned item. Renter clicks **Confirm Return — No Issues**, lender clicks **Confirm Item Received — No Issues**, separately and truthfully. One click alone does not end the rental/release a deposit. After both no-issues confirmations and no pending dispute, complete the clean return and release full simulated deposit once; apply final risk scoring using actual physical handback time.
-6. **Dispute overrides incomplete no-issue return:** EITHER party sees damage, missing item/accessories or a deposit dispute → **Raise Dispute / Request Platform Review** instead of falsely clicking clean return. This action immediately stops clean completion and deposit release, even if one party already clicked clean. Hold simulated deposit until an expressly fictional predefined claim scenario outcome or future genuine review; no real insurer/cash. Maintain physical-return facts apart from dispute status.
-7. **Two dashboards; no false claims:** Renter and Lender only, no admin. Very High Risk booking requests stay Pending (Demo); separate preset fictional DAMAGE CLAIM outcomes may show approval/rejection/appeal. Simulated deposit closure is not actual money transfer.
-8. **Remaining deliberate decisions:** Cancellation is allowed only at least 24 hours before the originally scheduled pickup/start; the **simulated refund of the full rental fee and service fee and full deposit release with no fee** are confirmed and not open for clarification. Shared real cross-device accounts/backend (**Option B**) and the shorter-rental delayed-handover conflict remedy (**Option A**) are already founder-confirmed; neither needs to be re-asked. No GitHub changes before the founder approves the full prompt.
-
----
-
-## Appendix C — Four founder-confirmed app edits and corrected Risk Score design after published README V2.7 (binding override)
-
-**Scope of this addendum:** Integrate the founder's four later Gemini app-edit instructions plus the **latest correction about the semicircular Canva risk-gauge design**. These are binding **UI and demo-seed requirements** that override the repository's old review/catalogue/gauge presentation. All risk, verification, deposit, handover, return, dispute, booking and backend *business rules* from Sections 0–29 and Appendix A remain authoritative. When the founder instructs the coding AI to build CurRENT, implement this addendum automatically as part of the full build—do not request another separate approval for each change.
-
-1. **Sony rental review placement:** Remove the six-review homepage `Recent Rental Reviews` collection completely. Replace Sony camera item detail's `Owner Reviews` block with a single `Rental Reviews` card directly beneath the existing owner/product information. Keep current app visual style and owner name/verification. Do not add reviews to other items, a general review submission form, or an owner review system.
-2. **Review/count/rating consistency:** In **Sony A7 III Mirrorless Camera** item detail use exactly one `Demo / Sample Review`, fictional reviewer **Alex Tan (Fictional Demo Renter)**, 5 stars, text **“The camera matched the listing and pickup was smooth. Everything was clear from booking to return.”** The Sony demo display should show **`1 completed rental`** in the existing owner-card position rather than `0 completed rentals`, and **`5.0`** as the demo product review rating where shown, not the prior 4.9 sample figure. Remove `0 community reviews` and `Owner Reviews` empty state. Do not actually manufacture a real completed booking, falsely increase lender transaction totals, or adjust renter reliability scores. This count belongs to the clearly illustrative demo case.
-3. **Homepage Risk Score appearance — correction superseding the previous circular lock:** Keep the **Why CurRENT Is Safer** four-card section, but replace the *newer app* circular `70 STANDARD` ring with the **original Canva website's semicircular red/amber/green Risk Score gauge** shown in the supplied CurRENT website PDF (page 4). Copy its visual arc, navy background and general presentation, **not its sample `82` score or older business labels**. Show a correct V1.8 sample such as **`70 / Low Risk`** for a newly demo-verified renter; use `N/A` when unverified. All actual scores, risk thresholds, score changes, deposits, eligibility and booking restrictions follow the README's V1.8 rules exclusively. No `STANDARD` tier, no circular ring UI and no Canva-era risk-calculation assumptions.
-4. **Complete seeded rental catalogue with Bicycle exception:** Replace unreconciled old-app demo sample listings with **all 21 CurRENT Canva listings** from Section 5, and **preserve the current app Bicycle as the only additional original demo listing**, for **22 intended demo seed items**. Main categories exactly **Electronics, Gaming, Luxury, Household, Work & Office, Tools, Outdoors, Event Gear**. Keep the original Bicycle image, price, name, location and stable ID (map its category to Outdoors if needed). For website products preserve listed names, daily rates and places; use appropriate non-mismatched image, functional item-detail routing, real search/category filtering, owner availability and the unchanged simulated booking mechanism. Treat seed migration as idempotent: update matching seed IDs, suppress unrelated old sample records, and never destroy genuine user-created listings or bookings. The seeded Sony item is the only one that displays a fictional rental review and review-derived rating.
-
-**Required checks before any approved implementation is called done:** 22 deduplicated seeded products and eight categories; correct Bicycle retained; full pricing/location/catalogue navigation; no homepage review section; Sony-only single review, 5.0 and 1 demo completed rental; no `Owner Reviews` UI; homepage uses the **original Canva SEMICIRCULAR risk-gauge design**, not the circular app graphic; actual V1.8 risk computation/payment/deposit rules unchanged; no artificial real transactions; genuine shared-backend data safe. When coding work is assigned, implement these in-scope requirements directly and report touched files and observed build/test results; do not stop for another per-feature approval. Founder approval for publishing this README has been granted; implementation begins after the founder assigns a coding task.
-
----
-
-**END OF MASTER PROMPT V2.9 — README PUBLICATION AUTHORISED. WHEN THE FOUNDER DIRECTS AN AI TO BUILD CurRENT, PROCEED WITH IN-SCOPE IMPLEMENTATION AUTONOMOUSLY WITHOUT REPEATED PHASE APPROVAL REQUESTS.**
+**End of CurRENT Master Development Prompt V3.15 — FOUNDER-APPROVED SPECIFICATION. Publishing this document does not itself authorise application-code changes.**
