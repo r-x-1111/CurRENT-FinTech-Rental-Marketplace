@@ -12,12 +12,14 @@ import type { Booking } from "../../types/marketplace";
 export default function RentalsScreen() {
   const { state, user } = useMarketplace();
 
-  const userPlatformRequests = state.platformReviewRequests.filter(
-    (r) => r.renterId === user?.id,
+  // In Admin Demo, show classroom presentation fixtures or user's requests; in Normal mode, show only user's own requests
+  const visiblePlatformRequests = state.platformReviewRequests.filter((r) =>
+    state.mode === "admin_demo"
+      ? r.renterId === user?.id || r.contextMode === "admin_demo"
+      : r.renterId === user?.id,
   );
-  const hasPlatformRequests = userPlatformRequests.length > 0;
 
-  const baseTabs = [
+  const tabs = [
     "All",
     "Upcoming",
     "Active",
@@ -25,12 +27,9 @@ export default function RentalsScreen() {
     "Completed",
     "Cancelled",
     "Disputed",
+    "Platform Review Requests",
     "Payment & Transaction History",
   ];
-
-  const tabs = hasPlatformRequests
-    ? [...baseTabs, "Platform Review Requests"]
-    : baseTabs;
 
   const [activeTab, setActiveTab] = useState("All");
 
@@ -271,34 +270,65 @@ export default function RentalsScreen() {
 
   // Helper to render platform review requests
   function renderPlatformReviewRequests() {
+    if (!visiblePlatformRequests.length) {
+      return (
+        <Empty
+          title="No platform review requests"
+          text="Applications submitted for CurRENT platform review will appear here."
+          action="Explore rentals"
+          onPress={() => router.push("/(tabs)/explore")}
+        />
+      );
+    }
+
     return (
       <View style={{ gap: 12, marginTop: 12 }}>
         <View style={styles.reviewNoticeBox}>
-          <Ionicons name="shield-outline" size={20} color="#D97706" />
+          <Ionicons name="shield-checkmark-outline" size={20} color="#0284C7" />
           <View style={{ flex: 1 }}>
             <Text style={styles.reviewNoticeTitle}>
-              CurRENT Platform Review Requests (Score 0–29)
+              Platform Review Requests
             </Text>
             <Text style={styles.reviewNoticeDesc}>
-              These requests are submitted for manual CurRENT safety assessment. They do NOT lock item inventory and are NEVER sent to the lender for approval.
+              Applications submitted for CurRENT platform review. You can track your application review status here.
             </Text>
           </View>
         </View>
 
-        {userPlatformRequests.map((req) => (
+        {visiblePlatformRequests.map((req) => (
           <View key={req.id} style={styles.platformCard}>
             <Image source={{ uri: req.image }} style={styles.platformThumb} />
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={s.bold}>{req.title}</Text>
-              <Text style={s.caption}>
-                Requested Dates: {req.start} → {req.end}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                }}
+              >
+                <Text style={s.bold}>{req.title}</Text>
+                <Badge text={req.statusLabel || "Pending Review"} />
+              </View>
+              <Text style={[s.caption, { color: colors.blue, fontWeight: "700" }]}>
+                Ref: {req.id}
               </Text>
-              <Badge text="Pending CurRENT Platform Review (Demo)" />
-              {req.notes && (
-                <Text style={[s.caption, { color: colors.muted, marginTop: 4 }]}>
-                  {req.notes}
+              <Text style={s.caption}>
+                Pickup: {req.start}{req.pickupTime ? `, ${req.pickupTime}` : ""}
+              </Text>
+              <Text style={s.caption}>
+                Return: {req.end}{req.returnTime ? `, ${req.returnTime}` : ""}
+              </Text>
+              {req.lenderName && (
+                <Text style={s.caption}>Lender: {req.lenderName}</Text>
+              )}
+              {req.collectionMethod && (
+                <Text style={s.caption}>
+                  Collection: {req.collectionMethod} {req.location ? `· ${req.location}` : ""}
                 </Text>
               )}
+              <Text style={[s.caption, { color: colors.muted, marginTop: 2 }]}>
+                Submitted {new Date(req.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · No deposit or payment charged
+              </Text>
             </View>
           </View>
         ))}
@@ -482,20 +512,20 @@ const styles = StyleSheet.create({
   reviewNoticeBox: {
     flexDirection: "row",
     gap: 10,
-    backgroundColor: "#FEF3C7",
+    backgroundColor: "#F0F9FF",
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#FDE68A",
+    borderColor: "#BAE6FD",
   },
   reviewNoticeTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#92400E",
+    color: "#0369A1",
   },
   reviewNoticeDesc: {
     fontSize: 12,
-    color: "#78350F",
+    color: "#0C4A6E",
     marginTop: 2,
     lineHeight: 16,
   },

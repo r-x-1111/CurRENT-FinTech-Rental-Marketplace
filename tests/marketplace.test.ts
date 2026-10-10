@@ -799,5 +799,70 @@ test("Phase 3: Option A delayed handover collision generates conflict offer that
   }
 });
 
+test("Very High Risk renters (0-29) submit Request to Rent applications to CurRENT platform without reserving inventory or charging payment", () => {
+  let state = createSeed();
+  // 1. Unverified user attempt
+  state = transition(state, { type: "login", userId: "unverified-renter" });
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "requestPlatformReview",
+        listingId: "sony-a7iii",
+        start: "2026-11-20",
+        end: "2026-11-25",
+      }),
+    /Complete demo identity verification/,
+  );
+
+  // 2. High risk user (score 25, Very High Risk) submits Request to Rent
+  state = transition(state, { type: "login", userId: "high-risk-renter" });
+  state = transition(state, {
+    type: "requestPlatformReview",
+    id: "REQ-TEST-1234",
+    listingId: "sony-a7iii",
+    start: "2026-11-20",
+    end: "2026-11-25",
+    pickupTime: "11:00 AM",
+    returnTime: "11:00 AM (Automatically matched)",
+    durationDays: 5,
+    collectionMethod: "Meet Owner",
+    location: "Petaling Jaya",
+    lenderName: "Aiman Rahman",
+    dailyPrice: 45,
+    estimatedRentalFee: 225,
+    notes: "Pending CurRENT Review (Demo). Submitted for platform safety assessment.",
+  });
+
+  // Verify application in platformReviewRequests
+  const app = state.platformReviewRequests.find((r) => r.id === "REQ-TEST-1234");
+  assert.ok(app, "Application should be saved in state.platformReviewRequests");
+  assert.equal(app.status, "pending_review");
+  assert.equal(app.renterId, "high-risk-renter");
+  assert.equal(app.listingId, "sony-a7iii");
+  assert.equal(app.pickupTime, "11:00 AM");
+  assert.equal(app.returnTime, "11:00 AM (Automatically matched)");
+  assert.equal(app.durationDays, 5);
+  assert.equal(app.estimatedRentalFee, 225);
+
+  // Crucial rule: No booking created, no payment charged, no deposit held, inventory NOT reserved
+  assert.ok(!state.bookings.some((b) => b.renterId === "high-risk-renter"));
+
+  // Verify inventory is NOT locked: an eligible verified renter (e.g. Alex Tan, score 75) can still book those dates
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  state = transition(state, {
+    type: "instantBook",
+    id: "booking-eligible-after-req",
+    listingId: "sony-a7iii",
+    start: "2026-11-20T11:00:00Z",
+    end: "2026-11-25T11:00:00Z",
+    collectionMethod: "Meet Owner",
+    paymentMethod: "Demo FPX",
+  });
+  const booked = state.bookings.find((b) => b.id === "booking-eligible-after-req");
+  assert.ok(booked, "Eligible renter should be able to book because application did not reserve inventory");
+  assert.equal(booked.status, "upcoming");
+  assert.equal(booked.payment, "paid");
+});
+
 
 

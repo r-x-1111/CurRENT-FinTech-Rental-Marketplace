@@ -183,26 +183,24 @@ export default function ListingDetailScreen() {
     }
   }
 
-  // Handle Request CurRENT Platform Review for scores 0–29
-  function handleRequestPlatformReview() {
+  // Handle Request to Rent navigation for Very High Risk renters (scores 0–29)
+  function handleNavigateToRequest() {
     if (!user) {
       router.push("/auth");
       return;
     }
-    try {
-      act({
-        type: "requestPlatformReview",
-        listingId: id,
-        start: startTimestamp,
-        end: endTimestamp,
-        notes: "Pending CurRENT Platform Review (Score 0–29). Does not lock inventory and is never sent to the lender.",
-      });
-      setSuccessNotice(
-        "Request submitted for CurRENT Platform Review (Demo). View in Your Rentals → Platform Review Requests. This request does not lock inventory and is never sent to the lender.",
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    if (!listing) return;
+    router.push({
+      pathname: "/rental-request",
+      params: {
+        listingId: listing.id,
+        start,
+        end,
+        pickupTime,
+        returnTime,
+        collectionMethod: selectedMethod,
+      },
+    });
   }
 
   // Handle Instant Booking checkout confirmation
@@ -263,14 +261,21 @@ export default function ListingDetailScreen() {
           </View>
 
           <Section title={listing.title} />
-          <Text style={s.caption}>
-            {listing.location} · {listing.category} · ★{" "}
-            {listing.id === "sony-a7iii"
-              ? "5.0 (1 review)"
-              : listing.rating
-              ? listing.rating.toFixed(1)
-              : "New"}
-          </Text>
+          <View style={styles.productLocationRow}>
+            <Ionicons
+              name="location-outline"
+              size={15}
+              color={colors.muted}
+            />
+            <Text style={styles.productLocationText}>
+              {listing.location} · {listing.category} · ★{" "}
+              {listing.id === "sony-a7iii"
+                ? "5.0 (1 review)"
+                : listing.rating
+                ? listing.rating.toFixed(1)
+                : "New"}
+            </Text>
+          </View>
 
           <Text style={[s.body, { marginVertical: 20 }]}>
             {listing.description}
@@ -347,14 +352,21 @@ export default function ListingDetailScreen() {
             {/* Header: Location, Rating, Price */}
             <View style={styles.bookingCardHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.bookingLocation}>
-                  {listing.location} · ★{" "}
-                  {listing.id === "sony-a7iii"
-                    ? "5.0 (1 completed rental)"
-                    : listing.rating
-                    ? `${listing.rating.toFixed(1)} rating`
-                    : "New"}
-                </Text>
+                <View style={styles.bookingLocationRow}>
+                  <Ionicons
+                    name="location-outline"
+                    size={13}
+                    color={colors.muted}
+                  />
+                  <Text style={styles.bookingLocation}>
+                    {listing.location} · ★{" "}
+                    {listing.id === "sony-a7iii"
+                      ? "5.0 (1 completed rental)"
+                      : listing.rating
+                      ? `${listing.rating.toFixed(1)} rating`
+                      : "New"}
+                  </Text>
+                </View>
                 <Text style={s.title}>
                   {money(listing.dailyPrice)}
                   <Text style={s.caption}> / day</Text>
@@ -571,9 +583,6 @@ export default function ListingDetailScreen() {
               <View style={{ marginTop: 8 }}>
                 <View style={styles.fieldLabelRow}>
                   <Text style={styles.fieldLabel}>Collection method</Text>
-                  <Text style={styles.fieldSubtext}>
-                    Location: {listing.location}
-                  </Text>
                 </View>
                 <Chips
                   options={methods}
@@ -595,8 +604,41 @@ export default function ListingDetailScreen() {
               </View>
             )}
 
-            {/* Concise Booking Summary */}
-            {quote && (
+            {/* For Very High Risk Renters: Clean Application Preview (not misleading checkout payment) */}
+            {renterRisk?.level === "very_high" && (
+              <View style={styles.reviewApplicationCard}>
+                <View style={styles.reviewApplicationHeader}>
+                  <Ionicons
+                    name="document-text-outline"
+                    size={17}
+                    color={colors.navy}
+                  />
+                  <Text style={styles.reviewApplicationTitle}>
+                    Rental Application
+                  </Text>
+                </View>
+                <Text style={styles.reviewApplicationText}>
+                  This rental is subject to standard CurRENT platform review prior
+                  to booking. Review and submit your rental details on the next
+                  screen.
+                </Text>
+                <View style={styles.reviewApplicationMeta}>
+                  <Text style={styles.reviewApplicationMetaItem}>
+                    Daily rate: {money(listing.dailyPrice)}/day ·{" "}
+                    {quote
+                      ? `${quote.days} ${quote.days === 1 ? "day" : "days"}`
+                      : "Select dates"}
+                  </Text>
+                  <Text style={styles.reviewApplicationMetaItem}>
+                    Estimated rental fee:{" "}
+                    {quote ? money(quote.rentalFee) : "—"}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Concise Booking Summary for eligible direct renters */}
+            {renterRisk?.level !== "very_high" && quote && (
               <View style={styles.summaryContainer}>
                 <Text style={styles.summaryTitle}>Booking Summary</Text>
                 <View style={styles.summaryRow}>
@@ -631,8 +673,6 @@ export default function ListingDetailScreen() {
                           ? "10% (capped at RM1,000)"
                           : "15% (capped at RM1,500)"
                       } refundable deposit based on replacement value. Released automatically upon verified clean return.`
-                    : renterRisk?.level === "very_high"
-                    ? "Score 0–29: Direct checkout is blocked. Requires CurRENT Platform Review."
                     : "Sign in and complete demo eKYC to view your risk-based deposit."}
                 </Text>
                 <View style={styles.summaryDivider} />
@@ -689,9 +729,9 @@ export default function ListingDetailScreen() {
                 ) : renterRisk?.level === "very_high" ? (
                   <Button
                     disabled={!start || !end || !!dateError}
-                    onPress={handleRequestPlatformReview}
+                    onPress={handleNavigateToRequest}
                   >
-                    Request CurRENT Platform Review
+                    Request to Rent
                   </Button>
                 ) : (
                   <Button
@@ -710,11 +750,6 @@ export default function ListingDetailScreen() {
                 )}
               </View>
             )}
-
-            <Text style={styles.instantBookingFooterNotice}>
-              CurRENT confirms eligible bookings automatically after simulated
-              checkout. Lenders cannot accept or reject bookings.
-            </Text>
           </Card>
         </View>
       </View>
@@ -734,17 +769,35 @@ const styles = StyleSheet.create({
   galleryThumbActive: {
     borderColor: colors.blue,
   },
+  productLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: -8,
+    marginBottom: 4,
+    flexWrap: "wrap",
+  },
+  productLocationText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: colors.muted,
+  },
   bookingCardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: 8,
   },
+  bookingLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 4,
+  },
   bookingLocation: {
     fontSize: 12,
     color: colors.muted,
     fontWeight: "600",
-    marginBottom: 4,
   },
   dateBoxesRow: {
     flexDirection: "row",
@@ -1057,12 +1110,42 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: colors.blue,
   },
-  instantBookingFooterNotice: {
-    textAlign: "center",
+  reviewApplicationCard: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  reviewApplicationHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  reviewApplicationTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.navy,
+  },
+  reviewApplicationText: {
     fontSize: 11,
-    lineHeight: 15,
     color: colors.muted,
-    marginTop: 10,
+    lineHeight: 15,
+  },
+  reviewApplicationMeta: {
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 8,
+    padding: 10,
+    gap: 4,
+  },
+  reviewApplicationMetaItem: {
+    fontSize: 12,
+    color: colors.navy,
+    fontWeight: "600",
   },
   checkoutPanel: {
     backgroundColor: "#F8FAFC",
