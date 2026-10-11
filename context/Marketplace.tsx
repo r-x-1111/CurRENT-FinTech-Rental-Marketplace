@@ -19,6 +19,12 @@ import {
   loadMarketplaceWorkspace,
   saveMarketplaceWorkspace,
 } from "../services/marketplacePersistence";
+import {
+  closeDemoWorkspaceSession,
+  loadDemoWorkspaceSession,
+  saveDemoWorkspaceSession,
+  startDemoWorkspaceSession,
+} from "../services/demoWorkspaceSessions";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 function createLoggedOutState(): Marketplace {
@@ -30,9 +36,11 @@ function createLoggedOutState(): Marketplace {
 const Context = createContext<{
   state: Marketplace;
   act: (action: Action) => void;
+  actAndPersist: (action: Action) => Promise<void>;
   activateAuthenticatedWorkspace: (
     account: AuthenticatedMarketplaceAccount,
   ) => Promise<void>;
+  closeAuthenticatedWorkspace: () => Promise<void>;
   storageError: string;
 }>(null!);
 
@@ -61,6 +69,10 @@ function accountFromSession(user: {
         typeof user.user_metadata.full_name === "string"
           ? user.user_metadata.full_name
           : "Alex Tan",
+      phone:
+        typeof user.user_metadata.phone === "string"
+          ? user.user_metadata.phone
+          : undefined,
       verified: true,
     };
   }
@@ -78,6 +90,10 @@ function accountFromSession(user: {
       typeof user.user_metadata.full_name === "string"
         ? user.user_metadata.full_name
         : email.split("@")[0],
+    phone:
+      typeof user.user_metadata.phone === "string"
+        ? user.user_metadata.phone
+        : undefined,
     verified: metadata.verification_status === "verified",
   };
 }
@@ -114,23 +130,23 @@ export function MarketplaceProvider({
             ? accountFromSession(session.user)
             : null;
           if (account) {
-            const workspace = await loadMarketplaceWorkspace(
-              supabase,
-              account.id,
-              account.accountKind,
-            );
-            restored =
-              workspace ??
-              (account.accountKind === "demo"
-                ? createSeed("admin_demo")
-                : createNormalAccountWorkspace(account));
-            if (!workspace) {
-              await saveMarketplaceWorkspace(
+            if (account.accountKind === "demo") {
+              restored = loadDemoWorkspaceSession(account.id);
+            } else {
+              const workspace = await loadMarketplaceWorkspace(
                 supabase,
                 account.id,
                 account.accountKind,
-                restored,
               );
+              restored = workspace ?? createNormalAccountWorkspace(account);
+              if (!workspace) {
+                await saveMarketplaceWorkspace(
+                  supabase,
+                  account.id,
+                  account.accountKind,
+                  restored,
+                );
+              }
             }
             authOwnerId.current = account.id;
             authAccountKind.current = account.accountKind;
@@ -152,7 +168,7 @@ export function MarketplaceProvider({
           setState(loggedOut);
           setStorageError(
             isSupabaseConfigured
-              ? "Supabase account data could not be loaded or saved. Confirm that both SQL migrations are applied and account RLS is enabled."
+              ? "Supabase account data could not be loaded. Please sign in again."
               : "Saved data or authentication session could not be read. Please sign in again.",
           );
         }
@@ -172,23 +188,25 @@ export function MarketplaceProvider({
     if (!supabase || !isSupabaseConfigured) {
       throw new Error("Supabase authentication is not configured.");
     }
-    const workspace = await loadMarketplaceWorkspace(
-      supabase,
-      account.id,
-      account.accountKind,
-    );
-    const authenticatedState =
-      workspace ??
-      (account.accountKind === "demo"
-        ? createSeed("admin_demo")
-        : createNormalAccountWorkspace(account));
-    if (!workspace) {
-      await saveMarketplaceWorkspace(
+    let authenticatedState: Marketplace;
+    if (account.accountKind === "demo") {
+      authenticatedState = startDemoWorkspaceSession(account.id);
+    } else {
+      const workspace = await loadMarketplaceWorkspace(
         supabase,
         account.id,
         account.accountKind,
-        authenticatedState,
       );
+      authenticatedState =
+        workspace ?? createNormalAccountWorkspace(account);
+      if (!workspace) {
+        await saveMarketplaceWorkspace(
+          supabase,
+          account.id,
+          account.accountKind,
+          authenticatedState,
+        );
+      }
     }
     authOwnerId.current = account.id;
     authAccountKind.current = account.accountKind;
@@ -211,16 +229,84 @@ export function MarketplaceProvider({
     const accountKind = authAccountKind.current;
     if (ownerId && accountKind && supabase) {
       writes.current = writes.current
-        .then(() =>
-          saveMarketplaceWorkspace(supabase!, ownerId, accountKind, next),
-        )
+        .then(() => {
+          if (accountKind === "demo") {
+            saveDemoWorkspaceSession(ownerId, next);
+            return;
+          }
+          return saveMarketplaceWorkspace(supabase!, ownerId, accountKind, next);
+        })
         .then(() => setStorageError(""))
         .catch(() =>
           setStorageError(
-            "Changes are in memory, but could not be saved to Supabase. Check the workspace migration and RLS policy.",
+            accountKind === "demo"
+              ? "Demo changes could not be saved in this browser session."
+              : "Changes are in memory, but could not be saved to Supabase.",
           ),
         );
     }
+  }
+
+  async function actAndPersist(action: Action) {
+    const previous = current.current;
+    const next = transition(previous, action);
+    current.current = next;
+    setState(next);
+
+    const ownerId = authOwnerId.current;
+    const accountKind = authAccountKind.current;
+    const client = supabase;
+    if (!ownerId || !accountKind || !client) {
+      current.current = previous;
+      setState(previous);
+      throw new Error(
+        "Your authenticated Supabase workspace is unavailable. The change was not saved.",
+      );
+    }
+
+    const save = writes.current.then(() => {
+      if (accountKind === "demo") {
+        saveDemoWorkspaceSession(ownerId, next);
+        return;
+      }
+      return saveMarketplaceWorkspace(client, ownerId, accountKind, next);
+    });
+    writes.current = save.then(
+      () => undefined,
+      () => undefined,
+    );
+    try {
+      await save;
+      setStorageError("");
+    } catch {
+      if (current.current === next) {
+        current.current = previous;
+        setState(previous);
+      }
+
+      setStorageError(
+        accountKind === "demo"
+          ? "The Demo change could not be saved in this browser session."
+          : "The change could not be saved to Supabase.",
+      );
+      throw new Error(
+        action.type === "booking"
+          ? "Cancellation could not be saved. Your booking has been restored; please try again."
+          : action.type === "instantBook"
+            ? "Booking could not be saved. No booking was confirmed; please try again."
+            : "The change could not be saved. Please try again.",
+      );
+    }
+  }
+
+  async function closeAuthenticatedWorkspace() {
+    const ownerId = authOwnerId.current;
+    if (authAccountKind.current === "demo" && ownerId) {
+      await writes.current;
+      closeDemoWorkspaceSession(ownerId);
+    }
+    authOwnerId.current = null;
+    authAccountKind.current = null;
   }
 
   if (!ready) {
@@ -240,7 +326,14 @@ export function MarketplaceProvider({
   }
   return (
     <Context.Provider
-      value={{ state, act, activateAuthenticatedWorkspace, storageError }}
+      value={{
+        state,
+        act,
+        actAndPersist,
+        activateAuthenticatedWorkspace,
+        closeAuthenticatedWorkspace,
+        storageError,
+      }}
     >
       <View style={{ flex: 1 }}>
         {storageError ? (

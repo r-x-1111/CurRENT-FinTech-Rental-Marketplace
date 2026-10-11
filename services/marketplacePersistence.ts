@@ -26,6 +26,7 @@ export function createNormalAccountWorkspace(account: {
   id: string;
   email: string;
   name: string;
+  phone?: string;
   verified: boolean;
 }): Marketplace {
   const state = createSeed("normal");
@@ -36,6 +37,7 @@ export function createNormalAccountWorkspace(account: {
     id: account.id,
     name: account.name,
     email: account.email,
+    ...(account.phone ? { phone: account.phone } : {}),
     verification: account.verified ? "verified" : "not_verified",
     favourites: [],
     riskScore: account.verified ? 80 : null,

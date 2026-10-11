@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Chips,
   Empty,
   Field,
   Notice,
@@ -23,10 +24,13 @@ import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { signOutAuthenticatedAccount } from "../../services/auth";
 
 export default function ProfileScreen() {
-  const { state, user, act } = useMarketplace();
+  const { state, user, act, closeAuthenticatedWorkspace } = useMarketplace();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [documentType, setDocumentType] = useState("MyKad");
+  const [sampledDocuments, setSampledDocuments] = useState<string[]>([]);
+  const [scanningFace, setScanningFace] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -35,14 +39,9 @@ export default function ProfileScreen() {
   }
 
   const risk = riskFor(state, user);
-  const reviews = state.reviews.filter((r) => r.recipientId === user.id);
   const completed = state.bookings.filter(
     (b) => b.renterId === user.id && b.status === "completed",
   ).length;
-  const cleanPoints = (user.riskHistory || []).reduce(
-    (acc, item) => acc + (item.effectiveAdjustment === 2 ? 2 : 0),
-    0,
-  );
   const netPoints = (user.riskHistory || []).reduce(
     (acc, item) => acc + item.effectiveAdjustment,
     0,
@@ -52,7 +51,11 @@ export default function ProfileScreen() {
     try {
       act({ type: "verify", status });
       setError("");
-      setSuccess(`Verification updated to ${status}.`);
+      setSuccess(
+        status === "verified"
+          ? "Demo Verification Successful. Your initial verified score is 80 (Low)."
+          : `Verification updated to ${status}.`,
+      );
     } catch (e) {
       setError((e as Error).message);
     }
@@ -172,39 +175,106 @@ export default function ProfileScreen() {
 
       <Button onPress={() => router.push("/owner")}>Lender Mode</Button>
 
-      {/* Identity Verification (Demo eKYC) - Hidden when already verified */}
-      {user.verification !== "verified" && (
-        <>
-          <Section title="Identity Verification (Demo eKYC)" />
-          <Card>
-            <Badge text={user.verification} green={false} />
+      <Section title="Identity Verification (Demo eKYC)" />
+      <Card>
+        {user.verification === "verified" ? (
+          <>
+            <Text style={s.caption}>Simulated eKYC — Demo Only</Text>
+            <View style={styles.verificationStage}>
+              <Ionicons name="checkmark-circle" size={20} color="#167A53" />
+              <Text style={styles.verificationStageText}>
+                Identity Document — Completed
+              </Text>
+            </View>
+            <View style={styles.verificationStage}>
+              <Ionicons name="checkmark-circle" size={20} color="#167A53" />
+              <Text style={styles.verificationStageText}>
+                Face Verification — Completed
+              </Text>
+            </View>
+          </>
+        ) : (
+          <>
             <Text style={s.caption}>
-              Simulate an external eKYC identity provider. In this classroom
-              demo, no real identity documents or biometrics are collected. Upon
-              successful verification, every newly verified renter begins at
-              strictly 80/100 (Low Risk).
+              Simulated eKYC — Demo Only. No real identity documents or
+              biometric data are collected.
             </Text>
-            {["not_verified", "failed"].includes(user.verification) && (
-              <Button onPress={() => verify("pending")}>
-                {user.verification === "failed"
-                  ? "Retry demo verification"
-                  : "Start demo verification"}
-              </Button>
-            )}
-            {user.verification === "pending" && (
-              <>
-                <Notice text="Verification pending. Choose a simulated provider response to test either outcome." />
-                <Button onPress={() => verify("verified")}>
-                  Simulate verified result (Initial Score 80 · Low)
+            <Chips
+              options={["MyKad", "Passport"]}
+              selected={documentType}
+              onSelect={(value) => {
+                setDocumentType(value);
+                setSampledDocuments([]);
+              }}
+            />
+            {(documentType === "MyKad"
+              ? ["Front", "Back"]
+              : ["Photo Page"]
+            ).map((side) => {
+              const key = `${documentType} ${side}`;
+              const selected = sampledDocuments.includes(key);
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select fictional ${key} sample photo`}
+                  accessibilityState={{ selected }}
+                  onPress={() =>
+                    setSampledDocuments((current) =>
+                      current.includes(key) ? current : [...current, key],
+                    )
+                  }
+                  style={styles.samplePhotoTile}
+                >
+                  <Ionicons
+                    name={selected ? "checkmark-circle" : "camera-outline"}
+                    size={24}
+                    color={selected ? "#167A53" : colors.blue}
+                  />
+                  <Text style={styles.verificationStageText}>
+                    {documentType === "MyKad"
+                      ? `${side} of MyKad`
+                      : "Passport Photo Page"}
+                  </Text>
+                  <Text style={s.caption}>
+                    {selected ? "Sample photo added (Demo)" : "Tap to select sample"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <View style={styles.verificationStage}>
+              <Ionicons name="scan-outline" size={22} color={colors.blue} />
+              <Text style={styles.verificationStageText}>
+                Face Verification — Simulated face scan
+              </Text>
+            </View>
+            {(() => {
+              const requiredSamples =
+                documentType === "MyKad"
+                  ? ["MyKad Front", "MyKad Back"]
+                  : ["Passport Photo Page"];
+              const documentsReady = requiredSamples.every((item) =>
+                sampledDocuments.includes(item),
+              );
+              return (
+                <Button
+                  disabled={!documentsReady || scanningFace}
+                  onPress={async () => {
+                    setScanningFace(true);
+                    await new Promise((resolve) => setTimeout(resolve, 900));
+                    setScanningFace(false);
+                    verify("verified");
+                  }}
+                >
+                  {scanningFace
+                    ? "Scanning…"
+                    : "Start Demo Face Scan"}
                 </Button>
-                <Button secondary onPress={() => verify("failed")}>
-                  Simulate failed result
-                </Button>
-              </>
-            )}
-          </Card>
-        </>
-      )}
+              );
+            })()}
+          </>
+        )}
+      </Card>
 
       {/* Rental Risk Score Section */}
       <Section title="Rental Risk Score" />
@@ -261,7 +331,8 @@ export default function ProfileScreen() {
           <Text style={styles.rulesBullet}>
             • Late return: If the item is returned later than the scheduled
             return delivery time, 5 points will be deducted from your Rental
-            Risk Score.
+            Risk Score when actual lateness is confirmed by reliable return-time
+            evidence.
           </Text>
           <Text style={styles.rulesBullet}>
             • −10 points: Confirmed minor damage.
@@ -425,6 +496,7 @@ export default function ProfileScreen() {
         accessibilityLabel="Sign out"
         onPress={async () => {
           try {
+            await closeAuthenticatedWorkspace();
             if (isSupabaseConfigured && supabase) {
               await signOutAuthenticatedAccount(supabase.auth);
             }
@@ -476,6 +548,31 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     borderTopWidth: 1,
     borderColor: colors.softBlue,
+  },
+  verificationStage: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  verificationStageText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  samplePhotoTile: {
+    minHeight: 88,
+    marginTop: 10,
+    padding: 12,
+    gap: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.blue,
+    backgroundColor: colors.paleBlue,
+    borderRadius: 12,
   },
   supportNavCard: {
     backgroundColor: "white",

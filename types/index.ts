@@ -44,7 +44,7 @@ export interface Listing {
   title: string;
   category: string;
   dailyPrice: number;
-  estimatedValue: number;
+  estimatedValue?: number;
   ownerEstimatedValue?: number;
   location: string;
   publicArea?: string;

@@ -1,5 +1,11 @@
-import { useState } from "react";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Image,
+  Modal,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -18,12 +24,10 @@ import {
   s,
 } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
-import {
-  calculateBorrowerServiceFee,
-  calculateOwnerPayout,
-} from "../../services/deposit";
+import { calculateOwnerPayout } from "../../services/deposit";
 import {
   formatMalaysiaDateTime,
+  getEffectiveBookingStatus,
   isCancellationEligible,
   money,
   parseMalaysiaTimestamp,
@@ -36,8 +40,15 @@ import {
 
 export default function RentalDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { state, user, act } = useMarketplace();
+  const { state, user, actAndPersist } = useMarketplace();
   const [error, setError] = useState("");
+  const [successNotice, setSuccessNotice] = useState("");
+  const [cancelConfirmationVisible, setCancelConfirmationVisible] =
+    useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isSavingAction, setIsSavingAction] = useState(false);
+  const cancellationInProgress = useRef(false);
   const [checkInPhotos, setCheckInPhotos] = useState<string[]>([]);
   const [checkInVideos, setCheckInVideos] = useState<string[]>([]);
   const [checkInNotes, setCheckInNotes] = useState("");
@@ -46,16 +57,20 @@ export default function RentalDetail() {
   const [returnVideos, setReturnVideos] = useState<string[]>([]);
   const [returnNotes, setReturnNotes] = useState("");
   const [checkOutIssue, setCheckOutIssue] = useState("");
-  const [disputePhotos, setDisputePhotos] = useState<string[]>([]);
-  const [disputeVideos, setDisputeVideos] = useState<string[]>([]);
   const [disputeNotes, setDisputeNotes] = useState("");
-  const [method, setMethod] = useState("Demo card");
   const [rating, setRating] = useState("5");
   const [review, setReview] = useState("");
   const [dispute, setDispute] = useState(false);
   const [disputeCategory, setDisputeCategory] = useState("Item damaged");
-  const [extensionDays, setExtensionDays] = useState("1");
   const [returnNotice, setReturnNotice] = useState("");
+  const [checkOutOffset, setCheckOutOffset] = useState<number | null>(null);
+  const [scrollToY, setScrollToY] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const b = state.bookings.find(
     (b) => b.id === id && [b.renterId, b.ownerId].includes(user?.id || ""),
@@ -77,7 +92,8 @@ export default function RentalDetail() {
       </Screen>
     );
 
-  const rental = b;
+  const effectiveStatus = getEffectiveBookingStatus(b, now);
+  const rental = { ...b, status: effectiveStatus };
   const owner = user.id === b.ownerId;
   const other = state.profiles.find(
     (p) => p.id === (owner ? b.renterId : b.ownerId),
@@ -90,13 +106,15 @@ export default function RentalDetail() {
   const renter = state.profiles.find((profile) => profile.id === b.renterId);
   const currentRisk = renter ? riskFor(state, renter) : null;
   const listing = state.listings.find((l) => l.id === b.listingId);
+  const startMs = parseMalaysiaTimestamp(b.start);
+  const endMs = parseMalaysiaTimestamp(b.end);
+  const isStartReached = now >= startMs;
+  const isEndReached = now >= endMs;
 
   const steps = ["Confirmed", "Delivery", "Active", "Return", "Complete"];
   const stepIndex =
     (
       {
-        pending: 0,
-        approved: 0,
         upcoming: 0,
         active: 2,
         return_pending: 3,
@@ -104,41 +122,77 @@ export default function RentalDetail() {
         disputed: 3,
         cancelled: -1,
       } as Record<string, number>
-    )[b.status] ?? -1;
+    )[effectiveStatus] ?? -1;
 
-  function run(action: Action) {
+  async function run(action: Action) {
+    if (isSavingAction) return;
     try {
-      act(action);
+      setIsSavingAction(true);
       setError("");
+      setSuccessNotice("");
+      await actAndPersist(action);
       setCheckInPhotos([]);
       setCheckInVideos([]);
       setCheckInNotes("");
       setReturnPhotos([]);
       setReturnVideos([]);
       setReturnNotes("");
-      setDisputePhotos([]);
-      setDisputeVideos([]);
       setDisputeNotes("");
       setDispute(false);
+      if (action.type === "returnConfirm" && action.role === "owner") {
+        setSuccessNotice(
+          "Rental completed. The simulated deposit ledger was released once; no real money was transferred.",
+        );
+      } else if (action.type === "dispute") {
+        setSuccessNotice(
+          "Dispute submitted and saved. The simulated deposit remains held pending authorised resolution.",
+        );
+      } else if (action.type === "returnConfirm") {
+        setSuccessNotice(
+          "Return evidence and confirmation were saved. The simulated deposit remains held for lender review.",
+        );
+      } else if (action.type === "conditionEvidence") {
+        setSuccessNotice("Condition evidence submitted and saved.");
+      } else if (action.type === "reportIssue") {
+        setSuccessNotice("Issue report submitted and saved for the lender.");
+      } else if (action.type === "confirmReceived") {
+        setSuccessNotice("Delivery receipt saved.");
+      }
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setIsSavingAction(false);
     }
   }
 
   function operation(
     operation: Extract<Action, { type: "booking" }>["operation"],
   ) {
-    run({ type: "booking", id, operation, method });
+    if (operation !== "cancel") return;
+    setCancelError("");
+    setCancelConfirmationVisible(true);
   }
 
-  const cancelEligible = b.scheduledPickup
-    ? isCancellationEligible(b.scheduledPickup)
-    : isCancellationEligible(b.start);
+  async function confirmCancellation() {
+    if (cancellationInProgress.current) return;
+    cancellationInProgress.current = true;
+    setIsCancelling(true);
+    setCancelError("");
+    try {
+      await actAndPersist({ type: "booking", id, operation: "cancel" });
+      setCancelConfirmationVisible(false);
+      setSuccessNotice(
+        "Booking cancelled. The simulated ledger now shows the rental and service fees as refunded and the deposit as released. No real payment or refund occurred.",
+      );
+    } catch (e) {
+      setCancelError((e as Error).message);
+    } finally {
+      cancellationInProgress.current = false;
+      setIsCancelling(false);
+    }
+  }
 
-  const extDaysNum = parseInt(extensionDays, 10) || 1;
-  const extRentalFee = listing ? listing.dailyPrice * extDaysNum : 0;
-  const extServiceFee = calculateBorrowerServiceFee(extRentalFee);
-  const extTotal = extRentalFee + extServiceFee;
+  const cancelEligible = isCancellationEligible(b.start);
 
   const checkInEvidence = state.evidence.find(
     (e) => e.bookingId === id && e.kind === "check_in",
@@ -154,13 +208,12 @@ export default function RentalDetail() {
   );
   const isDelivered =
     !!b.renterReceivedAt ||
-    ["active", "return_pending", "completed", "disputed"].includes(b.status);
-  const isReturnEligible = [
-    "active",
-    "return_pending",
-    "completed",
-    "disputed",
-  ].includes(b.status);
+    ["active", "return_pending", "completed", "disputed"].includes(
+      effectiveStatus,
+    );
+  const isReturnEligible =
+    (effectiveStatus === "active" && isEndReached) ||
+    ["return_pending", "completed", "disputed"].includes(effectiveStatus);
   function renderIssueReport(
     stage: "check_in" | "check_out",
     stageAvailable: boolean,
@@ -219,13 +272,6 @@ export default function RentalDetail() {
     );
   }
 
-  const startMs = parseMalaysiaTimestamp(b.scheduledPickup || b.start);
-  const endMs = parseMalaysiaTimestamp(
-    b.effectiveReturnDeadline || b.scheduledReturn || b.end,
-  );
-  const nowMs = Date.now();
-  const isStartReached = nowMs >= startMs;
-  const isEndReached = nowMs >= endMs;
   const confirmationStatus: Record<string, string> = {
     pending: "Pending",
     approved: "Approved",
@@ -251,7 +297,7 @@ export default function RentalDetail() {
         ) : isStartReached ? (
           <Button
             onPress={() =>
-              run({ type: "handoverConfirm", bookingId: id, role: "renter" })
+              run({ type: "confirmReceived", bookingId: id })
             }
           >
             Confirm Received — Delivered item successfully received
@@ -274,26 +320,30 @@ export default function RentalDetail() {
           <Button disabled secondary onPress={() => {}}>
             ✓ Return Confirmed · Awaiting Lender Review
           </Button>
-        ) : isEndReached ? (
-          <Button
-            onPress={() => {
-              setReturnNotice(
-                "Add at least 6 photos and 1 video before confirming return.",
-              );
-            }}
-          >
-            Confirm Item Return
-          </Button>
         ) : (
           <View style={{ gap: 4 }}>
-            <Button disabled secondary onPress={() => {}}>
-              {`Available from ${formatMalaysiaDateTime(endMs)}`}
-            </Button>
-            <Text
-              style={[s.caption, { textAlign: "center", color: colors.muted }]}
+            <Button
+              disabled={!isEndReached}
+              secondary={!isEndReached}
+              onPress={() => {
+                setReturnNotice(
+                  "Add at least 6 photos and 1 video before confirming return.",
+                );
+                setScrollToY(checkOutOffset);
+              }}
             >
-              {`Item return unlocks at ${formatMalaysiaDateTime(endMs)}`}
-            </Text>
+              Confirm Item Return
+            </Button>
+            {!isEndReached && (
+              <Text
+                style={[
+                  s.caption,
+                  { textAlign: "center", color: colors.muted },
+                ]}
+              >
+                {`Available from ${formatMalaysiaDateTime(endMs)}`}
+              </Text>
+            )}
           </View>
         )}
       </View>
@@ -301,7 +351,7 @@ export default function RentalDetail() {
   }
 
   return (
-    <Screen back title="Rental details">
+    <Screen back title="Rental details" scrollToY={scrollToY}>
       <Card>
         <View
           style={{
@@ -313,9 +363,9 @@ export default function RentalDetail() {
         >
           <Text style={[s.h2, { flex: 1 }]}>Rental Confirmation</Text>
           <Badge
-            text={confirmationStatus[b.status] || b.status}
+            text={confirmationStatus[effectiveStatus] || effectiveStatus}
             green={["upcoming", "confirmed", "active", "completed"].includes(
-              b.status,
+              effectiveStatus,
             )}
           />
         </View>
@@ -337,7 +387,7 @@ export default function RentalDetail() {
             <Text style={[s.body, { textAlign: "right" }]}>
               to{" "}
               {formatMalaysiaDateTime(
-                b.effectiveReturnDeadline || b.scheduledReturn || b.end,
+                b.end,
               )}
             </Text>
             <Text style={s.caption}>
@@ -383,116 +433,29 @@ export default function RentalDetail() {
       )}
 
       {!!error && <Notice text={error} error />}
-
-      {/* PENDING APPROVAL */}
-      {b.status === "pending" && (
-        <Card>
-          <Text style={s.h2}>
-            {owner ? "A new rental request" : "Waiting for owner approval"}
-          </Text>
-          <Text style={s.caption}>
-            {owner
-              ? `Renter risk score at request: ${b.riskScore}/100. Deposit: ${money(b.quote.deposit)}.`
-              : "The owner will review your dates. You will be notified here when they respond."}
-          </Text>
-          {owner && (
-            <>
-              <Row
-                label="Identity"
-                value={renter?.verification.replace("_", " ") || "Unknown"}
-              />
-              <Row
-                label="Rental Risk Score"
-                value={`${b.riskScore}/100 (${currentRisk?.label || "Low"})`}
-              />
-              <Button onPress={() => operation("approve")}>
-                Approve request
-              </Button>
-              <Button secondary onPress={() => operation("reject")}>
-                Decline request
-              </Button>
-            </>
-          )}
-          <Button secondary onPress={() => operation("cancel")}>
-            Cancel request
-          </Button>
-        </Card>
-      )}
-
-      {/* APPROVED / CHECKOUT */}
-      {b.status === "approved" && !owner && (
-        <Card>
-          <Text style={s.h2}>Your item is reserved</Text>
-          <Notice text="Simulated FPX Checkout (Demo). No real funds or banking credentials required. Booking will be confirmed automatically." />
-          <Chips
-            options={["Demo FPX"]}
-            selected="Demo FPX"
-            onSelect={() => {}}
-          />
-          {b.payment === "processing" ? (
-            <>
-              <Badge text="Payment processing · awaiting simulated provider" />
-              <Button onPress={() => operation("payment_result")}>
-                Simulate successful payment
-              </Button>
-              <Button
-                secondary
-                onPress={() =>
-                  run({
-                    type: "booking",
-                    id,
-                    operation: "payment_result",
-                    failed: true,
-                  })
-                }
-              >
-                Simulate failed payment
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button onPress={() => operation("pay")}>
-                {b.payment === "failed"
-                  ? "Retry demo payment"
-                  : `Pay ${money(b.quote.total)} · demo`}
-              </Button>
-              <Button secondary onPress={() => operation("cancel")}>
-                Cancel unpaid rental
-              </Button>
-            </>
-          )}
-        </Card>
-      )}
-
-      {b.status === "approved" && owner && (
-        <Notice text="Approved. Waiting for renter to complete demo checkout." />
-      )}
+      {!!successNotice && <Notice text={successNotice} />}
 
       {/* UPCOMING / DELIVERY FULFILMENT */}
-      {b.status === "upcoming" && (
+      {effectiveStatus === "upcoming" && (
         <Card>
           <Text style={s.h2}>Upcoming Rental (Confirmed)</Text>
           <Text style={s.caption}>
-            Fulfilment is delivery-only. Rental automatically activates at
-            scheduled start time ({b.scheduledPickup || b.start}).
+            Fulfilment is delivery-only. The rental automatically displays
+            Active at {formatMalaysiaDateTime(b.start)}.
           </Text>
 
           <View style={{ marginVertical: 12, gap: 8 }}>
             <Row
               label="Scheduled Rental Start"
               value={
-                formatMalaysiaDateTime(b.scheduledPickup || b.start) ||
-                b.scheduledPickup ||
-                b.start
+                formatMalaysiaDateTime(b.start) || b.start
               }
               strong
             />
             <Row
               label="Scheduled Return"
               value={
-                formatMalaysiaDateTime(b.scheduledReturn || b.end) ||
-                b.scheduledReturn ||
-                b.end
+                formatMalaysiaDateTime(b.end) || b.end
               }
             />
             <Row
@@ -506,69 +469,8 @@ export default function RentalDetail() {
             />
           </View>
 
-          {/* Option A Delayed Schedule Conflict Card (if applicable) */}
-          {b.conflictOffer && (
-            <View
-              style={{
-                backgroundColor: "#FFF8E7",
-                borderColor: "#FFE08A",
-                borderWidth: 1,
-                borderRadius: 10,
-                padding: 14,
-                marginVertical: 10,
-              }}
-            >
-              <Text style={[s.bold, { color: "#975A16" }]}>
-                ⚠️ Scheduling Conflict — Revised Rental Offer Required (Demo)
-              </Text>
-              <Text style={[s.caption, { color: "#744210", marginTop: 4 }]}>
-                A schedule overlap was detected with a subsequent confirmed
-                booking. In accordance with Founder Option A, the next booking
-                is protected. Review your revised rental terms below:
-              </Text>
-              <View style={{ marginTop: 8, gap: 4 }}>
-                <Row
-                  label="Revised Return Deadline"
-                  value={new Date(b.conflictOffer.revisedEnd).toLocaleString()}
-                />
-                <Row
-                  label="Revised Billable Days"
-                  value={`${b.conflictOffer.revisedRentalDays} days`}
-                />
-                <Row
-                  label="Original Rental Fee"
-                  value={money(b.conflictOffer.originalRentalFee)}
-                />
-                <Row
-                  label="Revised Rental Fee"
-                  value={money(b.conflictOffer.revisedRentalFee)}
-                />
-                <Row
-                  label="Simulated Refund"
-                  value={money(b.conflictOffer.refundAmount)}
-                  strong
-                />
-                <Row
-                  label="Deposit Retained"
-                  value={money(b.conflictOffer.depositRetained)}
-                />
-              </View>
-              {!owner ? (
-                <Button
-                  onPress={() =>
-                    run({ type: "acceptRevisedRental", bookingId: id })
-                  }
-                >
-                  Accept Revised Rental Offer & Activate
-                </Button>
-              ) : (
-                <Notice text="Waiting for renter to review and accept the revised conflict-free schedule." />
-              )}
-            </View>
-          )}
-
           {/* Renter Action Buttons (Two-Button Time-Gated Design) */}
-          {!owner && !b.conflictOffer && renderRenterActionButtons()}
+          {!owner && renderRenterActionButtons()}
 
           {/* Cancellation Window */}
           <View
@@ -582,14 +484,12 @@ export default function RentalDetail() {
             <Text style={s.caption}>
               Cancellation Cutoff: Free cancellation until at least 24 hours
               before scheduled start (
-              {formatMalaysiaDateTime(b.scheduledPickup || b.start) ||
-                b.scheduledPickup ||
-                b.start}
+              {formatMalaysiaDateTime(b.start) || b.start}
               ).
             </Text>
             {cancelEligible ? (
               <Button secondary onPress={() => operation("cancel")}>
-                Cancel Booking (100% Refund & RM0 Fee)
+                Cancel Booking (100% Simulated Refund & RM0 Fee)
               </Button>
             ) : (
               <Notice text="Cancellation window closed. Free cancellation is only available at least 24 hours before scheduled start." />
@@ -598,8 +498,8 @@ export default function RentalDetail() {
         </Card>
       )}
 
-      {/* ACTIVE RENTAL / CONSECUTIVE EXTENSION (PHASE 4) */}
-      {b.status === "active" && (
+      {/* ACTIVE RENTAL */}
+      {effectiveStatus === "active" && (
         <>
           <Card>
             <Text style={s.h2}>Rental is Active</Text>
@@ -611,20 +511,13 @@ export default function RentalDetail() {
               <Row
                 label="Scheduled Rental Start"
                 value={
-                  formatMalaysiaDateTime(b.scheduledPickup || b.start) ||
-                  b.scheduledPickup ||
-                  b.start
+                  formatMalaysiaDateTime(b.start) || b.start
                 }
               />
               <Row
-                label="Effective Return Deadline"
+                label="Scheduled Return"
                 value={
-                  formatMalaysiaDateTime(
-                    b.effectiveReturnDeadline || b.scheduledReturn || b.end,
-                  ) ||
-                  b.effectiveReturnDeadline ||
-                  b.scheduledReturn ||
-                  b.end
+                  formatMalaysiaDateTime(b.end) || b.end
                 }
                 strong
               />
@@ -646,76 +539,6 @@ export default function RentalDetail() {
             {/* Renter Action Buttons (Two-Button Time-Gated Design) */}
             {!owner && renderRenterActionButtons()}
 
-            {/* Consecutive Chain Extension (Phase 4) */}
-            {!owner && (
-              <View
-                style={{
-                  backgroundColor: "#F0F9FF",
-                  borderColor: "#BAE6FD",
-                  borderWidth: 1,
-                  borderRadius: 10,
-                  padding: 14,
-                  marginTop: 12,
-                }}
-              >
-                <Text style={[s.bold, { color: "#0369A1" }]}>
-                  Extend Rental (Consecutive Chain)
-                </Text>
-                <Text style={[s.caption, { color: "#0284C7", marginTop: 4 }]}>
-                  Keep the item longer without interrupting your rental. Charges
-                  additional daily rental and 5% service fee (min RM5) with RM0
-                  extra deposit.
-                </Text>
-                <Chips
-                  options={["1", "2", "3", "5"]}
-                  selected={extensionDays}
-                  onSelect={setExtensionDays}
-                />
-                <View style={{ marginVertical: 6, gap: 4 }}>
-                  <Row label="Additional Days" value={`${extDaysNum} days`} />
-                  <Row
-                    label="Additional Rental Fee"
-                    value={money(extRentalFee)}
-                  />
-                  <Row
-                    label="Additional Service Fee"
-                    value={money(extServiceFee)}
-                  />
-                  <Row
-                    label="Extra Security Deposit"
-                    value="RM0.00 (Retains first deposit)"
-                    strong
-                  />
-                  <Row
-                    label="Total Extension Charge"
-                    value={money(extTotal)}
-                    strong
-                  />
-                </View>
-                <Button
-                  onPress={() =>
-                    run({
-                      type: "consecutiveExtend",
-                      bookingId: id,
-                      additionalDays: extDaysNum,
-                    })
-                  }
-                >
-                  Confirm Extension ({money(extTotal)} · Demo)
-                </Button>
-              </View>
-            )}
-
-            {b.chainBookings && b.chainBookings.length > 0 && (
-              <View style={{ marginTop: 12 }}>
-                <Text style={s.bold}>Chain Extension History:</Text>
-                {b.chainBookings.map((chain, idx) => (
-                  <Text key={idx} style={s.caption}>
-                    • {chain}
-                  </Text>
-                ))}
-              </View>
-            )}
           </Card>
         </>
       )}
@@ -858,7 +681,14 @@ export default function RentalDetail() {
       </Card>
 
       {/* STAGE 2: CHECK-OUT — BEFORE RETURN */}
-      <Card>
+      <Card
+        onLayout={(event) => {
+          const offset = event.nativeEvent.layout.y;
+          setCheckOutOffset((current) =>
+            current === offset ? current : offset,
+          );
+        }}
+      >
         <View
           style={{
             flexDirection: "row",
@@ -868,7 +698,7 @@ export default function RentalDetail() {
           }}
         >
           <Text style={s.h2}>Check-out — Before Return</Text>
-          {b.status === "completed" ? (
+          {effectiveStatus === "completed" ? (
             <Badge text="Settled — No Issues" green />
           ) : checkOutEvidence || b.renterReturnConfirmedAt ? (
             <Badge text="Return Confirmed" />
@@ -888,7 +718,7 @@ export default function RentalDetail() {
         {!isReturnEligible ? (
           <>
             <Text style={s.caption}>
-              Check-out condition evidence will be available before return.
+              {`Check-out condition evidence will be available from ${formatMalaysiaDateTime(endMs)}.`}
             </Text>
             <MediaPicker
               disabled
@@ -1095,10 +925,12 @@ export default function RentalDetail() {
 
             {renderIssueReport("check_out", isReturnEligible && isEndReached)}
 
-            {["active", "return_pending"].includes(b.status) && (
+            {["active", "return_pending"].includes(effectiveStatus) && (
               <View style={{ marginTop: 14, gap: 10 }}>
                 <Button
-                  disabled={!b.renterReturnConfirmedAt || !!dispute}
+                  disabled={
+                    isSavingAction || !b.renterReturnConfirmedAt || !!dispute
+                  }
                   onPress={() =>
                     run({
                       type: "returnConfirm",
@@ -1116,8 +948,6 @@ export default function RentalDetail() {
                   secondary
                   onPress={() => {
                     setDispute(!dispute);
-                    setDisputePhotos([]);
-                    setDisputeVideos([]);
                     setDisputeNotes("");
                   }}
                 >
@@ -1133,7 +963,7 @@ export default function RentalDetail() {
               </View>
             )}
 
-            {b.status === "completed" && (
+            {effectiveStatus === "completed" && (
               <View
                 style={{
                   backgroundColor: "#ECFDF5",
@@ -1184,29 +1014,15 @@ export default function RentalDetail() {
             multiline
             placeholder="Provide specific details of damage or missing items."
           />
-          <MediaPicker
-            title="Dispute Evidence Media"
-            subtitle="Attach photos and/or videos documenting damage, defect or missing accessories."
-            photos={disputePhotos}
-            onPhotosChange={setDisputePhotos}
-            videos={disputeVideos}
-            onVideosChange={setDisputeVideos}
-            minPhotos={1}
-            minVideos={0}
-            samplePrefix="dispute"
-          />
           <Button
             danger
-            disabled={
-              disputeNotes.trim().length < 10 || disputePhotos.length === 0
-            }
+            disabled={isSavingAction || disputeNotes.trim().length < 10}
             onPress={() =>
               run({
                 type: "dispute",
                 bookingId: id,
                 reason: disputeNotes,
                 category: disputeCategory,
-                photo: disputePhotos[0],
               })
             }
           >
@@ -1216,7 +1032,7 @@ export default function RentalDetail() {
       )}
 
       {/* DISPUTE RESOLUTION FIXTURES (PHASE 5) */}
-      {b.status === "disputed" && (
+      {effectiveStatus === "disputed" && (
         <Card>
           <Text style={s.h2}>⚠️ Dispute Under Review (Demo)</Text>
           <Notice text="Deposit release is paused. CurRENT does not expose admin powers to users; use these founder-authorised fictional scenarios to demonstrate dispute resolution and scoring effects." />
@@ -1288,7 +1104,7 @@ export default function RentalDetail() {
       )}
 
       {/* COMPLETED STATUS */}
-      {b.status === "completed" && (
+      {effectiveStatus === "completed" && (
         <Card>
           <Text style={[s.h2, { color: "#00875A" }]}>
             ✓ Rental Successfully Completed
@@ -1326,7 +1142,7 @@ export default function RentalDetail() {
             />
             <Row
               label={
-                b.status === "completed"
+                effectiveStatus === "completed"
                   ? "Net owner payout (Simulated)"
                   : "Estimated net owner payout (88%)"
               }
@@ -1338,7 +1154,7 @@ export default function RentalDetail() {
       </Card>
 
       {/* REVIEWS — HOW DID IT GO? */}
-      {b.status === "completed" && (
+      {effectiveStatus === "completed" && (
         <>
           <Section title="How did it go?" />
           {myReview ? (
@@ -1464,6 +1280,63 @@ export default function RentalDetail() {
           )}
         </>
       )}
+      <Modal
+        visible={cancelConfirmationVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isCancelling) setCancelConfirmationVisible(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            accessibilityRole="alert"
+            accessibilityViewIsModal
+            style={styles.modalCard}
+          >
+            <Text style={s.h2}>Cancel booking?</Text>
+            <Text style={s.body}>
+              This will cancel the confirmed rental, mark the full rental and
+              service fees as refunded in CurRENT&apos;s simulated ledger,
+              release the held deposit, and restore availability. No real
+              payment or refund will occur.
+            </Text>
+            {!!cancelError && <Notice text={cancelError} error />}
+            <Button
+              danger
+              disabled={isCancelling}
+              onPress={confirmCancellation}
+            >
+              {isCancelling ? "Saving cancellation…" : "Confirm cancellation"}
+            </Button>
+            <Button
+              secondary
+              disabled={isCancelling}
+              onPress={() => setCancelConfirmationVisible(false)}
+            >
+              Keep booking
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
+
+const styles = {
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center" as const,
+    padding: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.55)",
+  },
+  modalCard: {
+    alignSelf: "center" as const,
+    width: "100%" as const,
+    maxWidth: 480,
+    gap: 12,
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF",
+  },
+};

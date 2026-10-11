@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Redirect, router } from "expo-router";
+import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
@@ -19,9 +19,8 @@ import type { SupportMessage } from "../../types/marketplace";
 const QUICK_TOPICS = [
   "How to rent",
   "Fees",
-  "Security deposits",
+  "Deposits",
   "Delivery & return",
-  "Rental extensions",
   "Risk score",
   "Disputes",
   "How is my risk score calculated?",
@@ -34,11 +33,7 @@ export default function CustomerServiceScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   const messages: SupportMessage[] = (state.supportMessages || []).filter(
-    (m) =>
-      m.userId === user?.id &&
-      m.sender !== "human" &&
-      m.text !==
-        "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+    (message) => message.userId === user?.id,
   );
 
   useEffect(() => {
@@ -62,10 +57,9 @@ export default function CustomerServiceScreen() {
   }
 
   function handleHandoff() {
-    act({
-      type: "supportHandoff",
-      query: "Talk to a Human",
-    });
+    const query = inputText.trim() || "Talk to a Human";
+    setInputText("");
+    act({ type: "supportHandoff", query });
   }
 
   function renderMessageItem({ item }: { item: SupportMessage }) {
@@ -165,18 +159,6 @@ export default function CustomerServiceScreen() {
           </View>
         </View>
 
-        <View style={styles.waitingNotice}>
-          <Ionicons
-            name="information-circle-outline"
-            size={16}
-            color="#B45309"
-          />
-          <Text style={styles.waitingNoticeText}>
-            The human support queue is not available here yet. Unanswered
-            questions and human requests cannot be sent right now.
-          </Text>
-        </View>
-
         {/* Quick Topic Chips */}
         <View style={styles.chipsSection}>
           <Text style={styles.chipsHeading}>Frequently asked topics:</Text>
@@ -207,7 +189,9 @@ export default function CustomerServiceScreen() {
         {storageError ? (
           <View style={styles.waitingNotice}>
             <Ionicons name="warning-outline" size={16} color="#B45309" />
-            <Text style={styles.waitingNoticeText}>{storageError}</Text>
+            <Text style={styles.waitingNoticeText}>
+              {storageError}
+            </Text>
           </View>
         ) : null}
 

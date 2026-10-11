@@ -1,10 +1,12 @@
 export type MarketplaceAccountKind = "normal" | "demo";
 export const DEMO_ACCOUNT_EMAIL = "democurrent@gmail.com";
+export const DEMO_OTP_CODE = "123456";
 export interface AuthenticatedMarketplaceAccount {
   accountKind: MarketplaceAccountKind;
   id: string;
   email: string;
   name: string;
+  phone?: string;
   verified: boolean;
 }
 
@@ -55,6 +57,16 @@ export function describeSupabaseAuthError(
   return `Supabase ${operation} failed${code}${status}: ${message}${triggerHint}`;
 }
 
+export function normalizeMalaysianPhone(localNumber: string): string {
+  let digits = localNumber.replace(/\D/g, "");
+  if (digits.startsWith("60")) digits = digits.slice(2);
+  if (digits.startsWith("0")) digits = digits.slice(1);
+  if (!/^1\d{8,9}$/.test(digits)) {
+    throw new Error("Enter a valid Malaysian mobile number.");
+  }
+  return `+60${digits}`;
+}
+
 export async function authenticateWithPassword(
   auth: PasswordAuthGateway,
   email: string,
@@ -89,6 +101,9 @@ export async function authenticateWithPassword(
         typeof data.user.user_metadata?.full_name === "string"
           ? data.user.user_metadata.full_name
           : "Alex Tan",
+      ...(typeof data.user.user_metadata?.phone === "string"
+        ? { phone: data.user.user_metadata.phone }
+        : {}),
       verified: true,
     };
   }
@@ -112,6 +127,9 @@ export async function authenticateWithPassword(
       typeof data.user.user_metadata?.full_name === "string"
         ? data.user.user_metadata.full_name
         : authenticatedEmail.split("@")[0],
+    ...(typeof data.user.user_metadata?.phone === "string"
+      ? { phone: data.user.user_metadata.phone }
+      : {}),
     verified: data.user.app_metadata.verification_status === "verified",
   };
 }

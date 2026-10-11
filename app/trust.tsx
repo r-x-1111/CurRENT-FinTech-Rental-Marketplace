@@ -15,7 +15,7 @@ export default function TrustScreen() {
       title="Trust"
       subtitle="Confidence, built into the journey. Simple signals and partner-supported services help renters and owners make better decisions before booking."
     >
-      <Notice text="CurRENT is an academic classroom demonstration in Klang Valley. Real identity checks, payments, deposit escrow, BNPL, item insurance and delivery would be supported by external authorised partners. No real money or personal data is collected." />
+      <Notice text="CurRENT is a classroom simulation. Identity checks, payments, deposits, insurance and delivery are not performed by real providers. Do not submit identity documents or bank credentials." />
 
       <Section title="Why CurRENT Is Safer" />
       <View
@@ -144,4 +144,3 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 });
-

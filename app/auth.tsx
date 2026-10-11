@@ -1,21 +1,28 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, Card, Field, Notice, Screen, s } from "../components/ui";
 import { useMarketplace } from "../context/Marketplace";
 import { colors } from "../constants/theme";
 import {
   authenticateWithPassword,
+  DEMO_OTP_CODE,
   describeSupabaseAuthError,
+  normalizeMalaysianPhone,
 } from "../services/auth";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 export default function Auth() {
   const { state, activateAuthenticatedWorkspace } = useMarketplace();
-  const [mode, setMode] = useState("Sign in");
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const [mode, setMode] = useState(
+    params.mode === "Create account" ? "Create account" : "Sign in",
+  );
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [demoOtp, setDemoOtp] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -27,7 +34,8 @@ export default function Auth() {
       setEmail("");
       setPassword("");
       setName("");
-      setMode("Sign in");
+      setPhone("");
+      setDemoOtp("");
       setError("");
       setInfoNotice("");
     }
@@ -52,13 +60,19 @@ export default function Auth() {
         if (!name.trim()) {
           throw new Error("Enter your full name.");
         }
+        const normalizedPhone = normalizeMalaysianPhone(phone);
         if (password.length < 8) {
           throw new Error("Choose a password of at least 8 characters.");
+        }
+        if (demoOtp !== DEMO_OTP_CODE) {
+          throw new Error(`Enter the displayed Demo OTP code ${DEMO_OTP_CODE}.`);
         }
         const { data, error } = await supabase.auth.signUp({
           email: address,
           password,
-          options: { data: { full_name: name.trim() } },
+          options: {
+            data: { full_name: name.trim(), phone: normalizedPhone },
+          },
         });
         if (error) {
           throw new Error(describeSupabaseAuthError(error, "sign-up"));
@@ -139,13 +153,15 @@ export default function Auth() {
           </View>
 
           {mode === "Create account" && (
-            <Field
-              label="Full name"
-              value={name}
-              onChangeText={setName}
-              autoComplete="name"
-              placeholder="Enter your full name"
-            />
+            <>
+              <Field
+                label="Full Name"
+                value={name}
+                onChangeText={setName}
+                autoComplete="name"
+                placeholder="Enter your full name"
+              />
+            </>
           )}
 
           <Field
@@ -158,6 +174,25 @@ export default function Auth() {
             placeholder="Enter your email address"
           />
 
+          {mode === "Create account" && (
+            <View style={styles.phoneRow}>
+              <View style={styles.phonePrefixBox}>
+                <Text style={styles.phonePrefixText}>+60</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Field
+                  label="Mobile Number"
+                  value={phone}
+                  onChangeText={setPhone}
+                  autoCapitalize="none"
+                  keyboardType="phone-pad"
+                  autoComplete="tel-national"
+                  placeholder="12 345 6789"
+                />
+              </View>
+            </View>
+          )}
+
           <View style={styles.passwordContainer}>
             <Field
               label="Password"
@@ -168,7 +203,11 @@ export default function Auth() {
               autoComplete={
                 mode === "Sign in" ? "current-password" : "new-password"
               }
-              placeholder="Enter your password"
+              placeholder={
+                mode === "Sign in"
+                  ? "Enter your password"
+                  : "Create a strong password"
+              }
             />
             <TouchableOpacity
               style={styles.eyeToggle}
@@ -182,6 +221,28 @@ export default function Auth() {
               />
             </TouchableOpacity>
           </View>
+
+          {mode === "Create account" && (
+            <>
+              <Text style={styles.demoCode}>
+                Demo code (no SMS): {DEMO_OTP_CODE}
+              </Text>
+              <Field
+                label="Demo OTP"
+                value={demoOtp}
+                onChangeText={(value) =>
+                  setDemoOtp(value.replace(/\D/g, "").slice(0, 6))
+                }
+                keyboardType="number-pad"
+                maxLength={6}
+                placeholder="Enter the 6-digit demo code"
+              />
+              <Text style={styles.demoDisclosure}>
+                Simulated OTP — no SMS sent; this does not verify phone
+                ownership.
+              </Text>
+            </>
+          )}
 
           {mode === "Sign in" && (
             <TouchableOpacity
@@ -254,6 +315,38 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 13,
     color: colors.muted,
+  },
+  phoneRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  phonePrefixBox: {
+    height: 48,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    justifyContent: "center",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DCE5F2",
+    backgroundColor: "#F4F7FB",
+  },
+  phonePrefixText: {
+    color: colors.navy,
+    fontWeight: "700",
+  },
+  demoCode: {
+    marginTop: 4,
+    marginBottom: 6,
+    color: colors.navy,
+    fontWeight: "700",
+  },
+  demoDisclosure: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -4,
+    marginBottom: 10,
   },
   passwordContainer: {
     position: "relative",

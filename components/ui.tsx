@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Image,
   Pressable,
@@ -24,17 +24,28 @@ export function Screen({
   subtitle,
   back,
   action,
+  scrollToY,
 }: {
   children: React.ReactNode;
   title?: string;
   subtitle?: string;
   back?: boolean;
   action?: React.ReactNode;
+  scrollToY?: number | null;
 }) {
   const { storageError } = useMarketplace();
+  const scrollViewRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (scrollToY !== undefined && scrollToY !== null) {
+      requestAnimationFrame(() =>
+        scrollViewRef.current?.scrollTo({ y: scrollToY, animated: true }),
+      );
+    }
+  }, [scrollToY]);
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={s.screen}>
       <ScrollView
+        ref={scrollViewRef}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={s.content}
       >
@@ -106,8 +117,18 @@ export function Button({
     </Pressable>
   );
 }
-export function Card({ children }: { children: React.ReactNode }) {
-  return <View style={s.card}>{children}</View>;
+export function Card({
+  children,
+  onLayout,
+}: {
+  children: React.ReactNode;
+  onLayout?: (event: import("react-native").LayoutChangeEvent) => void;
+}) {
+  return (
+    <View style={s.card} onLayout={onLayout}>
+      {children}
+    </View>
+  );
 }
 export function Section({
   title,

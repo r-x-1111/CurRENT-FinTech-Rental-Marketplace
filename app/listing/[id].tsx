@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Image,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -80,7 +82,7 @@ function formatDate(dateStr: string) {
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { state, user, act } = useMarketplace();
+  const { state, user, act, actAndPersist } = useMarketplace();
   const listing = state.listings.find((l) => l.id === id);
   // 8 Fixed Delivery Slots filtered by lender's selection (Section 4.3, 7.1, 17.8)
   const availableSlots = FIXED_DELIVERY_SLOTS.filter((opt) => {
@@ -98,6 +100,12 @@ export default function ListingDetailScreen() {
 
   const [start, setStart] = useState(dateAfter(1));
   const [end, setEnd] = useState(dateAfter(3));
+  const [calendarMonth, setCalendarMonth] = useState(
+    () => new Date(`${dateAfter(1).slice(0, 7)}-01T00:00:00Z`),
+  );
+  const [calendarPicker, setCalendarPicker] = useState<"month" | "year" | null>(
+    null,
+  );
   const [pickupTime, setPickupTime] = useState("");
   const effectivePickupTime =
     pickupTime && availableSlots.some((s) => s.value === pickupTime)
@@ -109,19 +117,26 @@ export default function ListingDetailScreen() {
     useState<CollectionMethod>("Delivery");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
   const [showCheckout, setShowCheckout] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
+  const payInProgress = useRef(false);
   const [error, setError] = useState("");
   const [successNotice, setSuccessNotice] = useState("");
   const [photo, setPhoto] = useState("");
 
   // Delivery Address state per README V3.23 Section 7.2
-  const [recipientName, setRecipientName] = useState(user?.name || "");
-  const [deliveryPhone, setDeliveryPhone] = useState("+60 12 345 6789");
-  const [streetAddress, setStreetAddress] = useState("Jalan SS 15/4");
-  const [unit, setUnit] = useState("");
-  const [postcode, setPostcode] = useState("47500");
-  const [city, setCity] = useState("Subang Jaya");
-  const [stateName, setStateName] = useState("Selangor");
-  const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [recipientName, setRecipientName] = useState(user?.savedDeliveryAddress?.recipientName || user?.name || "");
+  const [deliveryPhone, setDeliveryPhone] = useState(user?.savedDeliveryAddress?.phone || user?.phone || "");
+  const [streetAddress, setStreetAddress] = useState(user?.savedDeliveryAddress?.addressLine1 || "");
+  const [unit, setUnit] = useState(user?.savedDeliveryAddress?.addressLine2 || "");
+  const [postcode, setPostcode] = useState(user?.savedDeliveryAddress?.postcode || "");
+  const [city, setCity] = useState(user?.savedDeliveryAddress?.city || "");
+  const [stateName, setStateName] = useState(user?.savedDeliveryAddress?.state || "");
+  const [deliveryNotes, setDeliveryNotes] = useState(user?.savedDeliveryAddress?.instructions || "");
+  const demoSavedAddresses =
+    state.mode === "admin_demo" ? user?.savedDeliveryAddresses || [] : [];
+  const [selectedDemoAddressIndex, setSelectedDemoAddressIndex] = useState(
+    user?.defaultDeliveryAddressIndex ?? 0,
+  );
 
   const { width } = useWindowDimensions();
 
@@ -140,51 +155,56 @@ export default function ListingDetailScreen() {
   }
 
   const owner = state.profiles.find((p) => p.id === listing.ownerId);
-  const calendar = availabilityCalendar(state, listing, 28);
-  const firstDate = calendar[0]?.date
-    ? new Date(calendar[0].date + "T00:00:00Z")
-    : new Date();
-  const monthHeader = firstDate.toLocaleString("en-GB", {
+  const calendarYear = calendarMonth.getUTCFullYear();
+  const calendarMonthIndex = calendarMonth.getUTCMonth();
+  const calendarMonthName = calendarMonth.toLocaleString("en-GB", {
     month: "long",
-    year: "numeric",
     timeZone: "UTC",
   });
+  const monthStart = new Date(
+    Date.UTC(calendarYear, calendarMonthIndex, 1),
+  ).toISOString().slice(0, 10);
+  const daysInMonth = new Date(
+    Date.UTC(calendarYear, calendarMonthIndex + 1, 0),
+  ).getUTCDate();
+  const calendar = availabilityCalendar(
+    state,
+    listing,
+    daysInMonth,
+    monthStart,
+  );
   // Monday = 0, Tuesday = 1, ..., Sunday = 6
-  const firstDayOffset = (firstDate.getUTCDay() + 6) % 7;
+  const firstDayOffset =
+    (new Date(`${monthStart}T00:00:00Z`).getUTCDay() + 6) % 7;
   const emptyPads = Array.from({ length: firstDayOffset });
   const weekDays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+  const monthNames = Array.from({ length: 12 }, (_, month) =>
+    new Date(Date.UTC(2026, month, 1)).toLocaleString("en-GB", {
+      month: "long",
+      timeZone: "UTC",
+    }),
+  );
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 31 }, (_, index) => currentYear + index);
+
+  function changeDisplayedMonth(offset: number) {
+    setCalendarMonth(
+      (current) =>
+        new Date(
+          Date.UTC(
+            current.getUTCFullYear(),
+            current.getUTCMonth() + offset,
+            1,
+          ),
+        ),
+    );
+  }
 
   const selectedMethod = "Delivery Only";
   const renterRisk = user ? riskFor(state, user) : null;
 
   const startTimestamp = start ? toMalaysiaUtcTimestamp(start, effectivePickupTime) : "";
   const endTimestamp = end ? toMalaysiaUtcTimestamp(end, returnTime) : "";
-
-  // Check for immediately contiguous consecutive extension (Section 10)
-  const existingActiveBooking = user
-    ? state.bookings.find(
-        (b) =>
-          b.renterId === user.id &&
-          b.listingId === listing.id &&
-          ["confirmed", "upcoming", "active"].includes(b.status),
-      )
-    : undefined;
-
-  const isConsecutiveExtension = Boolean(
-    existingActiveBooking &&
-      startTimestamp &&
-      (startTimestamp === existingActiveBooking.scheduledReturn ||
-        startTimestamp === existingActiveBooking.end ||
-        (existingActiveBooking.end && start === existingActiveBooking.end.slice(0, 10))),
-  );
-
-  const extensionDays =
-    isConsecutiveExtension && start && end
-      ? rentalDays(startTimestamp, endTimestamp)
-      : 0;
-  const extRentalFee = listing.dailyPrice * extensionDays;
-  const extServiceFee = Math.max(5, Math.round(extRentalFee * 0.05));
-  const extTotal = extRentalFee + extServiceFee;
 
   let quote: ReturnType<typeof quoteFor> | undefined;
   let dateError = "";
@@ -203,13 +223,7 @@ export default function ListingDetailScreen() {
         startTimestamp,
         endTimestamp,
       );
-      availability(
-        state,
-        listing,
-        startTimestamp,
-        endTimestamp,
-        isConsecutiveExtension ? existingActiveBooking?.id : undefined,
-      );
+      availability(state, listing, startTimestamp, endTimestamp);
     } catch (e) {
       dateError = (e as Error).message;
     }
@@ -260,7 +274,9 @@ export default function ListingDetailScreen() {
     if (!listing) return;
     try {
       const refId = `REQ-${newId().slice(0, 8).toUpperCase()}`;
-      const fullDeliveryAddress = `${recipientName.trim()}${deliveryPhone.trim() ? `, ${deliveryPhone.trim()}` : ""}, ${streetAddress.trim()}${unit.trim() ? `, ${unit.trim()}` : ""}, ${postcode.trim()} ${city.trim()}, ${stateName.trim()}${deliveryNotes.trim() ? ` (Notes: ${deliveryNotes.trim()})` : ""}`;
+      const address = getDeliveryAddress();
+      act({ type: "saveDeliveryAddress", address });
+      const fullDeliveryAddress = formatDeliveryAddress(address);
       act({
         type: "requestPlatformReview",
         id: refId,
@@ -288,23 +304,26 @@ export default function ListingDetailScreen() {
   }
 
   // Handle Instant Booking checkout confirmation
-  function handleConfirmInstantBook() {
+  async function handleConfirmInstantBook() {
+    if (payInProgress.current) return;
     if (!user) {
       router.push("/auth");
       return;
     }
+    if (!deliveryAddressIsComplete()) {
+      setError(
+        "Complete the required Address fields before paying: recipient name, phone, street address, postcode, city, and state.",
+      );
+      return;
+    }
     try {
-      if (isConsecutiveExtension && existingActiveBooking) {
-        act({
-          type: "consecutiveExtend",
-          bookingId: existingActiveBooking.id,
-          additionalDays: extensionDays,
-        });
-        router.push(`/rental/${existingActiveBooking.id}`);
-        return;
-      }
+      const address = getDeliveryAddress();
+      act({ type: "saveDeliveryAddress", address });
       const bookingId = newId();
-      act({
+      payInProgress.current = true;
+      setIsPaying(true);
+      setError("");
+      await actAndPersist({
         type: "instantBook",
         id: bookingId,
         listingId: id,
@@ -312,11 +331,82 @@ export default function ListingDetailScreen() {
         end: endTimestamp,
         collectionMethod: selectedMethod,
         paymentMethod: selectedPaymentMethod,
+        deliveryAddress: formatDeliveryAddress(address),
       });
       router.push(`/rental/${bookingId}`);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      payInProgress.current = false;
+      setIsPaying(false);
     }
+  }
+
+  function getDeliveryAddress() {
+    return {
+      recipientName,
+      phone: deliveryPhone,
+      addressLine1: streetAddress,
+      addressLine2: unit,
+      postcode,
+      city,
+      state: stateName,
+      instructions: deliveryNotes,
+    };
+  }
+
+  function selectDemoAddress(index: number) {
+    const address = demoSavedAddresses[index];
+    if (!address) return;
+    setSelectedDemoAddressIndex(index);
+    setRecipientName(address.recipientName);
+    setDeliveryPhone(address.phone);
+    setStreetAddress(address.addressLine1);
+    setUnit(address.addressLine2);
+    setPostcode(address.postcode);
+    setCity(address.city);
+    setStateName(address.state);
+    setDeliveryNotes(address.instructions);
+    act({ type: "saveDeliveryAddress", address });
+  }
+
+  function handleSaveDeliveryAddress() {
+    if (!user) {
+      router.push("/auth");
+      return;
+    }
+    try {
+      act({ type: "saveDeliveryAddress", address: getDeliveryAddress() });
+      setError("");
+      setSuccessNotice("Address saved to your profile.");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function formatDeliveryAddress(address: ReturnType<typeof getDeliveryAddress>) {
+    return [
+      address.recipientName.trim(),
+      address.phone.trim(),
+      address.addressLine1.trim(),
+      address.addressLine2.trim(),
+      `${address.postcode.trim()} ${address.city.trim()}`,
+      address.state.trim(),
+      address.instructions.trim(),
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  function deliveryAddressIsComplete() {
+    return [
+      recipientName,
+      deliveryPhone,
+      streetAddress,
+      postcode,
+      city,
+      stateName,
+    ].every((value) => value.trim().length > 0);
   }
 
   return (
@@ -471,13 +561,25 @@ export default function ListingDetailScreen() {
               </View>
               <Badge
                 text={
-                  owner?.verification === "verified"
-                    ? "Verified Owner"
-                    : "Instant Booking"
+                  typeof listing.estimatedValue !== "number" ||
+                  !Number.isFinite(listing.estimatedValue) ||
+                  listing.estimatedValue <= 0
+                    ? "Valuation pending"
+                    : owner?.verification === "verified"
+                      ? "Verified Owner"
+                      : "Not verified"
                 }
-                green
+                green={owner?.verification === "verified"}
               />
             </View>
+
+            {typeof listing.estimatedValue !== "number" ||
+            !Number.isFinite(listing.estimatedValue) ||
+            listing.estimatedValue <= 0 ? (
+              <Notice
+                text="A security deposit and booking total are unavailable until CurRENT configures a protected platform valuation for this item."
+              />
+            ) : null}
 
             {/* 1. Date Range Input Boxes (Mockup Style) */}
             <View style={styles.dateBoxesRow}>
@@ -523,7 +625,50 @@ export default function ListingDetailScreen() {
             {/* 2. Clean Monthly Calendar Grid */}
             <View style={styles.calendarContainer}>
               <View style={styles.calendarHeaderRow}>
-                <Text style={styles.calendarMonthTitle}>{monthHeader}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous month"
+                  disabled={
+                    calendarYear === currentYear &&
+                    calendarMonthIndex === new Date().getMonth()
+                  }
+                  onPress={() => changeDisplayedMonth(-1)}
+                  style={styles.calendarNavButton}
+                >
+                  <Ionicons name="chevron-back" size={17} color={colors.blue} />
+                </Pressable>
+                <View style={styles.calendarSelectors}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select month, ${calendarMonthName}`}
+                    onPress={() => setCalendarPicker("month")}
+                    style={styles.calendarSelectButton}
+                  >
+                    <Text style={styles.calendarSelectLabel}>Month</Text>
+                    <Text style={styles.calendarSelectValue}>
+                      {calendarMonthName}
+                    </Text>
+                    <Ionicons name="chevron-down" size={14} color={colors.blue} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select year, ${calendarYear}`}
+                    onPress={() => setCalendarPicker("year")}
+                    style={styles.calendarSelectButton}
+                  >
+                    <Text style={styles.calendarSelectLabel}>Year</Text>
+                    <Text style={styles.calendarSelectValue}>{calendarYear}</Text>
+                    <Ionicons name="chevron-down" size={14} color={colors.blue} />
+                  </Pressable>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Next month"
+                  onPress={() => changeDisplayedMonth(1)}
+                  style={styles.calendarNavButton}
+                >
+                  <Ionicons name="chevron-forward" size={17} color={colors.blue} />
+                </Pressable>
                 {Boolean(start || end) && (
                   <Pressable
                     accessibilityRole="button"
@@ -556,26 +701,25 @@ export default function ListingDetailScreen() {
                   const isStart = start === day.date;
                   const isEnd = end === day.date;
                   const isInRange = Boolean(
-                    start && end && day.date > start && day.date < end,
+                    start && end && day.date >= start && day.date <= end,
                   );
                   const isSelected = isStart || isEnd;
-                  const isAvailable = day.status === "available";
+                  const isSelectable = day.status !== "unavailable";
                   const dayNum = parseInt(day.date.split("-")[2], 10);
 
                   return (
                     <View key={day.date} style={styles.dayCell}>
                       <Pressable
-                        key={day.date}
                         accessibilityRole="button"
-                        accessibilityLabel={`${day.date}, ${day.status}`}
-                        accessibilityState={{ disabled: !isAvailable }}
-                        disabled={!isAvailable}
+                        accessibilityLabel={`${day.date}, ${day.status}${day.status === "reserved" ? ", check selected delivery hour for partial availability" : ""}`}
+                        accessibilityState={{ disabled: !isSelectable }}
+                        disabled={!isSelectable}
                         onPress={() => handleDayPress(day.date)}
                         style={[
                           styles.dayBtn,
                           isInRange && styles.dayBtnInRange,
                           isSelected && styles.dayBtnSelected,
-                          !isAvailable && styles.dayBtnUnavailable,
+                          !isSelectable && styles.dayBtnUnavailable,
                         ]}
                       >
                         <Text
@@ -583,16 +727,102 @@ export default function ListingDetailScreen() {
                             styles.dayText,
                             isInRange && styles.dayTextInRange,
                             isSelected && styles.dayTextSelected,
-                            !isAvailable && styles.dayTextUnavailable,
+                            !isSelectable && styles.dayTextUnavailable,
+                            day.status === "reserved" &&
+                              !isSelected && styles.dayTextReserved,
                           ]}
                         >
                           {dayNum}
                         </Text>
+                        {day.status === "reserved" && (
+                          <View
+                            accessibilityLabel="Existing reservation on this date"
+                            style={styles.reservedDateMark}
+                          />
+                        )}
                       </Pressable>
                     </View>
                   );
                 })}
               </View>
+
+              <Modal
+                visible={calendarPicker !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setCalendarPicker(null)}
+              >
+                <View style={styles.calendarModalOverlay}>
+                  <View style={styles.calendarModalCard}>
+                    <Text style={s.h2}>
+                      Select {calendarPicker === "month" ? "month" : "year"}
+                    </Text>
+                    <ScrollView
+                      style={{ maxHeight: 340 }}
+                      contentContainerStyle={styles.calendarModalOptions}
+                    >
+                      {(calendarPicker === "month"
+                        ? monthNames.map((name, index) => ({
+                            label: name,
+                            value: index,
+                          }))
+                        : yearOptions.map((year) => ({
+                            label: String(year),
+                            value: year,
+                          }))
+                      ).map((option) => {
+                        const selected =
+                          calendarPicker === "month"
+                            ? option.value === calendarMonthIndex
+                            : option.value === calendarYear;
+                        return (
+                          <Pressable
+                            key={`${calendarPicker}-${option.value}`}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            onPress={() => {
+                              setCalendarMonth((current) =>
+                                new Date(
+                                  Date.UTC(
+                                    calendarPicker === "year"
+                                      ? option.value
+                                      : current.getUTCFullYear(),
+                                    calendarPicker === "month"
+                                      ? option.value
+                                      : current.getUTCMonth(),
+                                    1,
+                                  ),
+                                ),
+                              );
+                              setCalendarPicker(null);
+                            }}
+                            style={[
+                              styles.calendarModalOption,
+                              selected && styles.calendarModalOptionSelected,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.calendarModalOptionText,
+                                selected &&
+                                  styles.calendarModalOptionTextSelected,
+                              ]}
+                            >
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                    <Button
+                      secondary
+                      onPress={() => setCalendarPicker(null)}
+                    >
+                      Close
+                    </Button>
+                  </View>
+                </View>
+              </Modal>
 
               <Text style={styles.calendarHint}>
                 {!start
@@ -673,11 +903,47 @@ export default function ListingDetailScreen() {
             <View style={styles.deliveryAddressSection}>
               <View style={styles.arrangementHeaderRow}>
                 <Ionicons name="location-outline" size={15} color={colors.navy} />
-                <Text style={styles.arrangementTitle}>Delivery Address</Text>
+                <Text style={styles.arrangementTitle}>Address</Text>
               </View>
-              <Text style={styles.deliveryAddressSubtext}>
-                Private destination address in Klang Valley.
-              </Text>
+
+              {demoSavedAddresses.length > 0 && (
+                <View style={{ gap: 8, marginTop: 10 }}>
+                  <Text style={styles.inputLabel}>Saved delivery addresses</Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {demoSavedAddresses.map((address, index) => (
+                      <Pressable
+                        key={`${address.postcode}-${address.addressLine1}`}
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          selected: selectedDemoAddressIndex === index,
+                        }}
+                        onPress={() => selectDemoAddress(index)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 8,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor:
+                            selectedDemoAddressIndex === index
+                              ? colors.blue
+                              : colors.border,
+                          backgroundColor:
+                            selectedDemoAddressIndex === index
+                              ? colors.paleBlue
+                              : "#FFFFFF",
+                        }}
+                      >
+                        <Text style={s.caption}>
+                          {index === user?.defaultDeliveryAddressIndex
+                            ? "Default · "
+                            : ""}
+                          {address.city}, {address.state}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
 
               <View style={{ gap: 8, marginTop: 8 }}>
                 <View style={styles.addressFieldRow}>
@@ -711,6 +977,16 @@ export default function ListingDetailScreen() {
                   />
                 </View>
 
+                <View>
+                  <Text style={styles.inputLabel}>Building / Apartment / Unit (Optional)</Text>
+                  <TextInput
+                    style={styles.addressInput}
+                    value={unit}
+                    onChangeText={setUnit}
+                    placeholder="Unit, floor or building"
+                  />
+                </View>
+
                 <View style={styles.addressFieldRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.inputLabel}>Postcode</Text>
@@ -727,11 +1003,36 @@ export default function ListingDetailScreen() {
                       style={styles.addressInput}
                       value={city}
                       onChangeText={setCity}
-                      placeholder="Subang Jaya"
+                      placeholder="City or district"
                     />
                   </View>
                 </View>
+
+                <View>
+                  <Text style={styles.inputLabel}>State</Text>
+                  <TextInput
+                    style={styles.addressInput}
+                    value={stateName}
+                    onChangeText={setStateName}
+                    placeholder="State"
+                  />
+                </View>
+
+                <View>
+                  <Text style={styles.inputLabel}>Delivery Instructions (Optional)</Text>
+                  <TextInput
+                    style={styles.addressInput}
+                    value={deliveryNotes}
+                    onChangeText={setDeliveryNotes}
+                    placeholder="Optional delivery instructions"
+                  />
+                </View>
               </View>
+              {user && (
+                <Button secondary onPress={handleSaveDeliveryAddress}>
+                  Save Address
+                </Button>
+              )}
             </View>
 
             {/* Dynamic Cancellation Notice (24h before pickup) */}
@@ -778,19 +1079,16 @@ export default function ListingDetailScreen() {
             )}
 
             {/* Concise Booking Summary for eligible direct renters */}
-            {renterRisk?.level !== "very_high" && (quote || isConsecutiveExtension) && (
+            {renterRisk?.level !== "very_high" && quote && (
               <View style={styles.summaryContainer}>
-                <Text style={styles.summaryTitle}>
-                  {isConsecutiveExtension ? "Extension Summary" : "Booking Summary"}
-                </Text>
+                <Text style={styles.summaryTitle}>Booking Summary</Text>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
-                    {isConsecutiveExtension ? "Additional rental fee" : "Rental fee"} ·{" "}
-                    {isConsecutiveExtension ? extensionDays : quote?.days}{" "}
-                    {(isConsecutiveExtension ? extensionDays : quote?.days) === 1 ? "day" : "days"}
+                    Rental fee · {quote.days}{" "}
+                    {quote.days === 1 ? "day" : "days"}
                   </Text>
                   <Text style={styles.summaryValue}>
-                    {money(isConsecutiveExtension ? extRentalFee : quote?.rentalFee ?? 0)}
+                    {money(quote.rentalFee)}
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>
@@ -798,37 +1096,19 @@ export default function ListingDetailScreen() {
                     CurRENT service fee (5%, min RM5)
                   </Text>
                   <Text style={styles.summaryValue}>
-                    {money(isConsecutiveExtension ? extServiceFee : quote?.serviceFee ?? 0)}
+                    {money(quote.serviceFee)}
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
                     Risk-based security deposit
                   </Text>
-                  {isConsecutiveExtension ? (
-                    <View style={{ alignItems: "flex-end" }}>
-                      <Text
-                        style={[
-                          styles.summaryValue,
-                          { textDecorationLine: "line-through", color: colors.muted },
-                        ]}
-                      >
-                        {money(existingActiveBooking?.quote?.deposit ?? 400)}
-                      </Text>
-                      <Text style={[s.bold, { color: colors.blue, fontSize: 13, marginTop: 2 }]}>
-                        Additional deposit: RM0.00
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.summaryValue}>
-                      {money(quote?.deposit ?? 0)}
-                    </Text>
-                  )}
+                  <Text style={styles.summaryValue}>
+                    {money(quote.deposit)}
+                  </Text>
                 </View>
                 <Text style={styles.depositNote}>
-                  {isConsecutiveExtension
-                    ? "Original deposit already held — not charged again."
-                    : renterRisk?.canDirectBook
+                  {renterRisk?.canDirectBook
                     ? `Your ${renterRisk.label} tier sets a ${
                         renterRisk.level === "low"
                           ? "5% (capped at RM500)"
@@ -844,7 +1124,7 @@ export default function ListingDetailScreen() {
                     Total to Pay
                   </Text>
                   <Text style={styles.summaryTotalValue}>
-                    {money(isConsecutiveExtension ? extTotal : quote?.total ?? 0)}
+                    {money(quote.total)}
                   </Text>
                 </View>
               </View>
@@ -857,7 +1137,7 @@ export default function ListingDetailScreen() {
             {!!successNotice && <Notice text={successNotice} />}
 
             {/* Simulated Checkout Panel */}
-            {showCheckout && (quote || isConsecutiveExtension) && (
+            {showCheckout && quote && (
               <>
                 <Notice text="Demo payment only. No real funds or banking credentials are collected." />
                 <View style={styles.checkoutPanel}>
@@ -878,8 +1158,8 @@ export default function ListingDetailScreen() {
                       <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
                     )}
                   </Pressable>
-                  <Button onPress={handleConfirmInstantBook}>
-                    Pay
+                  <Button disabled={isPaying} onPress={handleConfirmInstantBook}>
+                    {isPaying ? "Processing demo payment…" : "Pay"}
                   </Button>
                   <Button secondary onPress={() => setShowCheckout(false)}>
                     Back
@@ -901,7 +1181,7 @@ export default function ListingDetailScreen() {
                   </Button>
                 ) : renterRisk?.level === "very_high" ? (
                   <Button
-                    disabled={!start || !end || !!dateError || !recipientName.trim() || !streetAddress.trim()}
+                    disabled={!start || !end || !!dateError || !deliveryAddressIsComplete()}
                     onPress={handleNavigateToRequest}
                   >
                     Submit Request to CurRENT
@@ -912,9 +1192,7 @@ export default function ListingDetailScreen() {
                       !start ||
                       !end ||
                       !!dateError ||
-                      listing.ownerId === user?.id ||
-                      !recipientName.trim() ||
-                      !streetAddress.trim()
+                      listing.ownerId === user?.id
                     }
                     onPress={() => setShowCheckout(true)}
                   >
@@ -923,6 +1201,29 @@ export default function ListingDetailScreen() {
                       : "Rent"}
                   </Button>
                 )}
+                {user?.verification === "verified" &&
+                  renterRisk?.level !== "very_high" &&
+                  (!start ||
+                    !end ||
+                    !!dateError ||
+                    listing.ownerId === user.id) && (
+                    <Text
+                      accessibilityRole="alert"
+                      style={[s.caption, { marginTop: 2 }]}
+                    >
+                      {listing.ownerId === user.id
+                        ? "You cannot rent your own listing."
+                        : dateError ||
+                          "Select an available start and end date to continue."}
+                    </Text>
+                  )}
+                {user?.verification === "verified" &&
+                  renterRisk?.level !== "very_high" &&
+                  !deliveryAddressIsComplete() && (
+                    <Text style={[s.caption, { marginTop: 2 }]}>
+                      Complete the required Address fields before selecting Pay.
+                    </Text>
+                  )}
               </View>
             )}
           </Card>
@@ -1020,13 +1321,87 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
     marginBottom: 8,
     paddingHorizontal: 4,
   },
-  calendarMonthTitle: {
-    fontSize: 13,
-    fontWeight: "700",
+  calendarNavButton: {
+    width: 30,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    backgroundColor: "#EFF6FF",
+  },
+  calendarSelectors: {
+    flex: 1,
+    minWidth: 180,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  calendarSelectButton: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    backgroundColor: "#FFFFFF",
+  },
+  calendarSelectLabel: {
+    color: colors.muted,
+    fontSize: 10,
+  },
+  calendarSelectValue: {
     color: colors.navy,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  calendarModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+  },
+  calendarModalCard: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 360,
+    padding: 18,
+    borderRadius: 16,
+    gap: 12,
+    backgroundColor: "#FFFFFF",
+  },
+  calendarModalOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  calendarModalOption: {
+    minWidth: 86,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    backgroundColor: "#FFFFFF",
+  },
+  calendarModalOptionSelected: {
+    borderColor: colors.blue,
+    backgroundColor: "#EFF6FF",
+  },
+  calendarModalOptionText: {
+    color: colors.navy,
+    textAlign: "center",
+    fontSize: 13,
+  },
+  calendarModalOptionTextSelected: {
+    color: colors.blue,
+    fontWeight: "700",
   },
   clearDatesBtn: {
     paddingHorizontal: 6,
@@ -1060,6 +1435,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   dayBtn: {
+    position: "relative",
     width: 32,
     height: 32,
     borderRadius: 6,
@@ -1093,6 +1469,18 @@ const styles = StyleSheet.create({
   dayTextUnavailable: {
     color: "#94A3B8",
     textDecorationLine: "line-through",
+  },
+  dayTextReserved: {
+    textDecorationLine: "underline",
+    textDecorationColor: colors.danger,
+  },
+  reservedDateMark: {
+    position: "absolute",
+    bottom: 2,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.danger,
   },
   calendarHint: {
     fontSize: 11,

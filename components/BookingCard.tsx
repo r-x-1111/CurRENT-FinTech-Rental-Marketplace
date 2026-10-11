@@ -3,7 +3,11 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import type { Booking } from "../types/marketplace";
 import { useMarketplace } from "../context/Marketplace";
-import { formatMalaysiaDateTime, money } from "../services/booking";
+import {
+  formatMalaysiaDateTime,
+  getEffectiveBookingStatus,
+  money,
+} from "../services/booking";
 import { colors } from "../constants/theme";
 
 export function BookingCard({
@@ -28,13 +32,14 @@ export function BookingCard({
       n.title.includes("sent you a message"),
   ).length;
 
-  const isUpcoming = booking.status === "upcoming";
-  const isActive = booking.status === "active";
-  const isReturnPending = booking.status === "return_pending";
-  const isCompleted = booking.status === "completed";
+  const status = getEffectiveBookingStatus(booking);
+  const isUpcoming = status === "upcoming";
+  const isActive = status === "active";
+  const isReturnPending = status === "return_pending";
+  const isCompleted = status === "completed";
   const isCancelled =
-    booking.status === "cancelled" || booking.status === "rejected";
-  const isDisputed = booking.status === "disputed";
+    status === "cancelled" || status === "rejected";
+  const isDisputed = status === "disputed";
 
   let headerSub = "Confirmed reservation";
   if (isActive) headerSub = "Current rental";
@@ -76,10 +81,10 @@ export function BookingCard({
   }
 
   const startFormatted = formatMalaysiaDateTime(
-    booking.scheduledPickup || booking.start,
+    booking.start,
   );
   const endFormatted = formatMalaysiaDateTime(
-    booking.scheduledReturn || booking.end,
+    booking.end,
   );
 
   let dateInfo = `Scheduled rental start: ${startFormatted}`;

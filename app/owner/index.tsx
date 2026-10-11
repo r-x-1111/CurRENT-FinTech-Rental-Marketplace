@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { Redirect, router } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
@@ -17,18 +17,49 @@ import {
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
 import { calculateOwnerPayout } from "../../services/deposit";
-import { money } from "../../services/booking";
+import { getEffectiveBookingStatus, money } from "../../services/booking";
 import { colors } from "../../constants/theme";
 
 export default function OwnerDashboard() {
   const { state, user, act } = useMarketplace();
+  const { published } = useLocalSearchParams<{ published?: string }>();
   const [tab, setTab] = useState("Listings");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [deleting, setDeleting] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (published === "1") setSuccess("Listing published successfully.");
+  }, [published]);
 
   if (!user) {
     return <Redirect href="/auth" />;
+  }
+
+  if (user.verification !== "verified" || typeof user.riskScore !== "number") {
+    return (
+      <Screen
+        back
+        title="Lender Mode"
+        subtitle="Listing management is locked for this account."
+      >
+        <Card>
+          <Text style={s.h2}>
+            Complete Identity Verification to manage listings.
+          </Text>
+          <Notice text="Complete Identity Verification to create or publish a listing." />
+          <Button onPress={() => router.push("/(tabs)/profile")}>
+            Complete Identity Verification
+          </Button>
+        </Card>
+      </Screen>
+    );
   }
 
   const listings = state.listings.filter((l) => l.ownerId === user.id);
@@ -39,7 +70,9 @@ export default function OwnerDashboard() {
     0,
   );
   const activeRentalsCount = bookings.filter((b) =>
-    ["active", "upcoming", "return_pending"].includes(b.status),
+    ["active", "upcoming", "return_pending"].includes(
+      getEffectiveBookingStatus(b, now),
+    ),
   ).length;
 
   return (
@@ -98,7 +131,7 @@ export default function OwnerDashboard() {
         ) : (
           <Empty
             title="No rentals yet"
-            text="Confirmed bookings and their handover steps will appear here."
+            text="Confirmed bookings and their delivery and return updates will appear here."
           />
         ))}
 

@@ -30,13 +30,3 @@ export function calculateOwnerPayout(rentalFee: number) {
 export const LENDER_BOOST_FEE = 10; // RM10
 export const LENDER_BOOST_DAYS = 7; // 7 days
 
-export function calculateConsecutiveQuote(additionalRentalFee: number) {
-  const serviceFee = calculateBorrowerServiceFee(additionalRentalFee);
-  return {
-    additionalRentalFee,
-    serviceFee,
-    deposit: 0, // RM0 extra deposit for consecutive chain
-    total: Math.round((additionalRentalFee + serviceFee) * 100) / 100,
-  };
-}
-
