@@ -29,6 +29,7 @@ export default function Auth() {
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [otp, setOtp] = useState("");
   const [demoCode, setDemoCode] = useState("");
+  const [resendCountdown, setResendCountdown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [infoNotice, setInfoNotice] = useState("");
@@ -41,6 +42,12 @@ export default function Auth() {
       setError("");
     }
   }, [state.currentUserId]);
+
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setInterval(() => setResendCountdown(n => Math.max(0, n - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [resendCountdown]);
 
   // A sign-up session may be restored after page refresh or email confirmation.
   // Do not silently activate the marketplace before the server-checked OTP.
@@ -80,6 +87,7 @@ export default function Auth() {
     if (!supabase) throw new Error("Supabase authentication is not configured.");
     const issuedCode = await requestDemoPhoneCode(supabase, mobile);
     setDemoCode(issuedCode);
+    setResendCountdown(60);
     setOtp("");
     setError("");
     setInfoNotice("Demo OTP Verification — no SMS sent. Enter the six-digit code shown below.");
@@ -210,6 +218,7 @@ export default function Auth() {
     setError("");
     setInfoNotice("");
     setDemoCode("");
+    setResendCountdown(0);
     setOtp("");
     setPassword("");
   }
@@ -371,8 +380,8 @@ export default function Auth() {
                 keyboardType="phone-pad"
                 placeholder="+60123456789"
               />
-              <Button secondary disabled={busy} onPress={() => void resendCode()}>
-                Resend OTP / Edit number
+              <Button secondary disabled={busy || resendCountdown > 0} onPress={() => void resendCode()}>
+                {resendCountdown > 0 ? `Resend OTP in ${resendCountdown}s` : "Resend OTP / Update number"}
               </Button>
               {!!demoCode && (
                 <Notice text={`Demo code (no SMS): ${demoCode}`} />
