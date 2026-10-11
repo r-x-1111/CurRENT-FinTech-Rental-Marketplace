@@ -615,7 +615,7 @@ Keep the **six existing** Customer Service quick-topic chips in their existing o
 
 The **one existing Fees & deposits chip MUST send TWO distinct consecutive assistant chat bubbles**: first headed **Fees**, second headed **Security deposits**. These must be separate persisted responses in the same conversation, not two chips and not one combined wall of text. All other quick topics produce the following readable response as one assistant message, even when the response has numbered steps/bullets. Free-text matching to an unambiguous covered question may use the same grounded reply. Do not duplicate responses on refresh/retry.
 
-### Customer Service scripted/grounded quick-topic answer copy
+#### Customer Service scripted/grounded quick-topic answer copy
 
 **1. How to rent**
 
