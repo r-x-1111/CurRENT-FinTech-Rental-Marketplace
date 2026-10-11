@@ -170,6 +170,27 @@ export type Action =
   | { type: "supportHandoff"; query?: string }
   | { type: "supportStaffReply"; caseId: string; text: string };
 
+export function getIssueReportPermissions({
+  stage,
+  status,
+  stageAvailable,
+  isLender,
+  reportSubmitted,
+}: {
+  stage: "check_in" | "check_out";
+  status: string;
+  stageAvailable: boolean;
+  isLender: boolean;
+  reportSubmitted: boolean;
+}) {
+  const canEdit = !isLender && stageAvailable && !reportSubmitted;
+  const activeStage =
+    stage === "check_in"
+      ? status === "active"
+      : ["active", "return_pending", "disputed"].includes(status);
+  return { canEdit, canSubmit: canEdit && activeStage };
+}
+
 export const newId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 

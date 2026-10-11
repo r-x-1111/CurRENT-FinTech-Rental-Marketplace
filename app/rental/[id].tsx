@@ -29,7 +29,10 @@ import {
   parseMalaysiaTimestamp,
   riskFor,
 } from "../../services/booking";
-import type { Action } from "../../services/marketplace";
+import {
+  getIssueReportPermissions,
+  type Action,
+} from "../../services/marketplace";
 
 export default function RentalDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -165,54 +168,52 @@ export default function RentalDetail() {
     const report = state.issueReports?.find(
       (item) => item.bookingId === rental.id && item.stage === stage,
     );
-    const canSubmit =
-      !owner &&
-      stageAvailable &&
-      (stage === "check_in"
-        ? rental.status === "active"
-        : ["active", "return_pending", "disputed"].includes(rental.status));
+    const { canEdit, canSubmit } = getIssueReportPermissions({
+      stage,
+      status: rental.status,
+      stageAvailable,
+      isLender: owner,
+      reportSubmitted: Boolean(report),
+    });
     const value = stage === "check_in" ? checkInIssue : checkOutIssue;
     const setValue = stage === "check_in" ? setCheckInIssue : setCheckOutIssue;
+    const comment = report?.text ?? (owner ? "" : value);
 
     return (
       <View style={{ marginTop: 14, gap: 8 }}>
         <Text style={s.bold}>Report an Issue</Text>
-        {report ? (
-          <>
-            <Text style={s.body}>{report.text}</Text>
-            <Text style={s.caption}>
-              Submitted by renter · {formatMalaysiaDateTime(report.createdAt)}{" "}
-              MYT
-            </Text>
-          </>
-        ) : (
-          <>
-            {!owner && (
-              <Field
-                label="Describe any damage, missing parts or other issues"
-                value={value}
-                onChangeText={setValue}
-                multiline
-                placeholder="Describe the issue (optional)."
-              />
-            )}
-            {canSubmit && (
-              <Button
-                secondary
-                disabled={!value.trim()}
-                onPress={() =>
-                  run({
-                    type: "reportIssue",
-                    bookingId: id,
-                    stage,
-                    text: value,
-                  })
-                }
-              >
-                Submit Report
-              </Button>
-            )}
-          </>
+        <Field
+          label="Issue details"
+          value={comment}
+          onChangeText={owner || report ? undefined : setValue}
+          editable={canEdit}
+          multiline
+          style={
+            !canEdit
+              ? { backgroundColor: colors.lightGrey, color: colors.muted }
+              : undefined
+          }
+        />
+        {report && (
+          <Text style={s.caption}>
+            Submitted by renter · {formatMalaysiaDateTime(report.createdAt)} MYT
+          </Text>
+        )}
+        {!owner && !report && canSubmit && (
+          <Button
+            secondary
+            disabled={!value.trim()}
+            onPress={() =>
+              run({
+                type: "reportIssue",
+                bookingId: id,
+                stage,
+                text: value,
+              })
+            }
+          >
+            Submit Report
+          </Button>
         )}
       </View>
     );
@@ -974,7 +975,10 @@ export default function RentalDetail() {
                     </>
                   )}
                 </View>
-                {renderIssueReport("check_out", isReturnEligible)}
+                {renderIssueReport(
+                  "check_out",
+                  isReturnEligible && isEndReached,
+                )}
               </>
             ) : (
               <>
@@ -998,7 +1002,10 @@ export default function RentalDetail() {
                   multiline
                   placeholder="Confirm all accessories are included and condition is clean."
                 />
-                {renderIssueReport("check_out", isReturnEligible)}
+                {renderIssueReport(
+                  "check_out",
+                  isReturnEligible && isEndReached,
+                )}
                 <Button
                   disabled={returnPhotos.length < 6 || returnVideos.length < 1}
                   onPress={() =>
@@ -1086,7 +1093,7 @@ export default function RentalDetail() {
               </>
             )}
 
-            {renderIssueReport("check_out", isReturnEligible)}
+            {renderIssueReport("check_out", isReturnEligible && isEndReached)}
 
             {["active", "return_pending"].includes(b.status) && (
               <View style={{ marginTop: 14, gap: 10 }}>

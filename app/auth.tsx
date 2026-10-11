@@ -5,7 +5,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { Button, Card, Field, Notice, Screen, s } from "../components/ui";
 import { useMarketplace } from "../context/Marketplace";
 import { colors } from "../constants/theme";
-import { authenticateWithPassword } from "../services/auth";
+import {
+  authenticateWithPassword,
+  describeSupabaseAuthError,
+} from "../services/auth";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 export default function Auth() {
@@ -58,13 +61,16 @@ export default function Auth() {
           options: { data: { full_name: name.trim() } },
         });
         if (error) {
+          throw new Error(describeSupabaseAuthError(error, "sign-up"));
+        }
+        if (data.user && data.user.identities?.length === 0) {
           throw new Error(
-            "Could not create the account. Check the details and try again.",
+            "Supabase did not create a new account for this address. If you already registered, sign in or request a password reset.",
           );
         }
         if (!data.session) {
           setInfoNotice(
-            "Account created. Check your email to confirm the address, then sign in.",
+            "Registration accepted. Check your inbox (and spam folder) for the Supabase confirmation email. Confirm your address, then sign in.",
           );
           return;
         }
@@ -109,7 +115,7 @@ export default function Auth() {
     }
     const { error } = await supabase.auth.resetPasswordForEmail(address);
     if (error) {
-      setError("Could not request a password reset. Please try again.");
+      setError(describeSupabaseAuthError(error, "password reset"));
       return;
     }
     setError("");

@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createSeed } from "../data/seed";
 import {
+  getIssueReportPermissions,
   resolveAutomatedSupportQuery,
   transition,
   type Action,
@@ -26,6 +27,7 @@ import { calculateOwnerPayout } from "../services/deposit";
 import { evaluateRentalOutcome } from "../services/riskScore";
 import {
   authenticateWithPassword,
+  describeSupabaseAuthError,
   signOutAuthenticatedAccount,
 } from "../services/auth";
 import { provisionDemoAccount } from "../services/demoAccountProvisioning";
@@ -56,6 +58,31 @@ test("new Supabase Normal workspaces start empty and are bound to their auth acc
   assert.equal(workspace.reviews.length, 0);
   assert.equal(workspace.disputes.length, 0);
   assert.equal(workspace.notifications.length, 0);
+});
+
+test("Supabase sign-up errors retain provider code, status, and trigger guidance", () => {
+  assert.equal(
+    describeSupabaseAuthError(
+      {
+        message: "Database error saving new user",
+        code: "unexpected_failure",
+        status: 500,
+      },
+      "sign-up",
+    ),
+    "Supabase sign-up failed [unexpected_failure] (HTTP 500): Database error saving new user Supabase rejected the Auth user hook; verify the initial profiles migration and handle_new_user trigger in the Dashboard.",
+  );
+  assert.equal(
+    describeSupabaseAuthError(
+      {
+        message: "Password should be at least 10 characters",
+        code: "weak_password",
+        status: 422,
+      },
+      "sign-up",
+    ),
+    "Supabase sign-up failed [weak_password] (HTTP 422): Password should be at least 10 characters",
+  );
 });
 
 test("Demo provisioning sets a provider-managed password for existing and new accounts", async () => {
@@ -788,6 +815,94 @@ test("renter issue reports remain stage-specific, visible to lenders, and retry-
     ],
   );
   assert.throws(() => transition(state, checkInReport), /Only the renter/);
+});
+
+test("issue comment boxes follow delivery/end-stage access in Normal and Demo rentals", () => {
+  for (const _mode of ["normal", "admin_demo"] as const) {
+    for (const stage of ["check_in", "check_out"] as const) {
+      assert.deepEqual(
+        getIssueReportPermissions({
+          stage,
+          status: "upcoming",
+          stageAvailable: false,
+          isLender: false,
+          reportSubmitted: false,
+        }),
+        { canEdit: false, canSubmit: false },
+      );
+    }
+
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_in",
+        status: "upcoming",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: true, canSubmit: false },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_in",
+        status: "active",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: true, canSubmit: true },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_out",
+        status: "active",
+        stageAvailable: false,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: false, canSubmit: false },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_out",
+        status: "active",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: true, canSubmit: true },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_out",
+        status: "completed",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: true, canSubmit: false },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_out",
+        status: "active",
+        stageAvailable: true,
+        isLender: true,
+        reportSubmitted: true,
+      }),
+      { canEdit: false, canSubmit: false },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_in",
+        status: "active",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: true,
+      }),
+      { canEdit: false, canSubmit: false },
+    );
+  }
 });
 
 test("issue report drafts can be prepared while pending but submitted only in their active stage", () => {

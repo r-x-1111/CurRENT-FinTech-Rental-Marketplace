@@ -26,6 +26,35 @@ export interface PasswordAuthGateway {
   signOut(): Promise<{ error: unknown }>;
 }
 
+export function describeSupabaseAuthError(
+  error: unknown,
+  operation: "sign-up" | "password reset",
+): string {
+  if (!error || typeof error !== "object") {
+    return `Supabase ${operation} failed: ${String(error || "Unknown Auth error")}`;
+  }
+  const authError = error as {
+    message?: unknown;
+    code?: unknown;
+    status?: unknown;
+  };
+  const message =
+    typeof authError.message === "string" && authError.message.trim()
+      ? authError.message.trim()
+      : "Unknown Auth error";
+  const code =
+    typeof authError.code === "string" && authError.code
+      ? ` [${authError.code}]`
+      : "";
+  const status =
+    typeof authError.status === "number" ? ` (HTTP ${authError.status})` : "";
+  const triggerHint =
+    operation === "sign-up" && /database error saving new user/i.test(message)
+      ? " Supabase rejected the Auth user hook; verify the initial profiles migration and handle_new_user trigger in the Dashboard."
+      : "";
+  return `Supabase ${operation} failed${code}${status}: ${message}${triggerHint}`;
+}
+
 export async function authenticateWithPassword(
   auth: PasswordAuthGateway,
   email: string,
