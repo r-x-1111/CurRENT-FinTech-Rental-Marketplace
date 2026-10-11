@@ -96,7 +96,7 @@ export default function ProfileScreen() {
             <Text style={s.h2}>{user.name}</Text>
             <Text style={s.caption}>{user.email}</Text>
             <Badge
-              text={`${user.verification} · demo`}
+              text={user.verification === "verified" ? "Verified" : user.verification}
               green={user.verification === "verified"}
             />
           </View>
@@ -155,36 +155,40 @@ export default function ProfileScreen() {
         Lender Mode
       </Button>
 
-      {/* Identity Verification (Demo eKYC) */}
-      <Section title="Identity Verification (Demo eKYC)" />
-      <Card>
-        <Badge
-          text={user.verification === "verified" ? "✓ Verified Renter (Demo eKYC Passed)" : `${user.verification} · demo`}
-          green={user.verification === "verified"}
-        />
-        <Text style={s.caption}>
-          Simulate an external eKYC identity provider. In this classroom demo, no real identity documents or biometrics are collected.
-          Upon successful verification, every newly verified renter begins at strictly 78/100 (Medium Risk).
-        </Text>
-        {["not_verified", "failed"].includes(user.verification) && (
-          <Button onPress={() => verify("pending")}>
-            {user.verification === "failed"
-              ? "Retry demo verification"
-              : "Start demo verification"}
-          </Button>
-        )}
-        {user.verification === "pending" && (
-          <>
-            <Notice text="Verification pending. Choose a simulated provider response to test either outcome." />
-            <Button onPress={() => verify("verified")}>
-              Simulate verified result (Initial Score 78 · Medium)
-            </Button>
-            <Button secondary onPress={() => verify("failed")}>
-              Simulate failed result
-            </Button>
-          </>
-        )}
-      </Card>
+      {/* Identity Verification (Demo eKYC) - Hidden when already verified */}
+      {user.verification !== "verified" && (
+        <>
+          <Section title="Identity Verification (Demo eKYC)" />
+          <Card>
+            <Badge
+              text={user.verification}
+              green={false}
+            />
+            <Text style={s.caption}>
+              Simulate an external eKYC identity provider. In this classroom demo, no real identity documents or biometrics are collected.
+              Upon successful verification, every newly verified renter begins at strictly 78/100 (Medium Risk).
+            </Text>
+            {["not_verified", "failed"].includes(user.verification) && (
+              <Button onPress={() => verify("pending")}>
+                {user.verification === "failed"
+                  ? "Retry demo verification"
+                  : "Start demo verification"}
+              </Button>
+            )}
+            {user.verification === "pending" && (
+              <>
+                <Notice text="Verification pending. Choose a simulated provider response to test either outcome." />
+                <Button onPress={() => verify("verified")}>
+                  Simulate verified result (Initial Score 78 · Medium)
+                </Button>
+                <Button secondary onPress={() => verify("failed")}>
+                  Simulate failed result
+                </Button>
+              </>
+            )}
+          </Card>
+        </>
+      )}
 
       {/* Rental Risk Score Section */}
       <Section title="Rental Risk Score" />
@@ -205,7 +209,7 @@ export default function ProfileScreen() {
         <Row label="Initial verified score" value="78 (Medium Risk)" />
         <Row
           label="Verification status"
-          value={user.verification === "verified" ? "Verified (Demo eKYC)" : "Not verified (N/A)"}
+          value={user.verification === "verified" ? "Verified" : "Not verified (N/A)"}
         />
         <Row
           label="Booking route"
@@ -213,7 +217,7 @@ export default function ProfileScreen() {
             risk.score === null
               ? "Blocked (eKYC Required)"
               : risk.score >= 30
-              ? "Direct Demo Checkout"
+              ? "Direct Checkout"
               : "Pending Platform Review Only"
           }
         />
@@ -346,6 +350,21 @@ export default function ProfileScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.supportNavTitle}>FAQ</Text>
             <Text style={styles.supportNavDesc}>Frequently asked questions and answers</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/support/customer-service")}
+          style={styles.supportNavCard}
+        >
+          <View style={styles.supportNavIconWrap}>
+            <Ionicons name="headset-outline" size={20} color={colors.blue} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.supportNavTitle}>Customer Service</Text>
+            <Text style={styles.supportNavDesc}>CurRENT Assistant · Automated Support & Human Handoff</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.muted} />
         </Pressable>

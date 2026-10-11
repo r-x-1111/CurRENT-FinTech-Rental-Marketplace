@@ -98,6 +98,7 @@ export interface Booking {
     | "disputed";
   paymentMethod?: string;
   agreement?: string;
+  deliveryAddress?: string;
   createdAt: string;
   scheduledPickup?: string;
   scheduledReturn?: string;
@@ -175,6 +176,25 @@ export interface Dispute {
   createdAt: string;
 }
 
+export interface SupportMessage {
+  id: string;
+  userId: string;
+  sender: "user" | "bot" | "human";
+  text: string;
+  createdAt: string;
+  caseId?: string;
+}
+
+export interface SupportCase {
+  id: string;
+  userId: string;
+  status: "waiting" | "replied" | "resolved";
+  query: string;
+  createdAt: string;
+  respondedAt?: string;
+  assignedStaffId?: string;
+}
+
 export interface Marketplace {
   version: 1;
   currentUserId: string | null;
@@ -188,4 +208,6 @@ export interface Marketplace {
   notifications: Notice[];
   disputes: Dispute[];
   platformReviewRequests: PlatformReviewRequest[];
+  supportMessages: SupportMessage[];
+  supportCases: SupportCase[];
 }

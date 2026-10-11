@@ -5,8 +5,11 @@ import {
   calculateCancellationCutoff,
   calculateDurationMinutes,
   checkHandoverConflict,
+  formatDigitalRentalAgreement,
+  formatMalaysiaDateTime,
   isCancellationEligible,
   parseDate,
+  parseMalaysiaTimestamp,
   parseTimestamp,
   quoteFor,
   riskFor,
@@ -71,6 +74,8 @@ export type Action =
       type: "handoverConfirm";
       bookingId: string;
       role: "owner" | "renter";
+      serverTime?: string | number;
+      enforceTimeLock?: boolean;
     }
   | {
       type: "acceptRevisedRental";
@@ -84,6 +89,14 @@ export type Action =
       photo?: string;
       photos?: string[];
       videos?: string[];
+      notes?: string;
+    }
+  | {
+      type: "conditionEvidence";
+      bookingId: string;
+      kind: "check_in" | "check_out";
+      photos: string[];
+      videos: string[];
       notes?: string;
     }
   | {
@@ -112,6 +125,7 @@ export type Action =
       end: string;
       collectionMethod?: CollectionMethod;
       paymentMethod?: string;
+      deliveryAddress?: string;
     }
   | {
       type: "requestPlatformReview";
@@ -140,13 +154,159 @@ export type Action =
       category?: string;
     }
   | { type: "readNotices" }
-  | { type: "readConversation"; bookingId: string };
+  | { type: "readConversation"; bookingId: string }
+  | { type: "supportQuery"; text: string }
+  | { type: "supportHandoff"; query?: string }
+  | { type: "supportStaffReply"; caseId: string; text: string };
 
 export const newId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 function requireThat(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+export function resolveAutomatedSupportQuery(query: string): { answered: boolean; response?: string } {
+  const q = query.trim().toLowerCase();
+
+  // If question involves external banking, overdrafts, personal loans, or non-CurRENT topics, escalate to human support
+  if (
+    q.includes("bank") ||
+    q.includes("overdraft") ||
+    q.includes("credit card") ||
+    q.includes("personal loan") ||
+    q.includes("lawyer") ||
+    q.includes("police")
+  ) {
+    return { answered: false };
+  }
+
+  // 1. How to rent / booking flow
+  if (
+    q.includes("how to rent") ||
+    q.includes("how do i rent") ||
+    q.includes("rent an item") ||
+    q.includes("booking process") ||
+    q.includes("how it works") ||
+    q === "how to rent"
+  ) {
+    return {
+      answered: true,
+      response:
+        "To rent an item on CurRENT:\n\n1. Browse listings on Home and select your desired item.\n2. Choose your rental dates on the calendar.\n3. Pick an available Scheduled Delivery Time slot (10:00 AM – 5:00 PM).\n4. Enter your private delivery address.\n5. Complete simulated FPX checkout (for risk scores 30–100) or submit a platform review request (for scores 0–29).\n6. Your item will be delivered with Delivery Only fulfillment.",
+    };
+  }
+
+  // 2. Fees & deposits
+  if (
+    q.includes("fees & deposits") ||
+    q.includes("fees and deposits") ||
+    q.includes("how much does current charge") ||
+    (q.includes("deposit") && (q.includes("security") || q.includes("calculate") || q.includes("how much") || q.includes("rate"))) ||
+    (q.includes("fee") && (q.includes("service") || q.includes("renter") || q.includes("charge") || q.includes("cost") || q.includes("commission")))
+  ) {
+    return {
+      answered: true,
+      response:
+        "CurRENT Pricing & Security Deposit Rules:\n\n• Renter Service Fee: 5% of rental fee, minimum RM5.\n• Lender Commission: 12% deducted from rent upon completed rental (88% net lender payout).\n• Refundable Security Deposit: Determined by your Rental Risk Score and item replacement value:\n  - Low Risk (80–100): 5% deposit, capped at RM500\n  - Medium Risk (40–79): 10% deposit, capped at RM1,000\n  - High Risk (30–39): 15% deposit, capped at RM1,500\n  - Very High Risk (0–29): Submit request to CurRENT for review\n• All payments and deposits are simulated via FPX in this demo.",
+    };
+  }
+
+  // 3. Delivery & return
+  if (
+    q.includes("delivery & return") ||
+    q.includes("delivery and return") ||
+    (q.includes("delivery") && (q.includes("return") || q.includes("work") || q.includes("receive") || q.includes("receipt") || q.includes("courier"))) ||
+    (q.includes("return") && (q.includes("item") || q.includes("evidence") || q.includes("process") || q.includes("confirm")))
+  ) {
+    return {
+      answered: true,
+      response:
+        "Delivery & Return Fulfillment:\n\n• CurRENT is Delivery Only. There is no physical pickup or meeting.\n• Delivery Receipt: When your item arrives, tap 'Confirm Received' in Rental Details.\n• Return Process: Upload at least 6 photos and 1 video condition evidence at Check-out, then tap 'Confirm Return'.\n• Lender Review: The lender inspects the shared evidence and selects 'No Issue – End Rental' to release your deposit, or 'Apply Dispute' if damage is observed.",
+    };
+  }
+
+  // 4. Rental extensions
+  if (
+    q === "rental extensions" ||
+    q.includes("rental extension") ||
+    q.includes("extend rental") ||
+    q.includes("extend my rental") ||
+    q.includes("extend booking") ||
+    q.includes("consecutive") ||
+    ((q.includes("extend") || q.includes("extension")) && (q.includes("rental") || q.includes("item") || q.includes("booking") || q.includes("days")))
+  ) {
+    return {
+      answered: true,
+      response:
+        "Rental Extensions (Consecutive Bookings):\n\n• You can extend your rental by booking immediately contiguous time starting exactly at your current scheduled return time.\n• Extensions charge only extra rental and service fees.\n• Additional deposit is RM0.00 — your original deposit remains held until final return.",
+    };
+  }
+
+  // 5. Risk score
+  if (
+    q.includes("risk score") ||
+    q.includes("score") ||
+    q.includes("points") ||
+    q.includes("reliability") ||
+    q === "risk score"
+  ) {
+    return {
+      answered: true,
+      response:
+        "CurRENT Rental Risk Score (0–100):\n\n• Starting Score: Every newly verified account begins at 78 (Medium Risk).\n• +2 points: On-time, issue-free completed rental.\n• Late return (>2 hours late): -1 point per additional hour (up to -5 max) when supported by evidence.\n• Confirmed Minor Damage: -10 points.\n• Confirmed Serious Damage/Loss: -30 points.\n• Intentional Fraud/Theft: Permanent ban.\n• Only the single most serious outcome applies per rental chain.",
+    };
+  }
+
+  // 6. Disputes
+  if (
+    q.includes("dispute") ||
+    q.includes("damage") ||
+    q.includes("problem") ||
+    q.includes("claim") ||
+    q.includes("issue") ||
+    q === "disputes"
+  ) {
+    return {
+      answered: true,
+      response:
+        "Disputes & Issue Resolution:\n\n• If an item arrives damaged, is not returned, or condition is disputed, either party can report an issue or apply for dispute.\n• Filing a dispute pauses clean completion and holds the security deposit pending CurRENT review.\n• CurRENT reviews the submitted condition photos/videos to determine claim liability.",
+    };
+  }
+
+  // 7. Cancellation
+  if (q.includes("cancel") || q.includes("cancellation")) {
+    return {
+      answered: true,
+      response:
+        "Cancellation Policy:\n\n• Free cancellation with 100% refund of rental and service fees and full release of deposit is available until at least 24 hours before the scheduled rental start time in Malaysia local time (UTC+8).\n• Regular self-service cancellation is closed within 24 hours of start.",
+    };
+  }
+
+  // 8. Fixed time slots
+  if (
+    q.includes("time slot") ||
+    q.includes("slots") ||
+    q.includes("hours") ||
+    q.includes("scheduled time")
+  ) {
+    return {
+      answered: true,
+      response:
+        "Delivery Time Slots:\n\n• Lenders select at least 2 delivery slots from 8 fixed hours: 10:00 AM, 11:00 AM, 12:00 PM, 1:00 PM, 2:00 PM, 3:00 PM, 4:00 PM, 5:00 PM (Malaysia local time).\n• Renters choose one available Scheduled Delivery Time slot for the rental start.",
+    };
+  }
+
+  // 9. BNPL
+  if (q.includes("bnpl") || q.includes("buy now pay later")) {
+    return {
+      answered: true,
+      response:
+        "Buy Now Pay Later (BNPL):\n\n• BNPL is a future concept for eligible high-value rentals through an external provider.\n• BNPL is not available in this academic demonstration; all checkout is simulated FPX.",
+    };
+  }
+
+  return { answered: false };
 }
 
 export function transition(previous: Marketplace, action: Action): Marketplace {
@@ -484,7 +644,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const cutoff = calculateCancellationCutoff(action.start);
       const quote = quoteFor(state, user, listing, action.start, action.end);
 
-      state.bookings.unshift({
+      const newBooking: Booking = {
         id: action.id,
         listingId: listing.id,
         title: listing.title,
@@ -498,16 +658,18 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         durationMinutes: durMinutes,
         cancellationCutoff: cutoff,
         collectionMethod,
+        deliveryAddress: action.deliveryAddress,
         status: "upcoming",
         quote,
         riskScore: risk.score ?? 78,
         payment: "paid",
         deposit: "held",
         paymentMethod: action.paymentMethod || "Demo FPX",
-        agreement: `DEMO RENTAL AGREEMENT V3.15 • ${action.id}\nLender: ${state.profiles.find((p) => p.id === listing.ownerId)?.name}\nRenter: ${user.name}\nItem: ${listing.title}\nPickup: ${action.start} • Return: ${action.end}\nCollection method: ${collectionMethod}\nRental fee: RM${quote.rentalFee.toFixed(2)} • Service fee: RM${quote.serviceFee.toFixed(2)}\nRefundable security deposit: RM${quote.deposit.toFixed(2)}\nTotal payable today: RM${quote.total.toFixed(2)}\nConfirmed automatically without lender approval.\nGenerated ${now}`,
         createdAt: now,
         contextMode: state.mode || "normal",
-      });
+      };
+      newBooking.agreement = formatDigitalRentalAgreement(newBooking, state);
+      state.bookings.unshift(newBooking);
 
       notify(
         listing.ownerId,
@@ -684,7 +846,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             if (!b.cancellationCutoff) {
               b.cancellationCutoff = calculateCancellationCutoff(b.scheduledPickup);
             }
-            b.agreement = `DEMO RENTAL AGREEMENT • ${b.id}\nOwner: ${state.profiles.find((p) => p.id === b.ownerId)?.name}\nRenter: ${user.name}\nItem: ${b.title}\nFulfilment: Delivery Only\nRental: RM${b.quote.rentalFee.toFixed(2)} • Service: RM${b.quote.serviceFee.toFixed(2)} • Protection: RM${b.quote.protection.toFixed(2)}\nRefundable deposit: RM${b.quote.deposit.toFixed(2)}\nTotal: RM${b.quote.total.toFixed(2)}\nBoth parties record condition evidence (≥6 photos, ≥1 video) at check-in and check-out. Deposit release follows mutual return confirmation; disputed deposits remain on hold for review. No actual money, insurance or deposit custody is provided in this academic demo.\nGenerated ${now}`;
+            b.agreement = formatDigitalRentalAgreement(b, state);
             notify(
               b.ownerId,
               `Demo payment received for ${b.title}. Ready for handover.`,
@@ -784,24 +946,38 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const b = bookingFor(action.bookingId);
       const owner = user.id === b.ownerId;
       requireThat(
-        b.status === "upcoming",
-        "Handover can only be confirmed for upcoming paid rentals.",
+        ["upcoming", "active"].includes(b.status),
+        "Handover or delivery receipt can only be confirmed for upcoming or active paid rentals.",
       );
 
       if (action.role === "owner") {
-        requireThat(owner, "Only the owner can confirm item handed over.");
+        requireThat(owner, "Only the owner can confirm item dispatch.");
         b.lenderHandoverAt = now;
         notify(
           b.renterId,
-          `Owner confirmed handover for ${b.title}. Please confirm receipt when you receive the item.`,
+          `Owner confirmed dispatch for ${b.title}. Please confirm receipt when you receive the item.`,
           b.id,
         );
       } else {
-        requireThat(!owner, "Only the renter can confirm item received.");
+        requireThat(!owner, "Only the renter can confirm item delivery receipt.");
+        requireThat(!b.renterReceivedAt, "Delivery receipt has already been confirmed.");
+        const startMs = parseMalaysiaTimestamp(b.scheduledPickup || b.start);
+        const currentMs =
+          action.serverTime !== undefined
+            ? typeof action.serverTime === "number"
+              ? action.serverTime
+              : parseMalaysiaTimestamp(action.serverTime)
+            : Date.now();
+        if (action.serverTime !== undefined || action.enforceTimeLock) {
+          requireThat(
+            currentMs >= startMs,
+            `Confirm Received is available from scheduled rental start: ${formatMalaysiaDateTime(startMs)}`,
+          );
+        }
         b.renterReceivedAt = now;
         notify(
           b.ownerId,
-          `Renter confirmed receipt for ${b.title}. Waiting for owner handover confirmation.`,
+          `Renter confirmed delivery receipt for ${b.title}.`,
           b.id,
         );
       }
@@ -952,20 +1128,9 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         );
       } else {
         requireThat(owner, "Only the owner can confirm return inspection.");
-        const lenderEvidence = state.evidence.filter(
-          (e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "check_out",
-        );
-        const totalPhotos = lenderEvidence.reduce(
-          (sum, e) => sum + (e.photos?.length || (e.photo ? 1 : 0)),
-          0,
-        );
-        const totalVideos = lenderEvidence.reduce(
-          (sum, e) => sum + (e.videos?.length || 0),
-          0,
-        );
         requireThat(
-          totalPhotos >= 6 && totalVideos >= 1,
-          `Lender must submit required check-out condition evidence (at least 6 photos and 1 video) before confirming check-out. Currently have ${totalPhotos} photos and ${totalVideos} videos.`,
+          !!b.renterReturnConfirmedAt,
+          "Renter must complete return check-out before lender can end the rental.",
         );
 
         b.lenderReturnConfirmedAt = now;
@@ -1058,6 +1223,45 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           b.id,
         );
       }
+      break;
+    }
+
+    case "conditionEvidence": {
+      const b = bookingFor(action.bookingId);
+      const owner = user.id === b.ownerId;
+      requireThat(!owner, "Only the renter submits condition evidence.");
+      requireThat(
+        ["upcoming", "active", "return_pending"].includes(b.status),
+        "Condition evidence can only be submitted for active, upcoming or returning rentals.",
+      );
+      if (action.kind === "check_in") {
+        requireThat(
+          !!b.renterReceivedAt || b.status === "active",
+          "Item must be delivered before submitting check-in condition evidence.",
+        );
+      }
+      requireThat(
+        action.photos.length >= 6 && action.videos.length >= 1,
+        `Condition evidence requires at least 6 photos and 1 video. Currently have ${action.photos.length} photos and ${action.videos.length} videos.`,
+      );
+
+      state.evidence.push({
+        id: newId(),
+        bookingId: b.id,
+        authorId: user.id,
+        kind: action.kind,
+        photo: action.photos[0] || "",
+        photos: action.photos,
+        videos: action.videos,
+        notes: action.notes?.trim() || `${action.kind === "check_in" ? "Check-in" : "Check-out"} condition evidence recorded.`,
+        createdAt: now,
+      });
+
+      notify(
+        b.ownerId,
+        `Renter submitted ${action.kind === "check_in" ? "check-in" : "check-out"} condition evidence for ${b.title}.`,
+        b.id,
+      );
       break;
     }
 
@@ -1372,6 +1576,110 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           notice.read = true;
         });
       break;
+
+    case "supportQuery": {
+      if (!state.supportMessages) state.supportMessages = [];
+      if (!state.supportCases) state.supportCases = [];
+
+      state.supportMessages.push({
+        id: newId(),
+        userId: user.id,
+        sender: "user",
+        text: action.text,
+        createdAt: now,
+      });
+
+      const result = resolveAutomatedSupportQuery(action.text);
+      if (result.answered && result.response) {
+        state.supportMessages.push({
+          id: newId(),
+          userId: user.id,
+          sender: "bot",
+          text: result.response,
+          createdAt: now,
+        });
+      } else {
+        let activeCase = state.supportCases.find(
+          (c) => c.userId === user.id && c.status === "waiting",
+        );
+        if (!activeCase) {
+          activeCase = {
+            id: `CASE-${newId().slice(0, 8).toUpperCase()}`,
+            userId: user.id,
+            status: "waiting",
+            query: action.text,
+            createdAt: now,
+          };
+          state.supportCases.push(activeCase);
+        } else {
+          activeCase.query = `${activeCase.query}\n${action.text}`;
+        }
+
+        state.supportMessages.push({
+          id: newId(),
+          userId: user.id,
+          sender: "bot",
+          caseId: activeCase.id,
+          text: "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+          createdAt: now,
+        });
+      }
+      break;
+    }
+
+    case "supportHandoff": {
+      if (!state.supportMessages) state.supportMessages = [];
+      if (!state.supportCases) state.supportCases = [];
+
+      let activeCase = state.supportCases.find(
+        (c) => c.userId === user.id && c.status === "waiting",
+      );
+      if (!activeCase) {
+        activeCase = {
+          id: `CASE-${newId().slice(0, 8).toUpperCase()}`,
+          userId: user.id,
+          status: "waiting",
+          query: action.query || "Customer requested human support handoff.",
+          createdAt: now,
+        };
+        state.supportCases.push(activeCase);
+      }
+
+      state.supportMessages.push({
+        id: newId(),
+        userId: user.id,
+        sender: "bot",
+        caseId: activeCase.id,
+        text: "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+        createdAt: now,
+      });
+      break;
+    }
+
+    case "supportStaffReply": {
+      if (!state.supportMessages) state.supportMessages = [];
+      if (!state.supportCases) state.supportCases = [];
+
+      const sc = state.supportCases.find((c) => c.id === action.caseId);
+      requireThat(sc, "Support case not found.");
+      sc.status = "replied";
+      sc.respondedAt = now;
+
+      state.supportMessages.push({
+        id: newId(),
+        userId: sc.userId,
+        sender: "human",
+        caseId: sc.id,
+        text: action.text,
+        createdAt: now,
+      });
+
+      notify(
+        sc.userId,
+        "CurRENT Support · Human has replied to your customer service enquiry.",
+      );
+      break;
+    }
   }
 
   return state;

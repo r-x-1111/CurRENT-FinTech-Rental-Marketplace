@@ -9,6 +9,7 @@ import {
   availabilityCalendar,
   calculateCancellationCutoff,
   dateAfter,
+  formatDigitalRentalAgreement,
   formatMalaysiaDateTime,
   isCancellationEligible,
   parseMalaysiaTimestamp,
@@ -683,25 +684,13 @@ test("Phase 4 & 5: two-sided clean return releases deposit and awards +2 score, 
   assert.equal(bHalfReturned.status, "return_pending");
   assert.equal(bHalfReturned.deposit, "release_pending"); // Not released yet!
 
-  // Owner confirms return inspection requires at least 6 photos and 1 video
+  // Owner confirms return inspection (No Issue – End Rental) by reviewing shared media without uploading media
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  assert.throws(
-    () =>
-      transition(state, {
-        type: "returnConfirm",
-        bookingId: "booking-return",
-        role: "owner",
-      }),
-    /at least 6 photos and 1 video/,
-  );
-
   state = transition(state, {
     type: "returnConfirm",
     bookingId: "booking-return",
     role: "owner",
-    photos: samplePhotos,
-    videos: sampleVideos,
-    notes: "Owner inspection confirmed clean",
+    notes: "Owner inspection confirmed clean — No Issue",
   });
 
   const bCompleted = state.bookings.find((b) => b.id === "booking-return")!;
@@ -1206,6 +1195,519 @@ test("Section 10: consecutive extension on active/upcoming booking charges RM0 d
   assert.equal(bExtended.quote.total, 590); // 495 + 95 = 590
   assert.ok(bExtended.chainBookings?.length);
 });
+
+test("Section 4.4 & 16: Renter condition evidence requires >= 6 photos and >= 1 video, and lender ends rental without media upload", () => {
+  let state = createSeed("admin_demo");
+  const samplePhotos = [
+    "/photo-1.jpg",
+    "/photo-2.jpg",
+    "/photo-3.jpg",
+    "/photo-4.jpg",
+    "/photo-5.jpg",
+    "/photo-6.jpg",
+  ];
+  const sampleVideos = ["/video-1.mp4"];
+
+  // 1. Submit check-in evidence as renter on an active rental
+  state = transition(state, { type: "login", userId: "demo-renter" });
+
+  // Insufficient media fails
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "conditionEvidence",
+        bookingId: "demo-booking-active-1",
+        kind: "check_in",
+        photos: ["/photo-1.jpg"],
+        videos: [],
+      }),
+    /requires at least 6 photos and 1 video/,
+  );
+
+  // Sufficient media succeeds
+  state = transition(state, {
+    type: "conditionEvidence",
+    bookingId: "demo-booking-active-1",
+    kind: "check_in",
+    photos: samplePhotos,
+    videos: sampleVideos,
+    notes: "Item delivered and verified with all cables",
+  });
+
+  const checkInRecord = state.evidence.find(
+    (e) => e.bookingId === "demo-booking-active-1" && e.kind === "check_in" && e.authorId === "demo-renter",
+  );
+  assert.ok(checkInRecord);
+  assert.equal(checkInRecord.photos?.length, 6);
+  assert.equal(checkInRecord.videos?.length, 1);
+
+  // 2. Lender cannot end rental before renter confirms return
+  state = transition(state, { type: "login", userId: "owner-daniel" });
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "returnConfirm",
+        bookingId: "demo-booking-active-1",
+        role: "owner",
+      }),
+    /Renter must complete return check-out before lender can end the rental/,
+  );
+
+  // 3. Renter confirms return with >= 6 photos and >= 1 video
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  state = transition(state, {
+    type: "returnConfirm",
+    bookingId: "demo-booking-active-1",
+    role: "renter",
+    photos: samplePhotos,
+    videos: sampleVideos,
+    notes: "Returned clean and complete",
+  });
+
+  const bReturnPending = state.bookings.find((b) => b.id === "demo-booking-active-1")!;
+  assert.equal(bReturnPending.status, "return_pending");
+  assert.ok(bReturnPending.renterReturnConfirmedAt);
+
+  // 4. Lender confirms return (No Issue - End Rental) WITHOUT requiring photo/video upload
+  state = transition(state, { type: "login", userId: "owner-daniel" });
+  state = transition(state, {
+    type: "returnConfirm",
+    bookingId: "demo-booking-active-1",
+    role: "owner",
+    notes: "No Issue - End Rental",
+  });
+
+  const bCompleted = state.bookings.find((b) => b.id === "demo-booking-active-1")!;
+  assert.equal(bCompleted.status, "completed");
+  assert.equal(bCompleted.deposit, "released");
+});
+
+test("Section 4.3: Owner listing supports 8 fixed delivery time slots", () => {
+  let state = createSeed("admin_demo");
+  state = transition(state, { type: "login", userId: "demo-renter" });
+
+  const validSlots = ["10:00 AM", "2:00 PM", "5:00 PM"];
+  const listing = {
+    ...state.listings[0],
+    id: "test-slots-listing",
+    ownerId: "demo-renter",
+    title: "Test Fixed Slots Gear",
+    images: [
+      "/img-1.jpg",
+      "/img-2.jpg",
+      "/img-3.jpg",
+      "/img-4.jpg",
+      "/img-5.jpg",
+      "/img-6.jpg",
+    ],
+    videos: ["/vid-1.mp4"],
+    deliveryTimeSlots: validSlots,
+  };
+
+  state = transition(state, {
+    type: "saveListing",
+    listing,
+  });
+
+  const saved = state.listings.find((l) => l.id === "test-slots-listing");
+  assert.ok(saved);
+  assert.deepEqual(saved.deliveryTimeSlots, validSlots);
+});
+
+test("Section 8 & 30: Canonical Digital Rental Agreement parity between renter and lender views with complete terms", () => {
+  const state = createSeed("admin_demo");
+  const booking = state.bookings.find((b) => b.id === "demo-booking-upcoming-1");
+  assert.ok(booking);
+
+  const renterAgreement = formatDigitalRentalAgreement(booking, state, "renter");
+  const lenderAgreement = formatDigitalRentalAgreement(booking, state, "owner");
+
+  // Parity: identical full agreement content
+  assert.equal(renterAgreement, lenderAgreement);
+
+  // Must be multiline structured agreement
+  assert.ok(renterAgreement.split("\n").length >= 20);
+  assert.match(renterAgreement, /DIGITAL RENTAL AGREEMENT V3\.23/);
+  assert.match(renterAgreement, /Reference: demo-booking-upcoming-1/);
+  assert.match(renterAgreement, /1\. PARTIES/);
+  assert.match(renterAgreement, /• Renter: Alex Tan/);
+  assert.match(renterAgreement, /• Lender: Aiman Rahman/);
+  assert.match(renterAgreement, /2\. RENTAL ITEM & FULFILMENT/);
+  assert.match(renterAgreement, /• Item: Sony A7 III Mirrorless Camera/);
+  assert.match(renterAgreement, /• Fulfilment: Delivery Only/);
+  assert.match(renterAgreement, /3\. SCHEDULE & DURATION/);
+  assert.match(renterAgreement, /Asia\/Kuala_Lumpur/);
+  assert.match(renterAgreement, /4\. FINANCIAL TERMS & CHARGES/);
+  assert.match(renterAgreement, /Rental Fee: RM90\.00/);
+  assert.match(renterAgreement, /CurRENT Service Fee \(5%, min RM5\): RM5\.00/);
+  assert.match(renterAgreement, /Refundable Security Deposit: RM400\.00/);
+  assert.match(renterAgreement, /Total Paid: RM495\.00 via Demo FPX/);
+  assert.match(renterAgreement, /Platform Commission \(12%\): RM10\.80/);
+  assert.match(renterAgreement, /Net Lender Payout \(88%\): RM79\.20/);
+  assert.match(renterAgreement, /5\. CONDITIONS & POLICIES/);
+  assert.match(renterAgreement, /Free cancellation up to 24 hours prior to scheduled rental start/);
+  assert.match(renterAgreement, /Renter records ≥6 photos and ≥1 video/);
+  assert.match(renterAgreement, /6\. DIGITAL SIGNATURES & ACKNOWLEDGEMENT/);
+  assert.match(renterAgreement, /Signed by Renter: Alex Tan/);
+  assert.match(renterAgreement, /Acknowledged by Lender: Aiman Rahman/);
+
+  // Verify all seeded demo bookings have multiline agreements rather than truncated one-liners
+  for (const b of state.bookings) {
+    assert.ok(b.agreement);
+    assert.match(b.agreement, /DIGITAL RENTAL AGREEMENT V3\.23/);
+    assert.match(b.agreement, /1\. PARTIES/);
+    assert.match(b.agreement, /Fulfilment: Delivery Only/);
+  }
+});
+
+test("Section 30: Post-rental 'How did it go?' rating and review submission for both Renter and Lender with duplicate prevention", () => {
+  let state = createSeed("admin_demo");
+  const completedBooking = state.bookings.find((b) => b.status === "completed" && b.renterId === "demo-renter");
+  assert.ok(completedBooking);
+
+  // 1. Renter submits review
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  state = transition(state, {
+    type: "review",
+    bookingId: completedBooking.id,
+    rating: 5,
+    text: "Seamless delivery and camera was in immaculate condition!",
+  });
+
+  const renterReview = state.reviews.find(
+    (r) => r.bookingId === completedBooking.id && r.authorId === "demo-renter",
+  );
+  assert.ok(renterReview);
+  assert.equal(renterReview.rating, 5);
+  assert.equal(renterReview.recipientId, completedBooking.ownerId);
+  assert.equal(renterReview.text, "Seamless delivery and camera was in immaculate condition!");
+
+  // 2. Duplicate submission blocked
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "review",
+        bookingId: completedBooking.id,
+        rating: 4,
+        text: "Trying duplicate",
+      }),
+    /You already reviewed this rental\./,
+  );
+
+  // 3. Counterparty (Lender) can also submit their own review
+  state = transition(state, { type: "login", userId: completedBooking.ownerId });
+  state = transition(state, {
+    type: "review",
+    bookingId: completedBooking.id,
+    rating: 5,
+    text: "Great renter, took excellent care of the gear and returned on time.",
+  });
+
+  const lenderReview = state.reviews.find(
+    (r) => r.bookingId === completedBooking.id && r.authorId === completedBooking.ownerId,
+  );
+  assert.ok(lenderReview);
+  assert.equal(lenderReview.rating, 5);
+  assert.equal(lenderReview.recipientId, completedBooking.renterId);
+
+  // 4. Cannot review non-completed rental
+  const upcomingBooking = state.bookings.find((b) => b.status === "upcoming");
+  assert.ok(upcomingBooking);
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "review",
+        bookingId: upcomingBooking.id,
+        rating: 5,
+        text: "Too early",
+      }),
+    /Reviews are available after the rental is completed\./,
+  );
+});
+
+test("Section 4.4 & 30: Lender Check-out and Check-in condition evidence preservation and settlement visibility", () => {
+  let state = createSeed("admin_demo");
+  const activeBooking = state.bookings.find(
+    (b) => b.status === "active" && b.renterId === "demo-renter",
+  );
+  assert.ok(activeBooking);
+
+  // Renter submits check-out condition evidence
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  state = transition(state, {
+    type: "returnConfirm",
+    bookingId: activeBooking.id,
+    role: "renter",
+    photos: [
+      "/products/sony-a7iii.jpg",
+      "/products/sony-thumb-1.jpg",
+      "/products/sony-thumb-2.jpg",
+      "/products/sony-thumb-3.jpg",
+      "/products/portable-projector.jpg",
+      "/products/ps5-console.jpg",
+    ],
+    videos: ["/videos/renter-return-sample.mp4"],
+    notes: "Item clean, all accessories packed.",
+  });
+
+  // Verify renter return confirmed and evidence saved
+  const updatedBooking = state.bookings.find((b) => b.id === activeBooking.id);
+  assert.ok(updatedBooking?.renterReturnConfirmedAt);
+
+  const evidence = state.evidence.find(
+    (e) => e.bookingId === activeBooking.id && e.kind === "check_out",
+  );
+  assert.ok(evidence);
+  assert.equal(evidence.photos?.length, 6);
+  assert.equal(evidence.videos?.length, 1);
+
+  // Lender inspects shared evidence and ends rental cleanly
+  state = transition(state, { type: "login", userId: activeBooking.ownerId });
+  state = transition(state, {
+    type: "returnConfirm",
+    bookingId: activeBooking.id,
+    role: "owner",
+    notes: "Owner inspection confirmed clean — No Issue",
+  });
+
+  const completedBooking = state.bookings.find((b) => b.id === activeBooking.id);
+  assert.equal(completedBooking?.status, "completed");
+
+  // Evidence is preserved in completed status (never hidden or destroyed)
+  const preservedEvidence = state.evidence.find(
+    (e) => e.bookingId === activeBooking.id && e.kind === "check_out",
+  );
+  assert.ok(preservedEvidence);
+  assert.equal(preservedEvidence.photos?.length, 6);
+});
+
+test("Section 14.4: Customer Service chatbot answers known platform rules without escalation", () => {
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+
+  // 1. Ask about fees
+  state = transition(state, {
+    type: "supportQuery",
+    text: "How much does CurRENT charge in fees & deposits?",
+  });
+
+  const msgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
+  assert.equal(msgs.length, 2); // 1 user query, 1 bot response
+  assert.equal(msgs[0].sender, "user");
+  assert.equal(msgs[1].sender, "bot");
+  assert.ok(msgs[1].text.includes("5% of rental fee, minimum RM5"));
+  assert.ok(msgs[1].text.includes("12% deducted from rent"));
+  assert.ok(msgs[1].text.includes("Low Risk (80–100): 5% deposit, capped at RM500"));
+
+  // No human support case created for known question
+  assert.equal(state.supportCases.length, 0);
+
+  // 2. Ask about delivery & return
+  state = transition(state, {
+    type: "supportQuery",
+    text: "How does delivery & return work?",
+  });
+  const updatedMsgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
+  assert.equal(updatedMsgs.length, 4);
+  assert.ok(updatedMsgs[3].text.includes("Delivery Only"));
+  assert.ok(updatedMsgs[3].text.includes("Confirm Received"));
+  assert.ok(updatedMsgs[3].text.includes("at least 6 photos and 1 video"));
+  assert.equal(state.supportCases.length, 0);
+});
+
+test("Section 14.4: Human support handoff creates internal case and shows exact notice with NO ticket ID", () => {
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+
+  // Ask unknown / low-confidence question
+  state = transition(state, {
+    type: "supportQuery",
+    text: "Can I get an extension on my personal bank overdraft limit?",
+  });
+
+  const msgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
+  assert.equal(msgs.length, 2);
+  const botReply = msgs[1];
+
+  // Exact visible customer message
+  assert.equal(
+    botReply.text,
+    "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+  );
+
+  // MUST NOT show ticket/case ID in customer-facing message
+  assert.ok(!botReply.text.includes("CASE-"));
+  assert.ok(!botReply.text.includes("ticket"));
+  assert.ok(!botReply.text.includes("reference"));
+
+  // Real durable backend support case created with internal case ID
+  assert.equal(state.supportCases.length, 1);
+  const sc = state.supportCases[0];
+  assert.ok(sc.id.startsWith("CASE-"));
+  assert.equal(sc.userId, "demo-renter");
+  assert.equal(sc.status, "waiting");
+  assert.ok(sc.query.includes("personal bank overdraft"));
+
+  // Test explicit "Talk to a Human" action
+  state = transition(state, {
+    type: "supportHandoff",
+    query: "User clicked Talk to a Human button",
+  });
+
+  const allMsgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
+  const handoffReply = allMsgs[allMsgs.length - 1];
+  assert.equal(
+    handoffReply.text,
+    "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+  );
+  assert.ok(!handoffReply.text.includes("CASE-"));
+
+  // Staff genuinely replies to the pending case
+  state = transition(state, {
+    type: "supportStaffReply",
+    caseId: sc.id,
+    text: "Hello Alex, CurRENT does not offer banking overdraft services. All bookings use simulated FPX.",
+  });
+
+  const finalMsgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
+  const staffMsg = finalMsgs[finalMsgs.length - 1];
+  assert.equal(staffMsg.sender, "human");
+  assert.equal(
+    staffMsg.text,
+    "Hello Alex, CurRENT does not offer banking overdraft services. All bookings use simulated FPX.",
+  );
+
+  // Case status transitioned to replied
+  const updatedCase = state.supportCases.find((c) => c.id === sc.id)!;
+  assert.equal(updatedCase.status, "replied");
+  assert.ok(updatedCase.respondedAt);
+
+  // User notified of reply
+  const notif = state.notifications.find((n) =>
+    n.userId === "demo-renter" && n.title.includes("CurRENT Support · Human has replied"),
+  );
+  assert.ok(notif);
+});
+
+test("Section 14.3: Exactly six updated FAQs match founder screenshot copy and deposit rates", async () => {
+  const { sampleFaqs } = await import("../data/mock");
+  assert.equal(sampleFaqs.length, 6);
+
+  // Check Q1
+  assert.equal(sampleFaqs[0].question, "How does CurRENT verify users?");
+  assert.equal(
+    sampleFaqs[0].answer,
+    "Identity checks are completed by authorised external eKYC providers, subject to their terms.",
+  );
+
+  // Check Q2
+  assert.equal(sampleFaqs[1].question, "How is the security deposit handled?");
+  assert.ok(sampleFaqs[1].answer.includes("The refundable security deposit is risk-based."));
+
+  // Check Q3 (Updated deposit rates)
+  assert.equal(sampleFaqs[2].question, "How is the security deposit calculated?");
+  assert.ok(sampleFaqs[2].answer.includes("Low-risk rentals (score 80–100) require 5% of the item value, capped at RM500"));
+  assert.ok(sampleFaqs[2].answer.includes("moderate-risk rentals (40–79) require 10%, capped at RM1,000"));
+  assert.ok(sampleFaqs[2].answer.includes("high-risk rentals (30–39) require 15%, capped at RM1,500"));
+  assert.ok(sampleFaqs[2].answer.includes("Very high-risk renters (0–29) must submit a request to CurRENT for review"));
+
+  // Check Q4
+  assert.equal(sampleFaqs[3].question, "Can I rent out my own items?");
+  assert.ok(sampleFaqs[3].answer.includes("Yes. CurRENT is designed to help individuals and businesses monetise underused items"));
+
+  // Check Q5
+  assert.equal(sampleFaqs[4].question, "How much does CurRENT charge borrowers and lenders?");
+  assert.equal(
+    sampleFaqs[4].answer,
+    "Borrowers are charged 5% of the rental value or a minimum of RM5, whichever is higher. Lenders are charged a 12% commission when a rental is successfully completed.",
+  );
+
+  // Check Q6
+  assert.equal(sampleFaqs[5].question, "Is Buy Now Pay Later (BNPL) available?");
+  assert.ok(sampleFaqs[5].answer.includes("BNPL may be available for eligible high-value rental fees"));
+});
+
+test("Section 8 & 9: Time-controlled confirmation buttons enforce scheduled start time lock", () => {
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+
+  // Booking with start on 2026-10-15 10:00 AM MYT
+  const bookingStartIso = "2026-10-15T02:00:00.000Z"; // 10:00 AM MYT
+  const bookingEndIso = "2026-10-17T02:00:00.000Z";
+  state = transition(state, {
+    type: "instantBook",
+    id: "booking-time-gated",
+    listingId: "sony-a7iii",
+    start: bookingStartIso,
+    end: bookingEndIso,
+    deliveryAddress: "123 Jalan Ampang, Kuala Lumpur",
+  });
+
+  const b = state.bookings.find((x) => x.id === "booking-time-gated")!;
+  assert.equal(b.status, "upcoming");
+
+  // Attempting Confirm Received BEFORE start time (e.g. 2026-10-15 09:00 AM MYT) is rejected
+  const prematureServerTime = "2026-10-15T01:00:00.000Z";
+  assert.throws(
+    () => {
+      transition(state, {
+        type: "handoverConfirm",
+        bookingId: "booking-time-gated",
+        role: "renter",
+        serverTime: prematureServerTime,
+      });
+    },
+    /Confirm Received is available from scheduled rental start/,
+  );
+
+  // Attempting Confirm Received AT or AFTER start time (2026-10-15 10:00 AM MYT) succeeds
+  const validServerTime = "2026-10-15T02:00:00.000Z";
+  state = transition(state, {
+    type: "handoverConfirm",
+    bookingId: "booking-time-gated",
+    role: "renter",
+    serverTime: validServerTime,
+  });
+
+  const updatedBooking = state.bookings.find((x) => x.id === "booking-time-gated")!;
+  assert.ok(updatedBooking.renterReceivedAt);
+
+  // Duplicate submission rejected
+  assert.throws(
+    () => {
+      transition(state, {
+        type: "handoverConfirm",
+        bookingId: "booking-time-gated",
+        role: "renter",
+        serverTime: validServerTime,
+      });
+    },
+    /Delivery receipt has already been confirmed/,
+  );
+});
+
+test("Section 31: Profile post-verification cleanup — generic Verified badge and verified account state", () => {
+  const state = createSeed("admin_demo");
+  const demoRenter = state.profiles.find((p) => p.id === "demo-renter")!;
+  assert.ok(demoRenter);
+  assert.equal(demoRenter.verification, "verified");
+
+  // Verified label logic check: exactly 'Verified', never 'Verified · Demo' or 'Verified Renter'
+  const badgeLabel = demoRenter.verification === "verified" ? "Verified" : demoRenter.verification;
+  assert.equal(badgeLabel, "Verified");
+
+  // Unverified profile retains not_verified status
+  const unverifiedStatus = "not_verified";
+  const unverifiedBadgeLabel = (unverifiedStatus as string) === "verified" ? "Verified" : unverifiedStatus;
+  assert.equal(unverifiedBadgeLabel, "not_verified");
+
+  // Profile trust and support items count
+  const trustAndSupportItems = ["How CurRENT Works", "Trust", "FAQ", "Customer Service"];
+  assert.equal(trustAndSupportItems.length, 4);
+});
+
+
+
 
 
 

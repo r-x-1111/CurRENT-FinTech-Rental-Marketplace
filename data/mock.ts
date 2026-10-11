@@ -26,72 +26,37 @@ export const sampleReviews: SampleReview[] = [
   },
 ];
 
-// Section 14: Canonical 13 FAQs on FAQ page
+// Section 14.3: Canonical 6 FAQs from founder screenshot
 export const sampleFaqs: FaqItem[] = [
   {
     question: "How does CurRENT verify users?",
     answer:
-      "Sign Up demonstrates choosing MyKad or Passport, previewing sample identity-document photos locally, and a simulated facial-scan animation; these do not check actual documents, capture real faces or use a live eKYC service. Demo-only verified status is server controlled; initial verified renter score is 78 Medium. Genuine account sign-in is separate from this fictional eKYC process.",
+      "Identity checks are completed by authorised external eKYC providers, subject to their terms.",
   },
   {
     question: "How is the security deposit handled?",
     answer:
-      "Calculated/held/refunded as Demo only; renter Confirm Return and lender End Rental — No Issue after viewing shared media release the full amount once; disputes hold it; not actual escrow.",
+      "The refundable security deposit is risk-based. The amount may vary according to borrower risk and item value. It is shown before payment and handled through an authorised external provider.",
   },
   {
     question: "How is the security deposit calculated?",
     answer:
-      "From internal illustrative replacement value, not rental/day price: Low 80–100 5% cap RM500, Medium 40–79 10% cap RM1,000, High 30–39 15% cap RM1,500; 0–29 restricted request has no quote/deposit; a contiguous extension does not create a second deposit.",
+      "CurRENT automatically determines the deposit based on the renter’s Rental Risk Score and the item’s estimated market value. Low-risk rentals (score 80–100) require 5% of the item value, capped at RM500; moderate-risk rentals (40–79) require 10%, capped at RM1,000; and high-risk rentals (30–39) require 15%, capped at RM1,500. Very high-risk renters (0–29) must submit a request to CurRENT for review instead of booking directly.",
   },
   {
     question: "Can I rent out my own items?",
     answer:
-      "Yes, after demo verification and submitting required six photos, one video, private dispatch address, schedule with ≥2 windows; listings use Delivery Only. Lenders control unreserved listing availability, not renter booking approval, score or platform claims; owner cannot rent their own listing.",
+      "Yes. CurRENT is designed to help individuals and businesses monetise underused items by renting them to users who need temporary access. Create a listing to make your item available for rent.",
   },
   {
-    question: "How much does CurRENT charge renters and lenders?",
+    question: "How much does CurRENT charge borrowers and lenders?",
     answer:
-      "Rental fee + 5% renter service fee (minimum RM5) + refundable demo deposit. Lender commission 12% deducted from rent, illustrative payout 88%. Optional RM10/7-day demo Listing Boost is lender-side; no real payment.",
+      "Borrowers are charged 5% of the rental value or a minimum of RM5, whichever is higher. Lenders are charged a 12% commission when a rental is successfully completed.",
   },
   {
     question: "Is Buy Now Pay Later (BNPL) available?",
     answer:
-      "BNPL is a future concept only. In this demo the only payment-method button is FPX, with a separate demo disclosure, which does not connect to real online banking; no real credit offered.",
-  },
-  {
-    question: "How do I book; does the owner approve?",
-    answer:
-      "On Home choose listing; product calendar date range, clock time, delivery address → Rent → select FPX (only payment method) → Pay (simulated, no money charged) → immediately Confirmed if the slot remains available, no lender approval; automatic Active at chosen timestamp. For 0–29: Submit Request to CurRENT → read-only Request to Rent pending status, no payment/held interval.",
-  },
-  {
-    question: "How does Rental Risk Score work?",
-    answer:
-      "Initially 78 Medium; Low 80–100, Medium 40–79, High 30–39, Very High 0–29; +2 clean, >2h late −min(5,ceil(hoursLate−2)), minor damage −10, serious damage/loss −30, confirmed intentional fraud ban; one final outcome per chain and no invented 4h-late penalty based on button click alone. Only the renter sees their private Risk Score History; Completed Rentals counts distinct finalised rental chains and +N points denotes effective clean-completion awards, synchronised with that same record history, not an independently mutable number.",
-  },
-  {
-    question: "What if something is damaged or missing?",
-    answer:
-      "Either party can report a dispute immediately, even if photo/video bundle incomplete; demo deposit held, factual evidence saved and scripted fictional platform claim/appeal path separate from the 0–29 Platform Review Requests tab. Coverage conditional and not live.",
-  },
-  {
-    question: "How do delivery receipt, item condition and return work?",
-    answer:
-      "Delivery Only. Renter Confirm Received acknowledges first delivery (clock stays scheduled). Renter alone uploads ≥6 photos + ≥1 video at Check-in and Check-out using camera/video-add icons; lender views those same files. Renter Confirm Return begins final review; lender presses End Rental — No Issue to settle cleanly or Apply for Dispute to hold funds. No lender media upload, and click times are not proof of on-time return.",
-  },
-  {
-    question: "Can I cancel a confirmed booking?",
-    answer:
-      "At least 24h before original scheduled start, inclusive; full simulated rent/service refund and deposit release, RM0 fee; after cutoff no regular self-service cancel. Pending platform requests aren't paid booked rentals.",
-  },
-  {
-    question: "How does delivery work, and who sees addresses?",
-    answer:
-      "Delivery Only, no real tracking or extra fee. Renter provides private destination address visible only to the renter and relevant confirmed-booking lender; lender's own complete dispatch address stays private, while a general service area shows publicly. Lender delivers under this classroom concept, not a guaranteed real courier service.",
-  },
-  {
-    question: "Can I extend my rental?",
-    answer:
-      "Immediately contiguous available period for same item/renter, simulate extra rent/service only, RM0 second deposit, no second delivery or lender approval; blocked by later reservations, one final chain-level risk outcome.",
+      "BNPL may be available for eligible high-value rental fees through an authorised external provider. Security deposits are paid separately and are not financed through BNPL.",
   },
 ];
 

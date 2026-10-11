@@ -1,5 +1,5 @@
 import type { Listing } from "../types";
-import type { Marketplace, Profile } from "../types/marketplace";
+import type { Booking, Marketplace, Profile } from "../types/marketplace";
 import {
   calculateBorrowerServiceFee,
   calculateSecurityDeposit,
@@ -345,4 +345,75 @@ export function checkHandoverConflict(
     },
   };
 }
+
+/**
+ * Canonical Digital Rental Agreement renderer for CurRENT V3.23.
+ * Produces identical, complete multiline contract terms for both Renter and Lender views.
+ */
+export function formatDigitalRentalAgreement(
+  b: Booking,
+  state: Marketplace,
+  viewRole: "renter" | "owner" = "renter",
+): string {
+  const renter = state.profiles.find((p) => p.id === b.renterId);
+  const lender = state.profiles.find((p) => p.id === b.ownerId);
+  const listing = state.listings.find((l) => l.id === b.listingId);
+
+  const renterName = renter?.name || "Renter";
+  const lenderName = lender?.name || "Lender";
+  const renterVerif = renter?.verification ? renter.verification.replace("_", " ") : "verified";
+  const lenderVerif = lender?.verification ? lender.verification.replace("_", " ") : "verified";
+
+  const startFormatted = formatMalaysiaDateTime(b.scheduledPickup || b.start);
+  const endFormatted = formatMalaysiaDateTime(b.effectiveReturnDeadline || b.scheduledReturn || b.end);
+
+  const rentalFee = b.quote?.rentalFee ?? 0;
+  const serviceFee = b.quote?.serviceFee ?? 0;
+  const deposit = b.quote?.deposit ?? 0;
+  const total = b.quote?.total ?? (rentalFee + serviceFee + deposit);
+  const commission = Math.round(rentalFee * 0.12 * 100) / 100;
+  const netPayout = Math.round(rentalFee * 0.88 * 100) / 100;
+
+  const address = b.deliveryAddress || "Authorised Private Delivery Address (Kuala Lumpur)";
+  const signedDate = formatMalaysiaDateTime(b.createdAt);
+
+  return [
+    `DIGITAL RENTAL AGREEMENT V3.23`,
+    `Reference: ${b.id}`,
+    ``,
+    `1. PARTIES`,
+    `• Renter: ${renterName} (${renterVerif})`,
+    `• Lender: ${lenderName} (${lenderVerif})`,
+    ``,
+    `2. RENTAL ITEM & FULFILMENT`,
+    `• Item: ${listing?.title || b.title}`,
+    `• Fulfilment: Delivery Only`,
+    `• Authorised Delivery Address: ${address}`,
+    ``,
+    `3. SCHEDULE & DURATION`,
+    `• Scheduled Rental Start: ${startFormatted} (Asia/Kuala_Lumpur)`,
+    `• Scheduled Return: ${endFormatted} (Asia/Kuala_Lumpur)`,
+    `• Booked Duration: ${b.quote?.days ?? 1} billable day(s)`,
+    ``,
+    `4. FINANCIAL TERMS & CHARGES`,
+    `• Rental Fee: RM${rentalFee.toFixed(2)}`,
+    `• CurRENT Service Fee (5%, min RM5): RM${serviceFee.toFixed(2)}`,
+    `• Refundable Security Deposit: RM${deposit.toFixed(2)} (${(b.deposit || "held").replace("_", " ")})`,
+    `• Total Paid: RM${total.toFixed(2)} via ${b.paymentMethod || "Demo FPX"}`,
+    `• Platform Commission (12%): RM${commission.toFixed(2)}`,
+    `• Net Lender Payout (88%): RM${netPayout.toFixed(2)}`,
+    ``,
+    `5. CONDITIONS & POLICIES`,
+    `• Cancellation: Free cancellation up to 24 hours prior to scheduled rental start (Asia/Kuala_Lumpur).`,
+    `• Condition Evidence: Renter records ≥6 photos and ≥1 video at delivery check-in and return check-out. Lender reviews shared evidence.`,
+    `• Return & Deposit: Mutual clean return confirmation releases the refundable deposit in full. Disputed items hold deposit pending platform review.`,
+    `• Academic Simulation: Simulated transaction executed under CurRENT Educational Platform V3.23.`,
+    ``,
+    `6. DIGITAL SIGNATURES & ACKNOWLEDGEMENT`,
+    `• Signed by Renter: ${renterName} (${signedDate} MYT)`,
+    `• Acknowledged by Lender: ${lenderName} (${signedDate} MYT)`,
+    `• Status: Confirmed & Digitally Executed`,
+  ].join("\n");
+}
+
 

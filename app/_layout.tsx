@@ -13,6 +13,7 @@ export default function RootLayout() {
           <Stack.Screen name="listing/[id]" />
           <Stack.Screen name="owner/index" />
           <Stack.Screen name="help" />
+          <Stack.Screen name="support/customer-service" />
         </Stack>
       </MarketplaceProvider>
     </SafeAreaProvider>

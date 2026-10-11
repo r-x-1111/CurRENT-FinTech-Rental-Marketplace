@@ -18,6 +18,16 @@ import { categories } from "../../constants/categories";
 import { newId } from "../../services/marketplace";
 import { colors } from "../../constants/theme";
 import type { AvailabilityPeriod } from "../../types";
+export const FIXED_DELIVERY_SLOTS = [
+  { value: "10:00", label: "10 AM", fullLabel: "10:00 AM" },
+  { value: "11:00", label: "11 AM", fullLabel: "11:00 AM" },
+  { value: "12:00", label: "12 PM", fullLabel: "12:00 PM" },
+  { value: "13:00", label: "1 PM", fullLabel: "1:00 PM" },
+  { value: "14:00", label: "2 PM", fullLabel: "2:00 PM" },
+  { value: "15:00", label: "3 PM", fullLabel: "3:00 PM" },
+  { value: "16:00", label: "4 PM", fullLabel: "4:00 PM" },
+  { value: "17:00", label: "5 PM", fullLabel: "5:00 PM" },
+];
 
 export default function EditListing() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -66,12 +76,14 @@ export default function EditListing() {
   const [inputStart, setInputStart] = useState("");
   const [inputEnd, setInputEnd] = useState("");
 
-  // Start-time windows
-  const [pickupWindowsStr, setPickupWindowsStr] = useState(
-    existing?.pickupTimeWindows
-      ? existing.pickupTimeWindows.map((w) => `${w.start}-${w.end}`).join(", ")
-      : "10:00-12:00, 14:00-18:00",
-  );
+  // 8 Fixed Delivery Slots (README V3.23 Section 4.3 & 17.8)
+  const initialSlots =
+    existing?.deliveryTimeSlots && existing.deliveryTimeSlots.length > 0
+      ? existing.deliveryTimeSlots
+      : existing?.pickupTimeWindows && existing.pickupTimeWindows.length > 0
+      ? existing.pickupTimeWindows.map((w) => w.start)
+      : ["10:00", "11:00", "14:00", "17:00"];
+  const [selectedSlots, setSelectedSlots] = useState<string[]>(initialSlots);
 
   // Listing Boost (RM10 for 7 days)
   const [boostListing, setBoostListing] = useState(
@@ -125,19 +137,19 @@ export default function EditListing() {
     }
   }
 
+  function toggleSlot(slotVal: string) {
+    setError("");
+    setSelectedSlots((prev) =>
+      prev.includes(slotVal)
+        ? prev.filter((s) => s !== slotVal)
+        : [...prev, slotVal].sort(),
+    );
+  }
+
   function save(status: "draft" | "published") {
     try {
-      const parsedWindows = pickupWindowsStr
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((part) => {
-          const [wStart, wEnd] = part.split("-").map((t) => t.trim());
-          return { start: wStart || "10:00", end: wEnd || "12:00" };
-        });
-
-      if (parsedWindows.length < 2 && status === "published") {
-        setError("Please configure at least 2 scheduled rental start-time windows.");
+      if (selectedSlots.length < 2 && status === "published") {
+        setError("Select at least 2 delivery time slots.");
         return;
       }
 
@@ -184,13 +196,8 @@ export default function EditListing() {
           featuredUntil: boostListing
             ? new Date(Date.now() + 7 * 86400000).toISOString()
             : existing?.featuredUntil,
-          pickupTimeWindows:
-            parsedWindows.length >= 2
-              ? parsedWindows
-              : [
-                  { start: "10:00", end: "12:00" },
-                  { start: "14:00", end: "18:00" },
-                ],
+          deliveryTimeSlots: selectedSlots,
+          pickupTimeWindows: selectedSlots.map((s) => ({ start: s, end: s })),
         },
       });
       router.replace("/owner");
@@ -207,7 +214,8 @@ export default function EditListing() {
     dailyPriceNum > 0 &&
     photos.length >= 6 &&
     videos.length >= 1 &&
-    periods.length >= 1;
+    periods.length >= 1 &&
+    selectedSlots.length >= 2;
 
   return (
     <Screen
@@ -410,16 +418,45 @@ export default function EditListing() {
           </View>
         </View>
 
-        {/* Scheduled Rental Start-Time Windows (Section 4.3) */}
-        <Field
-          label="Available delivery time slots (e.g. 10:00-12:00, 14:00-18:00)"
-          value={pickupWindowsStr}
-          onChangeText={setPickupWindowsStr}
-          placeholder="10:00-12:00, 14:00-18:00"
-        />
-        <Text style={[s.caption, { marginTop: -8, marginBottom: 14 }]}>
-          Requires at least two non-overlapping start-time windows for scheduled dispatch.
-        </Text>
+        {/* Scheduled Delivery Time Slots (README V3.23 Section 4.3 & 17.8) */}
+        <View style={{ marginTop: 14, marginBottom: 14 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <Text style={s.label}>Available delivery time slots</Text>
+            <Text style={[s.caption, { marginTop: 0, fontWeight: "600", color: selectedSlots.length >= 2 ? colors.navy : colors.danger }]}>
+              {selectedSlots.length}/8 selected (min 2 required)
+            </Text>
+          </View>
+          <Text style={[s.caption, { marginTop: -4, marginBottom: 10 }]}>
+            Select at least 2 of the 8 fixed delivery-start hours. Renters can only book during your chosen slots.
+          </Text>
+          <View style={styles.fixedSlotsGrid}>
+            {FIXED_DELIVERY_SLOTS.map((slot) => {
+              const isSelected = selectedSlots.includes(slot.value);
+              return (
+                <Pressable
+                  key={slot.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${slot.fullLabel} (${slot.label}) delivery slot`}
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => toggleSlot(slot.value)}
+                  style={[
+                    styles.fixedSlotBtn,
+                    isSelected && styles.fixedSlotBtnSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.fixedSlotText,
+                      isSelected && styles.fixedSlotTextSelected,
+                    ]}
+                  >
+                    {slot.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
 
         {/* Optional Listing Boost (Section 4.2) */}
         <Pressable
@@ -637,5 +674,32 @@ const styles = StyleSheet.create({
     color: colors.blue,
     fontWeight: "700",
     fontSize: 13,
+  },
+  fixedSlotsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  fixedSlotBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: "white",
+    minWidth: 70,
+    alignItems: "center",
+  },
+  fixedSlotBtnSelected: {
+    backgroundColor: colors.blue,
+    borderColor: colors.blue,
+  },
+  fixedSlotText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  fixedSlotTextSelected: {
+    color: "white",
   },
 });

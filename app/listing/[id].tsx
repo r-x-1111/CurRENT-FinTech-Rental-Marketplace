@@ -39,14 +39,15 @@ import { colors } from "../../constants/theme";
 import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
 
-const TIME_OPTIONS = [
-  { value: "09:00", label: "09:00 AM" },
-  { value: "10:00", label: "10:00 AM" },
-  { value: "11:00", label: "11:00 AM" },
-  { value: "12:00", label: "12:00 PM" },
-  { value: "14:00", label: "02:00 PM" },
-  { value: "16:00", label: "04:00 PM" },
-  { value: "18:00", label: "06:00 PM" },
+export const FIXED_DELIVERY_SLOTS = [
+  { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
+  { value: "11:00", label: "11:00 AM", shortLabel: "11 AM" },
+  { value: "12:00", label: "12:00 PM", shortLabel: "12 PM" },
+  { value: "13:00", label: "1:00 PM", shortLabel: "1 PM" },
+  { value: "14:00", label: "2:00 PM", shortLabel: "2 PM" },
+  { value: "15:00", label: "3:00 PM", shortLabel: "3 PM" },
+  { value: "16:00", label: "4:00 PM", shortLabel: "4 PM" },
+  { value: "17:00", label: "5:00 PM", shortLabel: "5 PM" },
 ];
 
 function formatTime(timeStr: string) {
@@ -81,12 +82,29 @@ export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state, user, act } = useMarketplace();
   const listing = state.listings.find((l) => l.id === id);
+  // 8 Fixed Delivery Slots filtered by lender's selection (Section 4.3, 7.1, 17.8)
+  const availableSlots = FIXED_DELIVERY_SLOTS.filter((opt) => {
+    if (!listing) return true;
+    if (listing.deliveryTimeSlots && listing.deliveryTimeSlots.length > 0) {
+      return listing.deliveryTimeSlots.includes(opt.value);
+    }
+    if (listing.pickupTimeWindows && listing.pickupTimeWindows.length > 0) {
+      return listing.pickupTimeWindows.some(
+        (w) => w.start === opt.value || (w.start <= opt.value && opt.value <= w.end),
+      );
+    }
+    return true;
+  });
 
   const [start, setStart] = useState(dateAfter(1));
   const [end, setEnd] = useState(dateAfter(3));
-  const [pickupTime, setPickupTime] = useState("11:00");
+  const [pickupTime, setPickupTime] = useState("");
+  const effectivePickupTime =
+    pickupTime && availableSlots.some((s) => s.value === pickupTime)
+      ? pickupTime
+      : availableSlots[0]?.value || "11:00";
   // Return time is strictly auto-matched and locked to pickup time per 24-hour rental rules
-  const returnTime = pickupTime;
+  const returnTime = effectivePickupTime;
   const [collectionMethod, setCollectionMethod] =
     useState<CollectionMethod>("Delivery");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
@@ -139,7 +157,7 @@ export default function ListingDetailScreen() {
   const selectedMethod = "Delivery Only";
   const renterRisk = user ? riskFor(state, user) : null;
 
-  const startTimestamp = start ? toMalaysiaUtcTimestamp(start, pickupTime) : "";
+  const startTimestamp = start ? toMalaysiaUtcTimestamp(start, effectivePickupTime) : "";
   const endTimestamp = end ? toMalaysiaUtcTimestamp(end, returnTime) : "";
 
   // Check for immediately contiguous consecutive extension (Section 10)
@@ -249,7 +267,7 @@ export default function ListingDetailScreen() {
         listingId: listing.id,
         start,
         end,
-        pickupTime: formatTime(pickupTime),
+        pickupTime: formatTime(effectivePickupTime),
         returnTime: formatTime(returnTime),
         durationDays: quote ? quote.days : 1,
         collectionMethod: "Delivery Only",
@@ -315,25 +333,29 @@ export default function ListingDetailScreen() {
               backgroundColor: "#F1F5F9",
             }}
           />
-          <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-            {(listing.images || [listing.imageUrl]).map((uri) => (
-              <Pressable
-                key={uri}
-                accessibilityRole="button"
-                accessibilityLabel="View item photo"
-                onPress={() => setPhoto(uri)}
-              >
-                <Image
-                  source={{ uri }}
-                  style={[
-                    styles.galleryThumb,
-                    (photo === uri || (!photo && uri === listing.imageUrl)) &&
-                      styles.galleryThumbActive,
-                  ]}
-                />
-              </Pressable>
-            ))}
-          </View>
+          {/* Section 3 & 17.5: Only Sony shows 3 thumbnails; all other listings show cover photo and ZERO thumbnails */}
+          {listing.id === "sony-a7iii" && (
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+              {["/products/sony-thumb-1.jpg", "/products/sony-thumb-2.jpg", "/products/sony-thumb-3.jpg"].map(
+                (uri, idx) => (
+                  <Pressable
+                    key={uri}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View Sony gallery photo ${idx + 1}`}
+                    onPress={() => setPhoto(photo === uri ? listing.imageUrl : uri)}
+                  >
+                    <Image
+                      source={{ uri }}
+                      style={[
+                        styles.galleryThumb,
+                        photo === uri && styles.galleryThumbActive,
+                      ]}
+                    />
+                  </Pressable>
+                ),
+              )}
+            </View>
+          )}
 
           <Section title={listing.title} />
           <View style={styles.productLocationRow}>
@@ -597,8 +619,8 @@ export default function ListingDetailScreen() {
                   <Text style={styles.fieldSubtext}>Available delivery time slots</Text>
                 </View>
                 <View style={styles.timeSlotsRow}>
-                  {TIME_OPTIONS.map((opt) => {
-                    const isSelected = pickupTime === opt.value;
+                  {availableSlots.map((opt) => {
+                    const isSelected = effectivePickupTime === opt.value;
                     return (
                       <Pressable
                         key={opt.value}
@@ -781,15 +803,31 @@ export default function ListingDetailScreen() {
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
-                    {isConsecutiveExtension ? "Security Deposit" : "Risk-based security deposit"}
+                    Risk-based security deposit
                   </Text>
-                  <Text style={styles.summaryValue}>
-                    {isConsecutiveExtension ? "—" : money(quote?.deposit ?? 0)}
-                  </Text>
+                  {isConsecutiveExtension ? (
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Text
+                        style={[
+                          styles.summaryValue,
+                          { textDecorationLine: "line-through", color: colors.muted },
+                        ]}
+                      >
+                        {money(existingActiveBooking?.quote?.deposit ?? 400)}
+                      </Text>
+                      <Text style={[s.bold, { color: colors.blue, fontSize: 13, marginTop: 2 }]}>
+                        Additional deposit: RM0.00
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.summaryValue}>
+                      {money(quote?.deposit ?? 0)}
+                    </Text>
+                  )}
                 </View>
                 <Text style={styles.depositNote}>
                   {isConsecutiveExtension
-                    ? "Original deposit remains held; no additional deposit required."
+                    ? "Original deposit already held — not charged again."
                     : renterRisk?.canDirectBook
                     ? `Your ${renterRisk.label} tier sets a ${
                         renterRisk.level === "low"
@@ -803,7 +841,7 @@ export default function ListingDetailScreen() {
                 <View style={styles.summaryDivider} />
                 <View style={styles.summaryRowTotal}>
                   <Text style={styles.summaryTotalLabel}>
-                    {isConsecutiveExtension ? "Total to Pay" : "Total payable today"}
+                    Total to Pay
                   </Text>
                   <Text style={styles.summaryTotalValue}>
                     {money(isConsecutiveExtension ? extTotal : quote?.total ?? 0)}
@@ -819,7 +857,7 @@ export default function ListingDetailScreen() {
             {!!successNotice && <Notice text={successNotice} />}
 
             {/* Simulated Checkout Panel */}
-            {showCheckout && quote && (
+            {showCheckout && (quote || isConsecutiveExtension) && (
               <View style={styles.checkoutPanel}>
                 <Text style={styles.checkoutTitle}>Secure Checkout</Text>
                 <Text style={styles.checkoutSubtitle}>
@@ -828,6 +866,37 @@ export default function ListingDetailScreen() {
                 <View style={styles.fpxBadgeRow}>
                   <Ionicons name="card-outline" size={16} color="#0369A1" />
                   <Text style={styles.fpxBadgeText}>FPX</Text>
+                </View>
+                <View style={{ marginVertical: 12, padding: 12, backgroundColor: colors.paleBlue, borderRadius: 10, gap: 6 }}>
+                  <Row
+                    label={isConsecutiveExtension ? "Additional Rental Fee" : "Rental Fee"}
+                    value={money(isConsecutiveExtension ? extRentalFee : quote?.rentalFee ?? 0)}
+                  />
+                  <Row
+                    label="CurRENT Service Fee"
+                    value={money(isConsecutiveExtension ? extServiceFee : quote?.serviceFee ?? 0)}
+                  />
+                  <View style={s.row}>
+                    <Text style={s.body}>Risk-based security deposit</Text>
+                    {isConsecutiveExtension ? (
+                      <View style={{ alignItems: "flex-end" }}>
+                        <Text style={{ textDecorationLine: "line-through", color: colors.muted, fontSize: 13 }}>
+                          {money(existingActiveBooking?.quote?.deposit ?? 400)}
+                        </Text>
+                        <Text style={[s.bold, { color: colors.blue, fontSize: 12 }]}>
+                          RM0.00 (Held)
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={s.body}>{money(quote?.deposit ?? 0)}</Text>
+                    )}
+                  </View>
+                  <View style={s.divider} />
+                  <Row
+                    label="Total to Pay"
+                    value={money(isConsecutiveExtension ? extTotal : quote?.total ?? 0)}
+                    strong
+                  />
                 </View>
                 <Button onPress={handleConfirmInstantBook}>
                   Pay

@@ -61,6 +61,7 @@ export interface Listing {
   availableTo?: string;
   availabilityPeriods?: AvailabilityPeriod[];
   pickupTimeWindows?: PickupTimeWindow[];
+  deliveryTimeSlots?: string[];
   collectionMethods?: CollectionMethod[];
   featuredUntil?: string | null;
 }

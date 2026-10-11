@@ -187,7 +187,7 @@ export function MediaPicker({
           onPress={handleAddPhoto}
           style={[
             styles.uploadBtn,
-            photos.length >= maxPhotos && styles.uploadBtnDisabled,
+            (disabled || photos.length >= maxPhotos) && styles.uploadBtnDisabled,
           ]}
         >
           <View style={styles.iconCircle}>
@@ -211,7 +211,7 @@ export function MediaPicker({
             onPress={handleAddVideo}
             style={[
               styles.uploadBtn,
-              videos.length >= maxVideos && styles.uploadBtnDisabled,
+              (disabled || videos.length >= maxVideos) && styles.uploadBtnDisabled,
             ]}
           >
             <View style={[styles.iconCircle, { backgroundColor: "#EFF6FF" }]}>
@@ -247,18 +247,20 @@ export function MediaPicker({
                 </View>
 
                 {/* Remove Photo Icon Button */}
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove photo ${idx + 1}`}
-                  onPress={() => removePhoto(idx)}
-                  style={styles.deletePhotoBtn}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="trash-outline" size={14} color="#DC2626" />
-                </TouchableOpacity>
+                {!disabled && (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove photo ${idx + 1}`}
+                    onPress={() => removePhoto(idx)}
+                    style={styles.deletePhotoBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                  </TouchableOpacity>
+                )}
 
                 {/* Listing Order Controls */}
-                {allowMainSelect && idx > 0 && (
+                {allowMainSelect && idx > 0 && !disabled && (
                   <View style={styles.orderControlsRow}>
                     <Pressable
                       accessibilityRole="button"
@@ -303,15 +305,17 @@ export function MediaPicker({
                 </View>
 
                 {/* Remove Video Icon Button */}
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove video ${idx + 1}`}
-                  onPress={() => removeVideo(idx)}
-                  style={styles.deleteVideoBtn}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="trash-outline" size={16} color="#DC2626" />
-                </TouchableOpacity>
+                {!disabled && (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove video ${idx + 1}`}
+                    onPress={() => removeVideo(idx)}
+                    style={styles.deleteVideoBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
           </View>
@@ -383,8 +387,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "white",
-    borderColor: colors.border,
+    backgroundColor: colors.paleBlue,
+    borderColor: "#93C5FD",
     borderWidth: 1.5,
     borderStyle: "dashed",
     borderRadius: 12,

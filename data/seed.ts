@@ -1,4 +1,5 @@
 import { listings } from "./mock";
+import { formatDigitalRentalAgreement } from "../services/booking";
 import type {
   Marketplace,
   Profile,
@@ -148,6 +149,8 @@ export function createNormalSeed(): Marketplace {
       },
     ],
     platformReviewRequests: [],
+    supportMessages: [],
+    supportCases: [],
   };
 }
 
@@ -1011,6 +1014,39 @@ export function createAdminDemoSeed(): Marketplace {
   // --------------------------------------------------------------------------
   const demoEvidence: Evidence[] = [
     {
+      id: "ev-checkin-1",
+      bookingId: "demo-booking-active-1",
+      authorId: "demo-renter",
+      kind: "check_in",
+      photo: "/products/portable-projector.jpg",
+      photos: sampleConditionImages,
+      videos: sampleVideos,
+      notes: "Projector, remote, and power cord received in excellent working order.",
+      createdAt: "2026-10-09T14:30:00Z",
+    },
+    {
+      id: "ev-checkin-2",
+      bookingId: "demo-booking-return-due-1",
+      authorId: "demo-renter",
+      kind: "check_in",
+      photo: "/products/monitor-27.jpg",
+      photos: sampleConditionImages,
+      videos: sampleVideos,
+      notes: "Monitor and cables inspected after delivery with zero scratches.",
+      createdAt: "2026-10-07T10:15:00Z",
+    },
+    {
+      id: "ev-checkin-3",
+      bookingId: "demo-booking-completed-1",
+      authorId: "demo-renter",
+      kind: "check_in",
+      photo: "/products/ps5-console.jpg",
+      photos: sampleConditionImages,
+      videos: sampleVideos,
+      notes: "PS5 console, accessories, and gamepad tested upon delivery.",
+      createdAt: "2026-09-01T10:30:00Z",
+    },
+    {
       id: "ev-1",
       bookingId: "demo-booking-completed-1",
       authorId: "demo-renter",
@@ -1263,12 +1299,20 @@ export function createAdminDemoSeed(): Marketplace {
           }
         : p,
     ),
-    bookings: demoBookings,
+    bookings: demoBookings.map((b) => ({
+      ...b,
+      agreement: formatDigitalRentalAgreement(b, {
+        ...normal,
+        bookings: demoBookings,
+      }),
+    })),
     messages: demoMessages,
     evidence: demoEvidence,
     disputes: demoDisputes,
     notifications: demoNotifications,
     platformReviewRequests: demoPlatformRequests,
+    supportMessages: [],
+    supportCases: [],
   };
 }
 

@@ -5,16 +5,26 @@ import { colors } from "../constants/theme";
 import type { FaqItem } from "../data/mock";
 
 export function FaqAccordion({ faqs }: { faqs: FaqItem[] }) {
-  const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const [openIndices, setOpenIndices] = useState<Set<number>>(
+    () => new Set(faqs.map((_, i) => i)),
+  );
 
   function toggle(index: number) {
-    setOpenIndex(openIndex === index ? null : index);
+    setOpenIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
   }
 
   return (
     <View style={styles.container}>
       {faqs.map((faq, index) => {
-        const isOpen = openIndex === index;
+        const isOpen = openIndices.has(index);
         return (
           <View
             key={faq.question}
@@ -66,7 +76,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: "#DDEAFF",
     overflow: "hidden",
   },
   header: {
