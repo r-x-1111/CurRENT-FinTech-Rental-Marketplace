@@ -20,7 +20,6 @@ import {
   saveMarketplaceWorkspace,
 } from "../services/marketplacePersistence";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import { phoneDemoVerified } from "../services/signup";
 
 function createLoggedOutState(): Marketplace {
   const seed = createSeed();
@@ -114,14 +113,14 @@ export function MarketplaceProvider({
           const account = session?.user
             ? accountFromSession(session.user)
             : null;
-          // Never resume a Normal workspace before its server-side Demo OTP is complete.
-          // Keep the Auth session so the user can resume the pending registration.
-          const phoneIsVerified =
-            !account ||
-            account.accountKind === "demo" ||
-            account.verified ||
-            (await phoneDemoVerified(supabase).catch(() => false));
-          if (account && phoneIsVerified) {
+          // Demo walkthrough completion is a presentation state, not a real OTP.
+          // Keep incomplete users on the demo onboarding screen after refresh.
+          const mayEnterWorkspace =
+            account &&
+            (account.accountKind === "demo" ||
+              account.verified ||
+              session?.user.user_metadata.demo_phone_stage_complete === true);
+          if (mayEnterWorkspace) {
             const workspace = await loadMarketplaceWorkspace(
               supabase,
               account.id,
@@ -182,8 +181,9 @@ export function MarketplaceProvider({
       throw new Error("Supabase authentication is not configured.");
     }
     if (account.accountKind === "normal" && !account.verified) {
-      if (!(await phoneDemoVerified(supabase))) {
-        throw new Error("Complete Demo OTP verification before accessing your workspace.");
+      const { data } = await supabase.auth.getUser();
+      if (data.user?.user_metadata.demo_phone_stage_complete !== true) {
+        throw new Error("Complete the classroom Demo OTP screen first.");
       }
     }
     const workspace = await loadMarketplaceWorkspace(
