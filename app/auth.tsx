@@ -1,17 +1,15 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
-import * as Crypto from "expo-crypto";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, Card, Field, Notice, Screen, s } from "../components/ui";
 import { useMarketplace } from "../context/Marketplace";
 import { colors } from "../constants/theme";
-import { newId } from "../services/marketplace";
-import { authenticateWithPassword, DEMO_ACCOUNT_EMAIL } from "../services/auth";
+import { authenticateWithPassword } from "../services/auth";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 export default function Auth() {
-  const { state, act } = useMarketplace();
+  const { state, activateAuthenticatedWorkspace } = useMarketplace();
   const [mode, setMode] = useState("Sign in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -37,6 +35,11 @@ export default function Auth() {
     setError("");
     setInfoNotice("");
     try {
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error(
+          "Sign in is unavailable because the Supabase Auth service is not configured.",
+        );
+      }
       const address = email.trim().toLowerCase();
       if (!address) {
         throw new Error("Enter your email address to continue.");
@@ -49,82 +52,42 @@ export default function Auth() {
         if (password.length < 8) {
           throw new Error("Choose a password of at least 8 characters.");
         }
-        const salt = Crypto.randomUUID();
-        const passwordHash = await Crypto.digestStringAsync(
-          Crypto.CryptoDigestAlgorithm.SHA256,
-          `${salt}:${password}`,
-        );
-        act({
-          type: "signup",
-          profile: {
-            id: newId(),
-            name: name.trim(),
-            email: address,
-            verification: "not_verified",
-            favourites: [],
-            salt,
-            passwordHash,
-          },
+        const { data, error } = await supabase.auth.signUp({
+          email: address,
+          password,
+          options: { data: { full_name: name.trim() } },
         });
+        if (error) {
+          throw new Error(
+            "Could not create the account. Check the details and try again.",
+          );
+        }
+        if (!data.session) {
+          setInfoNotice(
+            "Account created. Check your email to confirm the address, then sign in.",
+          );
+          return;
+        }
+        const account = await authenticateWithPassword(
+          supabase.auth,
+          address,
+          password,
+        );
+        await activateAuthenticatedWorkspace(account);
+        router.replace("/(tabs)/profile");
+        return;
       } else {
         // Sign In
         if (!password) {
           throw new Error("Enter your password.");
         }
 
-        if (isSupabaseConfigured && supabase) {
-          const accountKind = await authenticateWithPassword(
-            supabase.auth,
-            address,
-            password,
-          );
-          if (accountKind.accountKind === "demo") {
-            act({ type: "setMode", mode: "admin_demo" });
-          } else {
-            const profile = state.profiles.find(
-              (candidate) =>
-                candidate.id === accountKind.id ||
-                candidate.email.toLowerCase() === address,
-            );
-            if (profile) {
-              act({ type: "login", userId: profile.id });
-            } else {
-              act({
-                type: "signup",
-                profile: {
-                  id: accountKind.id,
-                  name: accountKind.name,
-                  email: accountKind.email,
-                  verification: accountKind.verified
-                    ? "verified"
-                    : "not_verified",
-                  favourites: [],
-                  riskScore: accountKind.verified ? 80 : null,
-                  riskLevel: accountKind.verified ? "low" : "unverified",
-                },
-              });
-            }
-          }
-        } else {
-          if (address === DEMO_ACCOUNT_EMAIL) {
-            throw new Error(
-              "Demo Account sign-in is unavailable until the Auth service is configured.",
-            );
-          }
-          const profile = state.profiles.find(
-            (p) => p.email.toLowerCase() === address && p.passwordHash,
-          );
-          if (
-            !profile ||
-            (await Crypto.digestStringAsync(
-              Crypto.CryptoDigestAlgorithm.SHA256,
-              `${profile.salt}:${password}`,
-            )) !== profile.passwordHash
-          ) {
-            throw new Error("Email or password is incorrect.");
-          }
-          act({ type: "login", userId: profile.id });
-        }
+        const account = await authenticateWithPassword(
+          supabase.auth,
+          address,
+          password,
+        );
+        await activateAuthenticatedWorkspace(account);
       }
       router.replace("/(tabs)/profile");
     } catch (e) {
@@ -134,9 +97,24 @@ export default function Auth() {
     }
   }
 
-  function handleForgotPassword() {
+  async function handleForgotPassword() {
+    if (!isSupabaseConfigured || !supabase) {
+      setError("Password reset is unavailable until Supabase is configured.");
+      return;
+    }
+    const address = email.trim().toLowerCase();
+    if (!address) {
+      setError("Enter your email address to request a password reset.");
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(address);
+    if (error) {
+      setError("Could not request a password reset. Please try again.");
+      return;
+    }
+    setError("");
     setInfoNotice(
-      "Password reset link simulated. In production, an expiring reset email is dispatched to your registered address.",
+      "If an account exists for that address, a password reset link has been sent.",
     );
   }
 
@@ -202,7 +180,7 @@ export default function Auth() {
           {mode === "Sign in" && (
             <TouchableOpacity
               style={styles.forgotPasswordWrap}
-              onPress={handleForgotPassword}
+              onPress={() => void handleForgotPassword()}
             >
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>

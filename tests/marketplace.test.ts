@@ -28,6 +28,112 @@ import {
   authenticateWithPassword,
   signOutAuthenticatedAccount,
 } from "../services/auth";
+import { provisionDemoAccount } from "../services/demoAccountProvisioning";
+import { createNormalAccountWorkspace } from "../services/marketplacePersistence";
+
+test("new Supabase Normal workspaces start empty and are bound to their auth account", () => {
+  const workspace = createNormalAccountWorkspace({
+    id: "normal-auth-user",
+    email: "member@example.com",
+    name: "Member",
+    verified: false,
+  });
+
+  assert.equal(workspace.currentUserId, "normal-auth-user");
+  assert.equal(workspace.mode, "normal");
+  assert.equal(
+    workspace.profiles.find((profile) => profile.id === "normal-auth-user")
+      ?.email,
+    "member@example.com",
+  );
+  assert.equal(
+    workspace.profiles.some((profile) => profile.id === "demo-renter"),
+    false,
+  );
+  assert.equal(workspace.bookings.length, 0);
+  assert.equal(workspace.messages.length, 0);
+  assert.equal(workspace.evidence.length, 0);
+  assert.equal(workspace.reviews.length, 0);
+  assert.equal(workspace.disputes.length, 0);
+  assert.equal(workspace.notifications.length, 0);
+});
+
+test("Demo provisioning sets a provider-managed password for existing and new accounts", async () => {
+  const password = "test-only-provisioned-password";
+  let updated:
+    | {
+        id: string;
+        password: string;
+        app_metadata: { account_kind: string; verified_demo: boolean };
+      }
+    | undefined;
+  const existingAdmin = {
+    async listUsers() {
+      return {
+        data: {
+          users: [{ id: "existing-demo-user", email: "democurrent@gmail.com" }],
+        },
+        error: null,
+      };
+    },
+    async updateUserById(
+      id: string,
+      attributes: {
+        password: string;
+        app_metadata: { account_kind: "demo"; verified_demo: true };
+      },
+    ) {
+      updated = { id, ...attributes };
+      return { error: null };
+    },
+    async createUser() {
+      assert.fail("An existing Demo user must be updated, not duplicated.");
+      return { error: null };
+    },
+  };
+
+  await provisionDemoAccount(existingAdmin, "DemoCurRENT@gmail.com", password);
+  assert.deepEqual(updated, {
+    id: "existing-demo-user",
+    password,
+    app_metadata: { account_kind: "demo", verified_demo: true },
+  });
+
+  let created:
+    | {
+        email: string;
+        password: string;
+        email_confirm: true;
+        app_metadata: { account_kind: string; verified_demo: boolean };
+      }
+    | undefined;
+  const newAdmin = {
+    async listUsers() {
+      return { data: { users: [] }, error: null };
+    },
+    async updateUserById() {
+      assert.fail("A missing Demo user must be created.");
+      return { error: null };
+    },
+    async createUser(attributes: {
+      email: string;
+      password: string;
+      email_confirm: true;
+      app_metadata: { account_kind: "demo"; verified_demo: true };
+    }) {
+      created = attributes;
+      return { error: null };
+    },
+  };
+
+  await provisionDemoAccount(newAdmin, "DemoCurRENT@gmail.com", password);
+  assert.deepEqual(created, {
+    email: "DemoCurRENT@gmail.com",
+    password,
+    email_confirm: true,
+    app_metadata: { account_kind: "demo", verified_demo: true },
+  });
+});
 
 function journey() {
   let state = createSeed();
@@ -153,6 +259,13 @@ test("Demo password authentication rejects wrong credentials and supports logout
     mode: "admin_demo",
   });
   const baselineBookingIds = workspace.bookings.map((booking) => booking.id);
+  assert.ok(workspace.profiles.some((profile) => profile.id === "demo-renter"));
+  assert.ok(
+    workspace.bookings.some((booking) => booking.renterId === "demo-renter"),
+  );
+  assert.ok(
+    workspace.bookings.some((booking) => booking.ownerId === "owner-aiman"),
+  );
   workspace.notifications = [];
 
   await signOutAuthenticatedAccount(fakeAuth);
