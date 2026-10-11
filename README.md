@@ -1,8 +1,8 @@
 # CurRENT — Master App Development Prompt
 
-**Version:** V3.26 — founder-approved consolidated implementation specification; add matching `Report an Issue` comment panels to renter Check-in and Check-out and read-only lender-side visibility, preserving all V3.25 customer-service wording and existing rental/dispute workflows; authentication-first, screenshot-specific Welcome/Sign In/five-step Sign Up, **blank editable credential sign-in for all accounts including a provisioned password-authenticated Demo Account**, isolated identical-feature Normal/Demo accounts, Profile `Sign Out`, accessible blue-and-white design, white public listing cards without `View Details`, and consistent completed-rental/score outcomes; **FOUNDER-APPROVED AND PUBLISHED TO GITHUB**  
+**Version:** V3.27 — founder-approved consolidated implementation specification; customer-service `Risk score` answer now states only the four score ranges and clarifies that users receive their initial 78-point score only after successful verification; preserves the V3.26 `Report an Issue` changes and other existing requirements; authentication-first, screenshot-specific Welcome/Sign In/five-step Sign Up, **blank editable credential sign-in for all accounts including a provisioned password-authenticated Demo Account**, isolated identical-feature Normal/Demo accounts, Profile `Sign Out`, accessible blue-and-white design, white public listing cards without `View Details`, and consistent completed-rental/score outcomes; **FOUNDER-APPROVED AND PUBLISHED TO GITHUB**  
 **Project:** `r-x-1111/CurRENT-FinTech-Rental-Marketplace` · `main/README.md`  
-**Baseline:** Founder-approved V3.25, read from GitHub `main/README.md` on 11 October 2026.  
+**Baseline:** Founder-approved V3.26, read from GitHub `main/README.md` on 11 October 2026.  
 **Tagline:** *Rent what you need. Earn from what you own.*
 
 > **Instructions to a coding AI:** This V3.26 README is the founder-approved authoritative development specification. Publishing this specification **does not** authorise app implementation or deployment. Do not change application code, run migrations, or deploy solely because this README has been published. A separate explicit instruction to **build the app** permits ordinary in-scope coding, testing, safe demo migrations, commits/pushes and the already-configured *demo* deployment subject to Section 16, tool-enforced permissions and the risk-based pause conditions there.
@@ -675,13 +675,14 @@ You can extend your rental by booking an available period that starts **exactly 
 
 **5. Risk score**
 
-CurRENT's **Rental Risk Score ranges from 0 to 100**. Every newly verified account starts at **78 (Medium Risk)**.
+CurRENT's Rental Risk Score ranges from 0 to 100, with four risk levels:
 
-- **Low Risk (80–100):** You can rent directly with a 5% deposit, capped at RM500.
-- **Medium Risk (40–79):** You can rent directly with a 10% deposit, capped at RM1,000.
-- **High Risk (30–39):** You can still rent directly, but a 15% deposit applies, capped at RM1,500.
-- **Very High Risk (0–29):** You cannot rent directly. You must submit a request to CurRENT for review.
-- **Unverified (N/A):** You must complete verification before renting.
+- **Low Risk:** 80–100
+- **Medium Risk:** 40–79
+- **High Risk:** 30–39
+- **Very High Risk:** 0–29
+
+**Unverified users do not have a Rental Risk Score (N/A).** Once verification is successfully completed, the user receives an initial score of **78 (Medium Risk)**.
 
 **6. Disputes**
 
@@ -714,7 +715,7 @@ CurRENT deducts a 12% commission, so the lender receives **88% of the rental fee
 
 **Security and functional boundaries:** Bot and staff case content must be stored and retrieved through a genuine authenticated backend and protected by tenant-scoped authorisation; no cross-user/private address, bank, password, identity-doc, risk audit or other rental-chat leakage. Customer Service is information/support communication, **not a shortcut to alter booking, refund, insurance, risk, deposit, dispute or payment state**. Staff taking over a chat does not automatically adjudicate a dispute or approve an insurance payout; established protected platform workflows remain required. Do not collect card/banking credentials, password or MyKad photo in support chat. Do not invent a public telephone number, email or provider subscription. A normal user cannot open the internal staff console or impersonate a responder.
 
-**Quick-topic copy and behavior acceptance:** Verify eight working quick-topic chips (six preserved, two new), all eight V3.26 copy-only polished answers, and the two distinct sequential persisted assistant messages from the single `Fees & deposits` chip. Repeated clicks/reload must not create duplicate responses. Check deposit tier caps, direct FPX/payment wording in the chatbot, the founder's on-time Scheduled Delivery Time statement, restricted 0–29 vs eligible 30–39, starting score 78, renter-only condition evidence and lender review, disputes, and lender payout at the rental/deposit settlement stage. Preserve required distinct payment/demo disclosures outside the chatbot answers, and do not alter financial-service integration or delivery-state behavior. Check quick-chip wrapping on small screens and keep the separate FAQ at exactly six entries.
+**Quick-topic copy and behavior acceptance:** Verify eight working quick-topic chips (six preserved, two new), all eight V3.27 approved answers (with `Risk score` showing only the four risk bands, no deposit percentages or booking rules, and `N/A` before verification, followed by initial 78 Medium upon successful verification), and the two distinct sequential persisted assistant messages from the single `Fees & deposits` chip. Repeated clicks/reload must not create duplicate responses. Check deposit tier caps, direct FPX/payment wording in the chatbot, the founder's on-time Scheduled Delivery Time statement, restricted 0–29 vs eligible 30–39, starting score 78, renter-only condition evidence and lender review, disputes, and lender payout at the rental/deposit settlement stage. Preserve required distinct payment/demo disclosures outside the chatbot answers, and do not alter financial-service integration or delivery-state behavior. Check quick-chip wrapping on small screens and keep the separate FAQ at exactly six entries.
 
 **Required acceptance tests:** (a) Ask a known CurRENT fee question: bot answers accurately without escalating. (b) Ask an unknown/ambiguous question: backend saves a real internal support case and the SAME customer chat shows exactly **`Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.`**; **NO visible request ID, ticket number, tracking code or additional ticket page**. (c) In a separate authenticated staff session, open the correct queued case using its PRIVATE internal reference, send a real response and verify the customer sees the labelled `CurRENT Support · Human` reply in that same chat with normal notification. (d) With no staff connected, the case remains genuinely pending, no fake human response and no false online claim; target remains explicitly best-effort during configured staffed hours. (e) If queue write fails, the customer sees a truthful submission failure, not the reassuring waiting message. (f) `Talk to a Human` triggers the same workflow. (g) Refresh/retries do not create repeated cases or missing/duplicated customer bubbles. (h) Renter↔lender private Messages, FAQ and all four Trust and Support entries remain intact, with correct Normal/Demo tenant isolation and responsive accessibility.
 
@@ -758,7 +759,7 @@ Fixture dates should be **set relative to the new authenticated demo workspace c
 
 **Visual implementation sequence (additional to the functional steps below):** Build one central design-token/typography system first. Then implement **Welcome → Sign In → five-step Sign Up (including demo document selection/face scan) → verified confirmation** against the preview contract in Sections 2 and 4, before applying the same palette to Profile, Your Rentals, lender dashboard, forms and Trust and Support. Preserve the existing **white public rental-listing cards**, remove only their visible `View Details` control, and make the card body navigate correctly. Check screenshot parity in desktop and mobile, legibility and focus/contrast before claiming UI completion. Do not generate arbitrary coloured gradients or replace authentic photo compositions just to make the site appear colourful. Both Normal/Demo share components and the design system; do not create a different demo-specific theme.
 
-**Current status of this document: founder-approved V3.26 master specification, published as the single authoritative `main/README.md`.** Publication is documentation-only and does **not** authorise application-code edits, migrations, seeding, or deployment. **Implementation requires a separate founder instruction to build the app.**
+**Current status of this document: founder-approved V3.27 master specification, published as the single authoritative `main/README.md`.** Publication is documentation-only and does **not** authorise application-code edits, migrations, seeding, or deployment. **Implementation requires a separate founder instruction to build the app.**
 
 Once separately authorised to implement:
 
@@ -826,4 +827,4 @@ Deliver a **single identical-feature V3.26 app with authentication-first access 
 
 After **separate explicit build authorisation**, report a concise list of actual changed files, commands and verified results, safe migrations/seed compatibility, missing source images/videos, unresolved implementation blockers and actual Vercel demo URL **only if deployed and verified**. Never claim tests passed without running them or misrepresent simulations as live financial/logistics services.
 
-**End of CurRENT Master Development Prompt V3.26 — FOUNDER-APPROVED SPECIFICATION. README publication does not itself authorise application-code changes.**
+**End of CurRENT Master Development Prompt V3.27 — FOUNDER-APPROVED SPECIFICATION. README publication does not itself authorise application-code changes.**
