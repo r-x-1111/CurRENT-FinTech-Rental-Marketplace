@@ -62,7 +62,7 @@ Current business-rule functions are in `services/deposit.ts` and `services/riskS
 | Lender commission | **12%** of rental fee; net **88%** |
 | Optional protection in new booking quote | **RM0**, not an active insurance quote |
 
-The score is an explainable **rental-reliability** metric, not a bank credit score or AI model. In the final confirmed-outcome path, clean on-time returns are **+2**, evidenced late returns incur a **fixed −5**, minor damage **−10**, serious damage/loss **−30**, unknown return timing **0**, and confirmed intentional theft/fraud bans the account. The effective score is clamped to 0–100, with one effective confirmed outcome applied per rental record.
+The score is an explainable **rental-reliability** metric, not a bank credit score or AI model. The source declares a nominal **+2** clean on-time incident, fixed **−5** late-return penalty, **−10** minor-damage penalty, **−30** serious-damage/loss penalty, **0** when return timing cannot be assessed, and a ban for confirmed theft/fraud. A static code-versus-test discrepancy remains for the clean +2 case: `evaluateRentalOutcome` currently starts its effective penalty accumulator at 0, so the clean-only branch appears to return an effective adjustment of 0, although a test expects 2. This has not been verified by running tests. The effective score is clamped to 0–100, with one effective confirmed outcome applied per rental record.
 
 ### Payment, cancellation and refund representation
 
