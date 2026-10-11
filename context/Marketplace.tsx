@@ -113,7 +113,14 @@ export function MarketplaceProvider({
           const account = session?.user
             ? accountFromSession(session.user)
             : null;
-          if (account) {
+          // Demo walkthrough completion is a presentation state, not a real OTP.
+          // Keep incomplete users on the demo onboarding screen after refresh.
+          const mayEnterWorkspace =
+            account &&
+            (account.accountKind === "demo" ||
+              account.verified ||
+              session?.user.user_metadata.demo_phone_stage_complete === true);
+          if (mayEnterWorkspace) {
             const workspace = await loadMarketplaceWorkspace(
               supabase,
               account.id,
@@ -135,7 +142,8 @@ export function MarketplaceProvider({
             authOwnerId.current = account.id;
             authAccountKind.current = account.accountKind;
           } else {
-            if (session) await supabase.auth.signOut();
+            // A pending account is NOT signed out: the OTP screen can resume.
+            if (!account && session) await supabase.auth.signOut();
             restored = createLoggedOutState();
           }
         } else {
@@ -171,6 +179,12 @@ export function MarketplaceProvider({
   ) {
     if (!supabase || !isSupabaseConfigured) {
       throw new Error("Supabase authentication is not configured.");
+    }
+    if (account.accountKind === "normal" && !account.verified) {
+      const { data } = await supabase.auth.getUser();
+      if (data.user?.user_metadata.demo_phone_stage_complete !== true) {
+        throw new Error("Complete the classroom Demo OTP screen first.");
+      }
     }
     const workspace = await loadMarketplaceWorkspace(
       supabase,

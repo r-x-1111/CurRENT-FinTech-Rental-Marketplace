@@ -29,6 +29,13 @@ export default function ProfileScreen() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // Presentation state only: no real document, camera, SMS, or biometric data.
+  const [demoDoc, setDemoDoc] = useState<"MyKad" | "Passport">("MyKad");
+  const [demoFront, setDemoFront] = useState(false);
+  const [demoBack, setDemoBack] = useState(false);
+  const [demoPassport, setDemoPassport] = useState(false);
+  const [demoScanning, setDemoScanning] = useState(false);
+  const [demoFaceDone, setDemoFaceDone] = useState(false);
 
   if (!user) {
     return <Redirect href="/auth" />;
@@ -47,16 +54,6 @@ export default function ProfileScreen() {
     (acc, item) => acc + item.effectiveAdjustment,
     0,
   );
-
-  function verify(status: "pending" | "verified" | "failed") {
-    try {
-      act({ type: "verify", status });
-      setError("");
-      setSuccess(`Verification updated to ${status}.`);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
 
   return (
     <Screen
@@ -172,39 +169,88 @@ export default function ProfileScreen() {
 
       <Button onPress={() => router.push("/owner")}>Lender Mode</Button>
 
-      {/* Identity Verification (Demo eKYC) - Hidden when already verified */}
-      {user.verification !== "verified" && (
-        <>
-          <Section title="Identity Verification (Demo eKYC)" />
-          <Card>
-            <Badge text={user.verification} green={false} />
-            <Text style={s.caption}>
-              Simulate an external eKYC identity provider. In this classroom
-              demo, no real identity documents or biometrics are collected. Upon
-              successful verification, every newly verified renter begins at
-              strictly 80/100 (Low Risk).
-            </Text>
-            {["not_verified", "failed"].includes(user.verification) && (
-              <Button onPress={() => verify("pending")}>
-                {user.verification === "failed"
-                  ? "Retry demo verification"
-                  : "Start demo verification"}
+
+      {/* Visible fictional eKYC presentation for BOTH completed and new users. */}
+      <Section title="Identity Verification (Demo eKYC)" />
+      <Card>
+        <Notice text="Classroom demonstration only — no real identity document, camera, biometric processing or government verification." />
+        {user.verification === "verified" ? (
+          <>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 10 }}>
+              <Ionicons name="checkmark-circle" size={24} color={colors.green} />
+              <Text style={s.bold}>Identity document sample — Completed (Demo)</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 10 }}>
+              <Ionicons name="scan-outline" size={24} color={colors.green} />
+              <Text style={s.bold}>Facial scan animation — Completed (Demo)</Text>
+            </View>
+            <Text style={s.caption}>These are fictional completed demo steps, not real identity verification. No re-verification required.</Text>
+          </>
+        ) : (
+          <>
+            <Text style={s.h2}>1. MyKad or Passport (Demo)</Text>
+            <View style={{ flexDirection: "row", gap: 10, marginVertical: 12 }}>
+              {(["MyKad", "Passport"] as const).map((choice) => (
+                <Pressable key={choice} accessibilityRole="button"
+                  accessibilityState={{ selected: demoDoc === choice }}
+                  onPress={() => { setDemoDoc(choice); setDemoFaceDone(false); }}
+                  style={{ flex: 1, borderWidth: 1, borderColor: demoDoc === choice ? colors.blue : colors.border,
+                    borderRadius: 12, padding: 12, alignItems: "center",
+                    backgroundColor: demoDoc === choice ? colors.paleBlue : "white" }}>
+                  <Text style={s.bold}>{choice}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {(demoDoc === "MyKad"
+              ? [
+                { title: "Front of MyKad", selected: demoFront, press: () => setDemoFront(!demoFront) },
+                { title: "Back of MyKad", selected: demoBack, press: () => setDemoBack(!demoBack) },
+              ]
+              : [
+                { title: "Passport Photo Page", selected: demoPassport, press: () => setDemoPassport(!demoPassport) },
+              ]
+            ).map((tile) => (
+              <Pressable accessibilityRole="button" key={tile.title} onPress={tile.press}
+                accessibilityLabel={`Use fictional sample image for ${tile.title}`}
+                style={{ borderWidth: 1, borderStyle: "dashed", borderColor: colors.border,
+                  borderRadius: 12, padding: 18, alignItems: "center", gap: 8, marginVertical: 7 }}>
+                <Ionicons name={tile.selected ? "checkmark-circle" : "camera-outline"}
+                  size={28} color={tile.selected ? colors.green : colors.blue} />
+                <Text style={s.bold}>{tile.title}</Text>
+                <Text style={s.caption}>{tile.selected ? "Sample image selected (Demo)" : "Tap to use a fictional sample photo"}</Text>
+              </Pressable>
+            ))}
+            <View style={{ marginTop: 15, gap: 10 }}>
+              <Text style={s.h2}>2. Face Verification (Demo)</Text>
+              <View style={{ alignItems: "center", gap: 12, paddingVertical: 10 }}>
+                <Ionicons name="scan-outline" size={60} color={colors.blue} />
+                <Text style={s.caption}>Animation only — no real facial recognition.</Text>
+              </View>
+              <Button secondary
+                disabled={demoScanning || demoFaceDone || !(demoDoc === "MyKad" ? demoFront && demoBack : demoPassport)}
+                onPress={() => {
+                  setDemoScanning(true);
+                  setTimeout(() => {
+                    setDemoScanning(false);
+                    setDemoFaceDone(true);
+                  }, 850);
+                }}>
+                {demoScanning ? "Scanning... (Demo)" : demoFaceDone ? "Demo Face Check Complete" : "Start Demo Face Scan"}
               </Button>
-            )}
-            {user.verification === "pending" && (
-              <>
-                <Notice text="Verification pending. Choose a simulated provider response to test either outcome." />
-                <Button onPress={() => verify("verified")}>
-                  Simulate verified result (Initial Score 80 · Low)
-                </Button>
-                <Button secondary onPress={() => verify("failed")}>
-                  Simulate failed result
-                </Button>
-              </>
-            )}
-          </Card>
-        </>
-      )}
+              <Button disabled={!demoFaceDone} onPress={() => {
+                try {
+                  if (user.verification !== "pending") act({ type: "verify", status: "pending" });
+                  act({ type: "verify", status: "verified" });
+                  setError("");
+                  setSuccess("Demo verification complete. No real identity check was performed.");
+                } catch (e) { setError((e as Error).message); }
+              }}>
+                Complete Demo Verification
+              </Button>
+            </View>
+          </>
+        )}
+      </Card>
 
       {/* Rental Risk Score Section */}
       <Section title="Rental Risk Score" />
