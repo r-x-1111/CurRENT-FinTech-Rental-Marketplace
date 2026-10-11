@@ -810,7 +810,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
 
     // ------------------------------------------------------------------------
-    // 6B. LENDER UPCOMING RENTAL (the single active/upcoming lender booking)
+    // 6B. LENDER UPCOMING RENTALS
     // ------------------------------------------------------------------------
     {
       id: "demo-lender-upcoming-1",
@@ -1016,9 +1016,11 @@ export function createAdminDemoSeed(): Marketplace {
   const demoWorkspaceBookings = demoBookings.filter(
     (booking) =>
       booking.ownerId !== "demo-renter" ||
-      ["demo-lender-upcoming-1", "demo-lender-completed-1"].includes(
-        booking.id,
-      ),
+      [
+        "demo-lender-upcoming-1",
+        "demo-lender-upcoming-2",
+        "demo-lender-completed-1",
+      ].includes(booking.id),
   );
 
   // --------------------------------------------------------------------------

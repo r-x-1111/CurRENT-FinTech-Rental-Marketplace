@@ -167,6 +167,15 @@ export function getIssueReportPermissions({
   return { canEdit, canSubmit: canEdit && activeStage };
 }
 
+export function isLenderDisputeEligible(
+  booking: Booking,
+  now = Date.now(),
+): boolean {
+  return (
+    booking.status !== "cancelled" && now >= parseMalaysiaTimestamp(booking.end)
+  );
+}
+
 export const newId = () =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -1205,6 +1214,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Reviews are available after the rental is completed.",
       );
       requireThat(
+        Date.parse(now) >= parseMalaysiaTimestamp(b.end),
+        "Reviews are available after the scheduled rental end.",
+      );
+      requireThat(
         !state.reviews.some(
           (r) => r.bookingId === b.id && r.authorId === user.id,
         ),
@@ -1250,8 +1263,14 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Only the booking lender can submit Apply Dispute.",
       );
       requireThat(
-        ["active", "return_pending"].includes(getEffectiveBookingStatus(b)),
-        "Disputes can be opened during an active rental or return inspection.",
+        isLenderDisputeEligible(b, Date.parse(now)),
+        b.status === "cancelled"
+          ? "Cancelled bookings cannot be disputed."
+          : "Apply Dispute is available from the scheduled rental end.",
+      );
+      requireThat(
+        !state.disputes.some((d) => d.bookingId === b.id),
+        "A dispute has already been submitted for this booking.",
       );
       requireThat(
         action.reason.trim().length >= 10,
@@ -1288,11 +1307,9 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           createdAt: now,
         });
       }
-      b.status = "disputed";
-      b.deposit = "disputed";
       notify(
-        user.id === b.ownerId ? b.renterId : b.ownerId,
-        `A dispute was opened for ${b.title}. Deposit release is paused.`,
+        b.renterId,
+        `A dispute was submitted for ${b.title}. Status: PENDING. No automatic financial adjustment was made.`,
         b.id,
       );
       break;

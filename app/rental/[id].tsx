@@ -1,18 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Image,
-  Modal,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { Image, Modal, Text, TouchableOpacity, View } from "react-native";
+import { Redirect, router, useLocalSearchParams, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
   Button,
   Card,
-  Chips,
   colors,
   Empty,
   Field,
@@ -35,6 +28,7 @@ import {
 } from "../../services/booking";
 import {
   getIssueReportPermissions,
+  isLenderDisputeEligible,
   type Action,
 } from "../../services/marketplace";
 
@@ -57,11 +51,8 @@ export default function RentalDetail() {
   const [returnVideos, setReturnVideos] = useState<string[]>([]);
   const [returnNotes, setReturnNotes] = useState("");
   const [checkOutIssue, setCheckOutIssue] = useState("");
-  const [disputeNotes, setDisputeNotes] = useState("");
   const [rating, setRating] = useState("5");
   const [review, setReview] = useState("");
-  const [dispute, setDispute] = useState(false);
-  const [disputeCategory, setDisputeCategory] = useState("Item damaged");
   const [returnNotice, setReturnNotice] = useState("");
   const [checkOutOffset, setCheckOutOffset] = useState<number | null>(null);
   const [scrollToY, setScrollToY] = useState<number | null>(null);
@@ -137,15 +128,9 @@ export default function RentalDetail() {
       setReturnPhotos([]);
       setReturnVideos([]);
       setReturnNotes("");
-      setDisputeNotes("");
-      setDispute(false);
       if (action.type === "returnConfirm" && action.role === "owner") {
         setSuccessNotice(
           "Rental completed. The simulated deposit ledger was released once; no real money was transferred.",
-        );
-      } else if (action.type === "dispute") {
-        setSuccessNotice(
-          "Dispute submitted and saved. The simulated deposit remains held pending authorised resolution.",
         );
       } else if (action.type === "returnConfirm") {
         setSuccessNotice(
@@ -193,6 +178,11 @@ export default function RentalDetail() {
   }
 
   const cancelEligible = isCancellationEligible(b.start);
+  const lenderCancelEligible =
+    effectiveStatus === "upcoming" && b.payment === "paid" && cancelEligible;
+  const existingDispute = state.disputes.find((d) => d.bookingId === b.id);
+  const disputeEligible = isLenderDisputeEligible(b, now);
+  const reviewEligible = effectiveStatus === "completed" && isEndReached;
 
   const checkInEvidence = state.evidence.find(
     (e) => e.bookingId === id && e.kind === "check_in",
@@ -296,9 +286,7 @@ export default function RentalDetail() {
           </Button>
         ) : isStartReached ? (
           <Button
-            onPress={() =>
-              run({ type: "confirmReceived", bookingId: id })
-            }
+            onPress={() => run({ type: "confirmReceived", bookingId: id })}
           >
             Confirm Received — Delivered item successfully received
           </Button>
@@ -385,10 +373,7 @@ export default function RentalDetail() {
               {formatMalaysiaDateTime(b.start)}
             </Text>
             <Text style={[s.body, { textAlign: "right" }]}>
-              to{" "}
-              {formatMalaysiaDateTime(
-                b.end,
-              )}
+              to {formatMalaysiaDateTime(b.end)}
             </Text>
             <Text style={s.caption}>
               {b.quote.days} {b.quote.days === 1 ? "day" : "days"} · Delivery
@@ -412,6 +397,44 @@ export default function RentalDetail() {
           Message {other?.name.split(" ")[0] || "participant"}
         </Button>
       </Card>
+
+      {owner && (
+        <Card>
+          <Text style={s.h2}>Lender Actions</Text>
+          <Text style={s.caption}>
+            Actions are enabled only when this rental reaches the relevant
+            eligibility point.
+          </Text>
+          <View style={{ marginTop: 12, gap: 10 }}>
+            <Button
+              secondary
+              disabled={!lenderCancelEligible}
+              onPress={() => operation("cancel")}
+            >
+              Cancel Booking (100% Simulated Refund & RM0 Fee)
+            </Button>
+            <Button
+              danger
+              secondary
+              disabled={!disputeEligible || !!existingDispute}
+              onPress={() => router.push(`/dispute/${b.id}` as Href)}
+            >
+              Apply Dispute
+            </Button>
+            {existingDispute ? (
+              <Text style={[s.caption, { textAlign: "center" }]}>
+                Dispute status: PENDING. Further submissions are disabled.
+              </Text>
+            ) : !disputeEligible ? (
+              <Text style={[s.caption, { textAlign: "center" }]}>
+                {b.status === "cancelled"
+                  ? "Cancelled bookings cannot be disputed."
+                  : `Apply Dispute is available from ${formatMalaysiaDateTime(endMs)}.`}
+              </Text>
+            ) : null}
+          </View>
+        </Card>
+      )}
 
       {stepIndex >= 0 && (
         <View
@@ -447,16 +470,12 @@ export default function RentalDetail() {
           <View style={{ marginVertical: 12, gap: 8 }}>
             <Row
               label="Scheduled Rental Start"
-              value={
-                formatMalaysiaDateTime(b.start) || b.start
-              }
+              value={formatMalaysiaDateTime(b.start) || b.start}
               strong
             />
             <Row
               label="Scheduled Return"
-              value={
-                formatMalaysiaDateTime(b.end) || b.end
-              }
+              value={formatMalaysiaDateTime(b.end) || b.end}
             />
             <Row
               label="Delivery Receipt"
@@ -487,13 +506,14 @@ export default function RentalDetail() {
               {formatMalaysiaDateTime(b.start) || b.start}
               ).
             </Text>
-            {cancelEligible ? (
-              <Button secondary onPress={() => operation("cancel")}>
-                Cancel Booking (100% Simulated Refund & RM0 Fee)
-              </Button>
-            ) : (
-              <Notice text="Cancellation window closed. Free cancellation is only available at least 24 hours before scheduled start." />
-            )}
+            {!owner &&
+              (cancelEligible ? (
+                <Button secondary onPress={() => operation("cancel")}>
+                  Cancel Booking (100% Simulated Refund & RM0 Fee)
+                </Button>
+              ) : (
+                <Notice text="Cancellation window closed. Free cancellation is only available at least 24 hours before scheduled start." />
+              ))}
           </View>
         </Card>
       )}
@@ -510,15 +530,11 @@ export default function RentalDetail() {
             <View style={{ marginVertical: 10, gap: 6 }}>
               <Row
                 label="Scheduled Rental Start"
-                value={
-                  formatMalaysiaDateTime(b.start) || b.start
-                }
+                value={formatMalaysiaDateTime(b.start) || b.start}
               />
               <Row
                 label="Scheduled Return"
-                value={
-                  formatMalaysiaDateTime(b.end) || b.end
-                }
+                value={formatMalaysiaDateTime(b.end) || b.end}
                 strong
               />
               <Row
@@ -538,7 +554,6 @@ export default function RentalDetail() {
 
             {/* Renter Action Buttons (Two-Button Time-Gated Design) */}
             {!owner && renderRenterActionButtons()}
-
           </Card>
         </>
       )}
@@ -928,9 +943,7 @@ export default function RentalDetail() {
             {["active", "return_pending"].includes(effectiveStatus) && (
               <View style={{ marginTop: 14, gap: 10 }}>
                 <Button
-                  disabled={
-                    isSavingAction || !b.renterReturnConfirmedAt || !!dispute
-                  }
+                  disabled={isSavingAction || !b.renterReturnConfirmedAt}
                   onPress={() =>
                     run({
                       type: "returnConfirm",
@@ -942,18 +955,6 @@ export default function RentalDetail() {
                 >
                   No Issue – End Rental
                 </Button>
-
-                <Button
-                  danger
-                  secondary
-                  onPress={() => {
-                    setDispute(!dispute);
-                    setDisputeNotes("");
-                  }}
-                >
-                  {dispute ? "Close Dispute Form" : "Apply Dispute"}
-                </Button>
-
                 {!b.renterReturnConfirmedAt && (
                   <Text style={[s.caption, { textAlign: "center" }]}>
                     "No Issue – End Rental" is disabled until renter completes
@@ -986,50 +987,6 @@ export default function RentalDetail() {
           </>
         )}
       </Card>
-
-      {/* DISPUTE FORM (WHEN OPEN) */}
-      {dispute && (
-        <Card>
-          <Text style={s.h2}>Raise a Dispute</Text>
-          <Text style={s.caption}>
-            Reporting damage or an issue immediately pauses clean completion and
-            holds the simulated deposit.
-          </Text>
-          <Text style={s.label}>Category</Text>
-          <Chips
-            options={[
-              "Item damaged",
-              "Item not returned",
-              "Condition disagreement",
-              "Payment issue",
-              "Security deposit issue",
-            ]}
-            selected={disputeCategory}
-            onSelect={setDisputeCategory}
-          />
-          <Field
-            label="Describe the issue in detail"
-            value={disputeNotes}
-            onChangeText={setDisputeNotes}
-            multiline
-            placeholder="Provide specific details of damage or missing items."
-          />
-          <Button
-            danger
-            disabled={isSavingAction || disputeNotes.trim().length < 10}
-            onPress={() =>
-              run({
-                type: "dispute",
-                bookingId: id,
-                reason: disputeNotes,
-                category: disputeCategory,
-              })
-            }
-          >
-            Submit Dispute & Freeze Deposit
-          </Button>
-        </Card>
-      )}
 
       {/* DISPUTE RESOLUTION FIXTURES (PHASE 5) */}
       {effectiveStatus === "disputed" && (
@@ -1154,132 +1111,143 @@ export default function RentalDetail() {
       </Card>
 
       {/* REVIEWS — HOW DID IT GO? */}
-      {effectiveStatus === "completed" && (
-        <>
-          <Section title="How did it go?" />
-          {myReview ? (
-            <Card>
+      <>
+        <Section title="How did it go?" />
+        {!myReview && !reviewEligible && (
+          <Notice
+            text={`Rating and review will unlock after this rental is completed and the scheduled end time (${formatMalaysiaDateTime(endMs)}) has passed.`}
+          />
+        )}
+        {myReview ? (
+          <Card>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
               <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 6,
-                }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                >
-                  <Text style={[s.bold, { fontSize: 16, color: "#D97706" }]}>
-                    {"★".repeat(myReview.rating)}
-                    {"☆".repeat(5 - myReview.rating)}
-                  </Text>
-                  <Badge text={`${myReview.rating} / 5 Stars`} green />
-                </View>
-                <Text style={s.caption}>Your review</Text>
+                <Text style={[s.bold, { fontSize: 16, color: "#D97706" }]}>
+                  {"★".repeat(myReview.rating)}
+                  {"☆".repeat(5 - myReview.rating)}
+                </Text>
+                <Badge text={`${myReview.rating} / 5 Stars`} green />
               </View>
-              <Text style={s.body}>{myReview.text || "Review submitted."}</Text>
-              <Text style={[s.caption, { marginTop: 6 }]}>
-                Reviewed by {user.name} ({owner ? "Lender" : "Renter"}) ·
-                Counterparty: {other?.name || "Participant"}
-              </Text>
-            </Card>
-          ) : (
-            <Card>
-              <Text style={[s.caption, { marginBottom: 8 }]}>
-                {owner
-                  ? `Rate your rental experience with ${other?.name || "the renter"}.`
-                  : `Rate your rental experience with ${other?.name || "the lender"}.`}
-              </Text>
-              <View
-                style={{ flexDirection: "row", gap: 10, marginVertical: 8 }}
-              >
-                {["1", "2", "3", "4", "5"].map((val) => {
-                  const isSelected = rating === val;
-                  return (
-                    <TouchableOpacity
-                      key={val}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${val} star rating`}
-                      onPress={() => setRating(val)}
+              <Text style={s.caption}>Your review</Text>
+            </View>
+            <Text style={s.body}>{myReview.text || "Review submitted."}</Text>
+            <Text style={[s.caption, { marginTop: 6 }]}>
+              Reviewed by {user.name} ({owner ? "Lender" : "Renter"}) ·
+              Counterparty: {other?.name || "Participant"}
+            </Text>
+          </Card>
+        ) : (
+          <Card>
+            <Text style={[s.caption, { marginBottom: 8 }]}>
+              {owner
+                ? `Rate your rental experience with ${other?.name || "the renter"}.`
+                : `Rate your rental experience with ${other?.name || "the lender"}.`}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10, marginVertical: 8 }}>
+              {["1", "2", "3", "4", "5"].map((val) => {
+                const isSelected = rating === val;
+                return (
+                  <TouchableOpacity
+                    key={val}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${val} star rating`}
+                    accessibilityState={{ disabled: !reviewEligible }}
+                    disabled={!reviewEligible}
+                    onPress={() => setRating(val)}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: isSelected ? colors.blue : "#F1F5F9",
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? colors.blue : "#CBD5E1",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      opacity: reviewEligible ? 1 : 0.55,
+                    }}
+                  >
+                    <Text
                       style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 22,
-                        backgroundColor: isSelected ? colors.blue : "#F1F5F9",
-                        borderWidth: 1.5,
-                        borderColor: isSelected ? colors.blue : "#CBD5E1",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        fontSize: 16,
+                        fontWeight: "700",
+                        color: isSelected ? "#FFFFFF" : colors.navy,
                       }}
                     >
-                      <Text
-                        style={{
-                          fontSize: 16,
-                          fontWeight: "700",
-                          color: isSelected ? "#FFFFFF" : colors.navy,
-                        }}
-                      >
-                        {val}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Field
-                label="Your review"
-                value={review}
-                onChangeText={setReview}
-                multiline
-                placeholder="Help the community rent with confidence."
-              />
-              <Button
-                onPress={() =>
-                  run({
-                    type: "review",
-                    bookingId: id,
-                    rating: Number(rating),
-                    text: review,
-                  })
-                }
-              >
-                Leave {rating}-star review
-              </Button>
-            </Card>
-          )}
+                      {val}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Field
+              label="Your review"
+              value={review}
+              onChangeText={setReview}
+              editable={reviewEligible}
+              multiline
+              placeholder="Help the community rent with confidence."
+              style={
+                !reviewEligible
+                  ? { backgroundColor: colors.lightGrey, color: colors.muted }
+                  : undefined
+              }
+            />
+            <Button
+              disabled={!reviewEligible || isSavingAction}
+              onPress={() =>
+                run({
+                  type: "review",
+                  bookingId: id,
+                  rating: Number(rating),
+                  text: review,
+                })
+              }
+            >
+              Leave {rating}-star review
+            </Button>
+          </Card>
+        )}
 
-          {otherReview && (
-            <Card>
+        {otherReview && (
+          <Card>
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+              }}
+            >
               <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 6,
-                }}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
               >
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-                >
-                  <Text style={[s.bold, { fontSize: 16, color: "#D97706" }]}>
-                    {"★".repeat(otherReview.rating)}
-                    {"☆".repeat(5 - otherReview.rating)}
-                  </Text>
-                  <Badge text={`${otherReview.rating} / 5 Stars`} />
-                </View>
-                <Text style={s.caption}>Counterparty review</Text>
+                <Text style={[s.bold, { fontSize: 16, color: "#D97706" }]}>
+                  {"★".repeat(otherReview.rating)}
+                  {"☆".repeat(5 - otherReview.rating)}
+                </Text>
+                <Badge text={`${otherReview.rating} / 5 Stars`} />
               </View>
-              <Text style={s.body}>
-                {otherReview.text || "Review submitted."}
-              </Text>
-              <Text style={[s.caption, { marginTop: 6 }]}>
-                Reviewed by {other?.name || "Counterparty"} (
-                {owner ? "Renter" : "Lender"})
-              </Text>
-            </Card>
-          )}
-        </>
-      )}
+              <Text style={s.caption}>Counterparty review</Text>
+            </View>
+            <Text style={s.body}>
+              {otherReview.text || "Review submitted."}
+            </Text>
+            <Text style={[s.caption, { marginTop: 6 }]}>
+              Reviewed by {other?.name || "Counterparty"} (
+              {owner ? "Renter" : "Lender"})
+            </Text>
+          </Card>
+        )}
+      </>
       <Modal
         visible={cancelConfirmationVisible}
         transparent

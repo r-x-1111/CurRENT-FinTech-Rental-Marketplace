@@ -5,6 +5,7 @@ import path from "node:path";
 import { createSeed } from "../data/seed";
 import {
   getIssueReportPermissions,
+  isLenderDisputeEligible,
   resolveAutomatedSupportQuery,
   transition,
   type Action,
@@ -1404,28 +1405,125 @@ test("confirmed booking cancellation is available to both participants only befo
   );
 });
 
-test("Lender Rental Details renders one lower Cancel Booking control", () => {
+test("Lender Rental Details renders one persistent action panel without the old inline dispute workflow", () => {
   const source = fs.readFileSync(
     path.resolve(process.cwd(), "app/rental/[id].tsx"),
     "utf8",
   );
-  const cancelLabels = source.match(
-    /Cancel Booking \(100% Simulated Refund & RM0 Fee\)/g,
+  const disputeSource = fs.readFileSync(
+    path.resolve(process.cwd(), "app/dispute/[id].tsx"),
+    "utf8",
   );
-  assert.equal(cancelLabels?.length, 1);
 
   const messageButton = source.indexOf(
     'Message {other?.name.split(" ")[0] || "participant"}',
   );
-  const upcomingCard = source.indexOf("Upcoming Rental (Confirmed)");
-  const cancellationCutoff = source.indexOf("Cancellation Cutoff:");
-  const remainingCancelButton = source.indexOf(
+  const actionPanel = source.indexOf("Lender Actions");
+  const lenderCancelButton = source.indexOf(
     "Cancel Booking (100% Simulated Refund & RM0 Fee)",
   );
+  const lenderDisputeButton = source.indexOf("Apply Dispute");
   assert.ok(messageButton >= 0);
-  assert.ok(messageButton < upcomingCard);
-  assert.ok(upcomingCard < cancellationCutoff);
-  assert.ok(cancellationCutoff < remainingCancelButton);
+  assert.ok(messageButton < actionPanel);
+  assert.ok(actionPanel < lenderCancelButton);
+  assert.ok(lenderCancelButton < lenderDisputeButton);
+  assert.match(
+    source,
+    /disabled={!disputeEligible \|\| !!existingDispute}/,
+  );
+  assert.doesNotMatch(source, /Submit Dispute & Freeze Deposit/);
+  assert.doesNotMatch(source, /Close Dispute Form/);
+  assert.match(disputeSource, /Dispute Submitted/);
+  assert.match(disputeSource, /"PENDING"/);
+  assert.match(disputeSource, /actAndPersist/);
+  assert.match(disputeSource, /New financial charge/);
+});
+
+test("lender disputes unlock at scheduled end, persist once, and do not change financial state", () => {
+  let state = createSeed("admin_demo");
+  const booking = state.bookings.find(
+    (item) => item.id === "demo-lender-completed-1",
+  )!;
+  booking.status = "completed";
+  booking.end = new Date(Date.now() - 1).toISOString();
+  booking.deposit = "released";
+  booking.payment = "paid";
+
+  assert.equal(
+    isLenderDisputeEligible(booking, parseMalaysiaTimestamp(booking.end) - 1),
+    false,
+  );
+  assert.equal(
+    isLenderDisputeEligible(booking, parseMalaysiaTimestamp(booking.end)),
+    true,
+  );
+
+  state = transition(state, {
+    type: "dispute",
+    bookingId: booking.id,
+    category: "Item damaged",
+    reason: "A post-return inspection found a damaged component.",
+  });
+
+  const unchangedBooking = state.bookings.find(
+    (item) => item.id === booking.id,
+  )!;
+  assert.equal(unchangedBooking.status, "completed");
+  assert.equal(unchangedBooking.deposit, "released");
+  assert.equal(unchangedBooking.payment, "paid");
+  assert.equal(
+    state.disputes.filter((item) => item.bookingId === booking.id).length,
+    1,
+  );
+  assert.equal(
+    state.disputes.find((item) => item.bookingId === booking.id)?.status,
+    "under_review",
+  );
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "dispute",
+        bookingId: booking.id,
+        category: "Item damaged",
+        reason: "A duplicate dispute submission should be rejected.",
+      }),
+    /already been submitted/,
+  );
+
+  const cancelledState = createSeed("admin_demo");
+  const cancelledBooking = cancelledState.bookings.find(
+    (item) => item.id === "demo-lender-completed-1",
+  )!;
+  cancelledBooking.status = "cancelled";
+  cancelledBooking.end = new Date(Date.now() - 1).toISOString();
+  assert.equal(isLenderDisputeEligible(cancelledBooking), false);
+  assert.throws(
+    () =>
+      transition(cancelledState, {
+        type: "dispute",
+        bookingId: cancelledBooking.id,
+        category: "Item damaged",
+        reason: "Cancelled bookings must remain ineligible for disputes.",
+      }),
+    /Cancelled bookings cannot be disputed/,
+  );
+
+  const earlyState = createSeed("admin_demo");
+  const earlyBooking = earlyState.bookings.find(
+    (item) => item.id === "demo-lender-upcoming-1",
+  )!;
+  earlyBooking.end = new Date(Date.now() + 86_400_000).toISOString();
+  assert.ok(parseMalaysiaTimestamp(earlyBooking.end) > Date.now());
+  assert.throws(
+    () =>
+      transition(earlyState, {
+        type: "dispute",
+        bookingId: earlyBooking.id,
+        category: "Item damaged",
+        reason: "This dispute is too early and must remain frozen.",
+      }),
+    /available from the scheduled rental end/,
+  );
 });
 
 test("return evidence releases the deposit and preserves the unassessed timing outcome", () => {
@@ -1525,6 +1623,7 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
   )!;
   disputedBooking.status = "active";
   disputedBooking.deposit = "held";
+  disputedBooking.end = new Date(Date.now() - 1).toISOString();
 
   // Owner raises a dispute for scratched lens
   state = transition(state, { type: "login", userId: "owner-aiman" });
@@ -1536,8 +1635,8 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
   });
 
   const bDisputed = state.bookings.find((b) => b.id === "booking-dispute")!;
-  assert.equal(bDisputed.status, "disputed");
-  assert.equal(bDisputed.deposit, "disputed");
+  assert.equal(bDisputed.status, "active");
+  assert.equal(bDisputed.deposit, "held");
 
   const dispute = state.disputes.find(
     (d) => d.bookingId === "booking-dispute",
@@ -1828,13 +1927,13 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
     1,
     `Expected exactly 1 lender payout, got ${lenderPayouts.length}`,
   );
-  assert.equal(lenderBookings.filter((b) => b.status === "upcoming").length, 1);
+  assert.equal(lenderBookings.filter((b) => b.status === "upcoming").length, 2);
   assert.equal(
     lenderBookings.filter((b) =>
       ["active", "upcoming", "return_pending"].includes(b.status),
     ).length,
-    1,
-    "The lender Active / Upcoming Rentals counter should match its single upcoming booking.",
+    2,
+    "The lender Active / Upcoming Rentals counter should match its two upcoming bookings.",
   );
   assert.equal(lenderPayouts[0].id, "demo-lender-completed-1");
   assert.equal(
@@ -1845,7 +1944,7 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
     seed.messages.filter((message) =>
       lenderBookings.some((booking) => booking.id === message.bookingId),
     ).length,
-    4,
+    6,
     "The retained lender bookings should keep their message threads.",
   );
 
@@ -2307,6 +2406,7 @@ test("Section 30: Post-rental 'How did it go?' rating and review submission for 
     (b) => b.status === "completed" && b.renterId === "demo-renter",
   );
   assert.ok(completedBooking);
+  completedBooking.end = new Date(Date.now() - 1).toISOString();
 
   // 1. Renter submits review
   state = transition(state, { type: "login", userId: "demo-renter" });
@@ -2373,6 +2473,35 @@ test("Section 30: Post-rental 'How did it go?' rating and review submission for 
         text: "Too early",
       }),
     /Reviews are available after the rental is completed\./,
+  );
+
+  // 5. Completed status alone does not unlock reviews before scheduled end
+  const futureState = createSeed("admin_demo");
+  const futureCompletedBooking = futureState.bookings.find(
+    (b) => b.status === "completed" && b.renterId === "demo-renter",
+  );
+  assert.ok(futureCompletedBooking);
+  futureCompletedBooking.end = new Date(Date.now() + 86_400_000).toISOString();
+  assert.throws(
+    () =>
+      transition(futureState, {
+        type: "review",
+        bookingId: futureCompletedBooking.id,
+        rating: 5,
+        text: "The scheduled end has not arrived yet.",
+      }),
+    /Reviews are available after the scheduled rental end\./,
+  );
+
+  const rentalDetailSource = fs.readFileSync(
+    path.resolve(process.cwd(), "app/rental/[id].tsx"),
+    "utf8",
+  );
+  assert.match(rentalDetailSource, /const reviewEligible =/);
+  assert.match(rentalDetailSource, /editable={reviewEligible}/);
+  assert.match(
+    rentalDetailSource,
+    /disabled={!reviewEligible \|\| isSavingAction}/,
   );
 });
 

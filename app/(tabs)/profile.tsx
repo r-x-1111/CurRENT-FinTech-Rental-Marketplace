@@ -329,10 +329,7 @@ export default function ProfileScreen() {
             • +2 points: Complete a rental on time with no issues.
           </Text>
           <Text style={styles.rulesBullet}>
-            • Late return: If the item is returned later than the scheduled
-            return delivery time, 5 points will be deducted from your Rental
-            Risk Score when actual lateness is confirmed by reliable return-time
-            evidence.
+            • −5 points: Confirmed late return
           </Text>
           <Text style={styles.rulesBullet}>
             • −10 points: Confirmed minor damage.
