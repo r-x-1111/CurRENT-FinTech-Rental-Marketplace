@@ -20,6 +20,7 @@ import {
   saveMarketplaceWorkspace,
 } from "../services/marketplacePersistence";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { phoneDemoVerified } from "../services/signup";
 
 function createLoggedOutState(): Marketplace {
   const seed = createSeed();
@@ -113,7 +114,14 @@ export function MarketplaceProvider({
           const account = session?.user
             ? accountFromSession(session.user)
             : null;
-          if (account) {
+          // Never resume a Normal workspace before its server-side Demo OTP is complete.
+          // Keep the Auth session so the user can resume the pending registration.
+          const phoneIsVerified =
+            !account ||
+            account.accountKind === "demo" ||
+            account.verified ||
+            (await phoneDemoVerified(supabase).catch(() => false));
+          if (account && phoneIsVerified) {
             const workspace = await loadMarketplaceWorkspace(
               supabase,
               account.id,
@@ -135,7 +143,8 @@ export function MarketplaceProvider({
             authOwnerId.current = account.id;
             authAccountKind.current = account.accountKind;
           } else {
-            if (session) await supabase.auth.signOut();
+            // A pending account is NOT signed out: the OTP screen can resume.
+            if (!account && session) await supabase.auth.signOut();
             restored = createLoggedOutState();
           }
         } else {
@@ -171,6 +180,11 @@ export function MarketplaceProvider({
   ) {
     if (!supabase || !isSupabaseConfigured) {
       throw new Error("Supabase authentication is not configured.");
+    }
+    if (account.accountKind === "normal" && !account.verified) {
+      if (!(await phoneDemoVerified(supabase))) {
+        throw new Error("Complete Demo OTP verification before accessing your workspace.");
+      }
     }
     const workspace = await loadMarketplaceWorkspace(
       supabase,
