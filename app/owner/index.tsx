@@ -166,7 +166,9 @@ export default function OwnerDashboard() {
                 <View style={styles.statsRow}>
                   <View style={styles.statItem}>
                     <Ionicons name="eye-outline" size={13} color={colors.muted} />
-                    <Text style={styles.statText}>Views: —</Text>
+                    <Text style={styles.statText}>
+                      Views: {l.demoViewCount ?? "—"}
+                    </Text>
                   </View>
                   <View style={styles.statItem}>
                     <Ionicons name="heart-outline" size={13} color={colors.muted} />
@@ -177,7 +179,7 @@ export default function OwnerDashboard() {
                   <View style={styles.statItem}>
                     <Ionicons name="bag-check-outline" size={13} color={colors.muted} />
                     <Text style={styles.statText}>
-                      Completed: {state.bookings.filter((b) => b.listingId === l.id && b.status === "completed").length}
+                      Completed: {bookings.filter((b) => b.listingId === l.id && b.status === "completed").length}
                     </Text>
                   </View>
                 </View>

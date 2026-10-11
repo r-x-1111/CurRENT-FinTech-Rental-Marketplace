@@ -22,6 +22,12 @@ const sampleConditionImages = [
 
 const sampleVideos = ["/videos/condition-evidence-sample-1.mp4"];
 
+const DEMO_LISTING_VIEW_COUNTS: Record<string, number> = {
+  "office-chair": 58,
+  "party-speaker": 43,
+  "camping-tent": 31,
+};
+
 export function createNormalSeed(): Marketplace {
   return {
     version: 1,
@@ -1446,6 +1452,10 @@ export function createAdminDemoSeed(): Marketplace {
   return {
     ...normal,
     mode: "admin_demo",
+    listings: normal.listings.map((listing) => ({
+      ...listing,
+      demoViewCount: DEMO_LISTING_VIEW_COUNTS[listing.id],
+    })),
     profiles: normal.profiles.map((p) =>
       p.id === "demo-renter"
         ? {

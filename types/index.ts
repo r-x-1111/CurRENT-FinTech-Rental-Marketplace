@@ -51,6 +51,7 @@ export interface Listing {
   privateMeetingVenue?: string;
   rating: number;
   completedRentalsCount?: number;
+  demoViewCount?: number;
   verifiedOwner: boolean;
   imageUrl: string;
   description: string;

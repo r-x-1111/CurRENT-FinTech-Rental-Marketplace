@@ -1977,6 +1977,54 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
   );
 });
 
+test("Demo lender listings use fixed view counts consistent with saves and completed rentals", () => {
+  const demo = createSeed("admin_demo");
+  const demoLenderListings = demo.listings.filter(
+    (listing) => listing.ownerId === "demo-renter",
+  );
+
+  assert.deepEqual(
+    Object.fromEntries(
+      demoLenderListings.map((listing) => [listing.id, listing.demoViewCount]),
+    ),
+    {
+      "office-chair": 58,
+      "party-speaker": 43,
+      "camping-tent": 31,
+    },
+  );
+
+  for (const listing of demoLenderListings) {
+    const saves = demo.profiles.filter((profile) =>
+      profile.favourites?.includes(listing.id),
+    ).length;
+    const completed = demo.bookings.filter(
+      (booking) =>
+        booking.ownerId === "demo-renter" &&
+        booking.listingId === listing.id &&
+        booking.status === "completed",
+    ).length;
+    assert.ok((listing.demoViewCount ?? -1) >= saves);
+    assert.ok((listing.demoViewCount ?? -1) >= completed);
+  }
+
+  assert.equal(
+    demo.bookings.filter(
+      (booking) =>
+        booking.ownerId === "demo-renter" &&
+        booking.listingId === "camping-tent" &&
+        booking.status === "completed",
+    ).length,
+    0,
+  );
+
+  const normal = createSeed("normal");
+  assert.equal(
+    normal.listings.some((listing) => listing.demoViewCount !== undefined),
+    false,
+  );
+});
+
 test("V3.23 listing publish requires >= 6 photos and >= 1 video", () => {
   let state = createSeed("admin_demo");
   state = transition(state, { type: "login", userId: "demo-renter" });
