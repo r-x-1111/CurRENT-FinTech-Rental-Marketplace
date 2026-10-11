@@ -6,12 +6,7 @@ import { Button, Card, Field, Notice, Screen, s } from "../components/ui";
 import { useMarketplace } from "../context/Marketplace";
 import { colors } from "../constants/theme";
 import { authenticateWithPassword } from "../services/auth";
-import {
-  confirmDemoPhoneCode,
-  normalizeMalaysianMobile,
-  phoneDemoVerified,
-  requestDemoPhoneCode,
-} from "../services/signup";
+import { checkExampleOtp, DEMO_OTP, normalizeMalaysianMobile } from "../services/signup";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 type Mode = "Sign in" | "Create account";
@@ -49,8 +44,7 @@ export default function Auth() {
     return () => clearInterval(timer);
   }, [resendCountdown]);
 
-  // A sign-up session may be restored after page refresh or email confirmation.
-  // Do not silently activate the marketplace before the server-checked OTP.
+  // Resume the fictional onboarding presentation after a real password sign-in.
   useEffect(() => {
     let active = true;
     async function resumePendingRegistration() {
@@ -63,12 +57,7 @@ export default function Auth() {
         user.app_metadata.account_kind === "demo" ||
         user.app_metadata.verification_status === "verified"
       ) return;
-      try {
-        if (await phoneDemoVerified(supabase)) return;
-      } catch {
-        // The verification service may not yet have been migrated; keep the
-        // account on the registration screen rather than marking it verified.
-      }
+      if (user.user_metadata.demo_phone_stage_complete === true) return;
       if (!active) return;
       setMode("Create account");
       setRegistrationStep(2);
@@ -84,13 +73,12 @@ export default function Auth() {
   }, [state.currentUserId]);
 
   async function requestCode(mobile: string) {
-    if (!supabase) throw new Error("Supabase authentication is not configured.");
-    const issuedCode = await requestDemoPhoneCode(supabase, mobile);
-    setDemoCode(issuedCode);
-    setResendCountdown(60);
+    normalizeMalaysianMobile(mobile);
+    setDemoCode(DEMO_OTP);
+    setResendCountdown(0);
     setOtp("");
     setError("");
-    setInfoNotice("Demo OTP Verification — no SMS sent. Enter the six-digit code shown below.");
+    setInfoNotice("Classroom Demo OTP only — no SMS, random code or phone-owner verification.");
   }
 
   async function submit() {
@@ -140,7 +128,11 @@ export default function Auth() {
       }
 
       if (mode === "Create account" && registrationStep === 2) {
-        await confirmDemoPhoneCode(supabase, otp);
+        checkExampleOtp(otp);
+        const updated = await supabase.auth.updateUser({
+          data: { demo_phone_stage_complete: true },
+        });
+        if (updated.error) throw new Error("Could not save demo progress.");
         const { data, error: userError } = await supabase.auth.getUser();
         if (userError || !data.user || !data.user.email) {
           throw new Error("Your session expired. Sign in to resume registration.");
@@ -164,8 +156,8 @@ export default function Auth() {
       if (!password) throw new Error("Enter your password.");
       const account = await authenticateWithPassword(supabase.auth, address, password);
       if (account.accountKind === "normal" && !account.verified) {
-        if (!(await phoneDemoVerified(supabase))) {
-          const { data } = await supabase.auth.getUser();
+        const { data } = await supabase.auth.getUser();
+        if (data.user?.user_metadata.demo_phone_stage_complete !== true) {
           const mobile =
             typeof data.user?.user_metadata.mobile_e164 === "string"
               ? data.user.user_metadata.mobile_e164
@@ -180,11 +172,7 @@ export default function Auth() {
             "Phone verification is required before continuing. Request a Demo OTP below.",
           );
           if (mobile) {
-            try {
-              await requestCode(mobile);
-            } catch {
-              setInfoNotice("Please wait for the resend cooldown, then request a new Demo OTP.");
-            }
+            await requestCode(mobile);
           }
           return;
         }
@@ -261,7 +249,7 @@ export default function Auth() {
             </Text>
             <Text style={styles.tagline}>Rent Smarter. Own Less. Live More.</Text>
             {mode === "Create account" && (
-              <Text style={s.caption}>Step {registrationStep} of 5 · Account → OTP → Identity → Result → Complete</Text>
+              <Text style={s.caption}>Step {registrationStep} of 5 · Account → OTP → Identity → Result → Complete (Demo)</Text>
             )}
           </View>
 
@@ -372,7 +360,7 @@ export default function Auth() {
 
           {otpScreen && (
             <>
-              <Notice text="Demo OTP Verification — no SMS sent. This does not verify real phone ownership." />
+              <Notice text="Simulated OTP — no SMS or real phone verification. Use the example code." />
               <Field
                 label="Mobile Number (+60)"
                 value={phone}
@@ -380,8 +368,8 @@ export default function Auth() {
                 keyboardType="phone-pad"
                 placeholder="+60123456789"
               />
-              <Button secondary disabled={busy || resendCountdown > 0} onPress={() => void resendCode()}>
-                {resendCountdown > 0 ? `Resend OTP in ${resendCountdown}s` : "Resend OTP / Update number"}
+              <Button secondary disabled={busy} onPress={() => void resendCode()}>
+                Resend OTP (Demo) / Edit number
               </Button>
               {!!demoCode && (
                 <Notice text={`Demo code (no SMS): ${demoCode}`} />
