@@ -24,7 +24,6 @@ export default function Auth() {
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [otp, setOtp] = useState("");
   const [demoCode, setDemoCode] = useState("");
-  const [resendCountdown, setResendCountdown] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [infoNotice, setInfoNotice] = useState("");
@@ -37,12 +36,6 @@ export default function Auth() {
       setError("");
     }
   }, [state.currentUserId]);
-
-  useEffect(() => {
-    if (resendCountdown <= 0) return;
-    const timer = setInterval(() => setResendCountdown(n => Math.max(0, n - 1)), 1000);
-    return () => clearInterval(timer);
-  }, [resendCountdown]);
 
   // Resume the fictional onboarding presentation after a real password sign-in.
   useEffect(() => {
@@ -64,8 +57,7 @@ export default function Auth() {
       setEmail(user.email || "");
       setName(typeof user.user_metadata.full_name === "string"
         ? user.user_metadata.full_name : "");
-      setPhone(typeof user.user_metadata.mobile_e164 === "string"
-        ? user.user_metadata.mobile_e164 : "");
+      setPhone("+60123456789");
       setInfoNotice("Continue your Demo phone verification. Use Resend OTP if you no longer have a code.");
     }
     void resumePendingRegistration();
@@ -75,7 +67,6 @@ export default function Auth() {
   async function requestCode(mobile: string) {
     normalizeMalaysianMobile(mobile);
     setDemoCode(DEMO_OTP);
-    setResendCountdown(0);
     setOtp("");
     setError("");
     setInfoNotice("Classroom Demo OTP only — no SMS, random code or phone-owner verification.");
@@ -108,7 +99,7 @@ export default function Auth() {
           email: address,
           password,
           options: {
-            data: { full_name: name.trim(), mobile_e164: normalizedPhone },
+            data: { full_name: name.trim() },
           },
         });
         if (signUpError) {
@@ -159,9 +150,7 @@ export default function Auth() {
         const { data } = await supabase.auth.getUser();
         if (data.user?.user_metadata.demo_phone_stage_complete !== true) {
           const mobile =
-            typeof data.user?.user_metadata.mobile_e164 === "string"
-              ? data.user.user_metadata.mobile_e164
-              : "";
+            "+60123456789";
           setName(account.name);
           setPhone(mobile);
           setRegistrationStep(2);
@@ -360,7 +349,7 @@ export default function Auth() {
 
           {otpScreen && (
             <>
-              <Notice text="Simulated OTP — no SMS or real phone verification. Use the example code." />
+              <Notice text="Simulated OTP — use a fictional +60 number and the visible example code. No SMS is sent." />
               <Field
                 label="Mobile Number (+60)"
                 value={phone}
