@@ -21,25 +21,24 @@ export function ListingCard({
     new Date(listing.featuredUntil).getTime() > Date.now();
 
   return (
-    <View style={styles.card}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`View item details: ${listing.title}`}
+      onPress={onPress}
+      style={styles.card}
+    >
       <View style={{ position: "relative" }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`View ${listing.title}`}
-          onPress={onPress}
-        >
-          <Image source={{ uri: listing.imageUrl }} style={styles.image} />
-        </Pressable>
+        <Image source={{ uri: listing.imageUrl }} style={styles.image} />
 
         {/* Favourite heart button */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${saved ? "Unsave" : "Save"} ${listing.title}`}
-          onPress={() =>
-            user
-              ? act({ type: "favourite", listingId: listing.id })
-              : router.push("/auth")
-          }
+          onPress={(event) => {
+            event.stopPropagation();
+            if (user) act({ type: "favourite", listingId: listing.id });
+            else router.push("/auth");
+          }}
           style={styles.heart}
         >
           <Ionicons
@@ -52,7 +51,7 @@ export function ListingCard({
         {/* Featured badge if boosted */}
         {isFeatured && (
           <View style={styles.featuredBadge}>
-            <Text style={styles.featuredText}>Featured (Demo)</Text>
+            <Text style={styles.featuredText}>Featured</Text>
           </View>
         )}
 
@@ -83,11 +82,9 @@ export function ListingCard({
         </View>
 
         {/* Title */}
-        <Pressable onPress={onPress}>
-          <Text style={styles.title} numberOfLines={1}>
-            {listing.title}
-          </Text>
-        </Pressable>
+        <Text style={styles.title} numberOfLines={1}>
+          {listing.title}
+        </Text>
 
         {/* Location */}
         <View style={styles.locationRow}>
@@ -103,7 +100,7 @@ export function ListingCard({
           </Text>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

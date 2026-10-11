@@ -1,7 +1,13 @@
 import type { RiskLevel } from "../types";
 
 export interface RentalIncident {
-  type: "on_time_success" | "late_return" | "minor_damage" | "serious_damage" | "theft_fraud";
+  type:
+    | "on_time_success"
+    | "late_return"
+    | "return_timing_unassessed"
+    | "minor_damage"
+    | "serious_damage"
+    | "theft_fraud";
   hoursLate?: number;
   confirmed: boolean;
   status: "pending" | "confirmed" | "rejected";
@@ -46,8 +52,8 @@ export function tierForScore(score: number | null): { level: RiskLevel; label: s
 }
 
 export function calculateLatePenalty(hoursLate: number): number {
-  if (hoursLate <= 2) return 0;
-  return -Math.min(5, Math.ceil(hoursLate - 2));
+  if (hoursLate <= 0) return 0;
+  return -5;
 }
 
 export function calculateRiskScore(input: RiskInputs): RiskResult {
@@ -60,21 +66,21 @@ export function calculateRiskScore(input: RiskInputs): RiskResult {
     };
   }
 
-  // Newly verified renter starts at 78/100 Medium (V3.23 rule)
-  let score = 78;
+  // Newly verified renter starts at 80/100 Low (V3.39 rule)
+  let score = 80;
 
   if (input.rentalHistory && input.rentalHistory.length > 0) {
     for (const rental of input.rentalHistory) {
       const confirmedIncidents = rental.incidents.filter((i) => i.confirmed);
       if (confirmedIncidents.length === 0) {
-        // Successful on-time rental: +2
-        score += 2;
+        continue;
       } else {
         // Pick only the single most serious confirmed penalty (V1.8 rule)
         let maxPenalty = 0; // negative number
         for (const inc of confirmedIncidents) {
           let pen = 0;
-          if (inc.type === "minor_damage") pen = -10;
+          if (inc.type === "on_time_success") pen = 2;
+          else if (inc.type === "minor_damage") pen = -10;
           else if (inc.type === "serious_damage") pen = -30;
           else if (inc.type === "late_return" && inc.hoursLate) pen = calculateLatePenalty(inc.hoursLate);
           if (pen < maxPenalty) maxPenalty = pen;
@@ -103,7 +109,13 @@ export function calculateRiskScore(input: RiskInputs): RiskResult {
 
 export function evaluateRentalOutcome(
   rawIncidents: {
-    type: "on_time_success" | "late_return" | "minor_damage" | "serious_damage" | "theft_fraud";
+    type:
+      | "on_time_success"
+      | "late_return"
+      | "return_timing_unassessed"
+      | "minor_damage"
+      | "serious_damage"
+      | "theft_fraud";
     hoursLate?: number;
     confirmed?: boolean;
     description?: string;
@@ -111,7 +123,13 @@ export function evaluateRentalOutcome(
 ): {
   effectiveAdjustment: number;
   incidents: {
-    type: "on_time_success" | "late_return" | "minor_damage" | "serious_damage" | "theft_fraud";
+    type:
+      | "on_time_success"
+      | "late_return"
+      | "return_timing_unassessed"
+      | "minor_damage"
+      | "serious_damage"
+      | "theft_fraud";
     description: string;
     penalty: number;
     hoursLate?: number;
@@ -121,17 +139,10 @@ export function evaluateRentalOutcome(
 } {
   const confirmed = rawIncidents.filter((i) => i.confirmed !== false);
 
-  if (confirmed.length === 0 || (confirmed.length === 1 && confirmed[0].type === "on_time_success")) {
+  if (confirmed.length === 0) {
     return {
-      effectiveAdjustment: 2,
-      incidents: [
-        {
-          type: "on_time_success",
-          description: "Completed on-time with no confirmed issues (+2 points)",
-          penalty: 2,
-          isWinning: true,
-        },
-      ],
+      effectiveAdjustment: 0,
+      incidents: [],
       isBanned: false,
     };
   }
@@ -147,6 +158,12 @@ export function evaluateRentalOutcome(
     if (inc.type === "minor_damage") {
       penalty = -10;
       if (!description) description = "Confirmed minor damage (−10 points)";
+    } else if (inc.type === "on_time_success") {
+      penalty = 2;
+      if (!description) description = "Completed on time with no issues (+2 points)";
+    } else if (inc.type === "return_timing_unassessed") {
+      penalty = 0;
+      if (!description) description = "Return timing unassessed (0 points)";
     } else if (inc.type === "serious_damage") {
       penalty = -30;
       if (!description) description = "Confirmed serious damage or accidental loss (−30 points)";
@@ -155,9 +172,9 @@ export function evaluateRentalOutcome(
       penalty = calculateLatePenalty(late);
       if (!description) {
         description =
-          late <= 2
-            ? `Late return within 2h grace period (RM0 / 0 points)`
-            : `Unapproved late return (${late}h) (${penalty} points)`;
+          late > 0
+            ? "Late return: Returned later than scheduled return delivery time (−5 points)"
+            : "On-time return (0 points)";
       }
     } else if (inc.type === "theft_fraud") {
       penalty = -100;
@@ -165,7 +182,7 @@ export function evaluateRentalOutcome(
       if (!description) description = "Confirmed intentional theft or fraud (Permanent account ban)";
     }
 
-    if (penalty < minPenalty) {
+    if (penalty < minPenalty || (penalty > 0 && winningIndex === -1)) {
       minPenalty = penalty;
       winningIndex = index;
     }
@@ -192,4 +209,3 @@ export function evaluateRentalOutcome(
     isBanned,
   };
 }
-

@@ -19,6 +19,7 @@ import {
   toMalaysiaUtcTimestamp,
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
+import { evaluateRentalOutcome } from "../services/riskScore";
 
 function journey() {
   let state = createSeed();
@@ -63,9 +64,9 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
     days: 2,
     rentalFee: 90,
     serviceFee: 5,
-    deposit: 400,
+    deposit: 200,
     protection: 0,
-    total: 495,
+    total: 295,
   });
   assert.deepEqual(calculateOwnerPayout(90), {
     commission: 10.8,
@@ -213,7 +214,7 @@ test("dispute preserves evidence and freezes deposit release", () => {
   assert.throws(() => j.operation("release"), /inspect/);
   assert.throws(() => j.operation("cancel"), /unpaid/);
   assert.equal(j.state.disputes.length, 1);
-  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 48);
+  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 80);
 });
 test("listing publication, dates, ownership, verification and deletion are enforced", () => {
   const j = journey();
@@ -344,7 +345,7 @@ test("state snapshots can reload mid-payment without losing fees or agreement pr
     id: "booking-1",
     operation: "payment_result",
   });
-  assert.equal(paid.bookings[0].quote.total, 495);
+  assert.equal(paid.bookings[0].quote.total, 295);
   assert.equal(paid.bookings[0].payment, "paid");
   assert.equal(loaded.bookings[0].payment, "processing");
 });
@@ -369,7 +370,7 @@ test("started 24-hour block pricing charges full days for partial blocks", () =>
   assert.equal(rentalDays("2026-11-01T10:00:00Z", "2026-11-03T17:00:00Z"), 3);
 });
 
-test("simulated eKYC verification initializes risk score to strictly 78 and unverified is N/A", () => {
+test("simulated eKYC verification initializes risk score to 80 and unverified is N/A", () => {
   let state = createSeed();
   // Switch to unverified renter Chloe Ng
   state = transition(state, { type: "login", userId: "unverified-renter" });
@@ -387,9 +388,9 @@ test("simulated eKYC verification initializes risk score to strictly 78 and unve
   state = transition(state, { type: "verify", status: "verified" });
   user = state.profiles.find((p) => p.id === "unverified-renter")!;
   assert.equal(user.verification, "verified");
-  assert.equal(user.riskScore, 78);
-  assert.equal(riskFor(state, user).score, 78);
-  assert.equal(riskFor(state, user).level, "medium");
+  assert.equal(user.riskScore, 80);
+  assert.equal(riskFor(state, user).score, 80);
+  assert.equal(riskFor(state, user).level, "low");
 });
 
 test("V3.15 risk score tier boundaries and direct checkout permissions (29, 30, 39, 40, 70, 79, 80, 100)", () => {
@@ -427,7 +428,7 @@ test("single winning incident rule applies only the most severe penalty and mark
   // Late return should be secondary (Recorded, not winning)
   const late = outcome.incidents.find((i: any) => i.type === "late_return")!;
   assert.equal(late.isWinning, false);
-  assert.equal(late.penalty, -2);
+  assert.equal(late.penalty, -5);
 
   // Minor damage should be winning
   const damage = outcome.incidents.find((i: any) => i.type === "minor_damage")!;
@@ -439,6 +440,66 @@ test("single winning incident rule applies only the most severe penalty and mark
     { type: "theft_fraud", confirmed: true },
   ]);
   assert.equal(fraudOutcome.isBanned, true);
+});
+
+test("return timing awards +2 only when on-time completion is evidenced", () => {
+  const onTime = evaluateRentalOutcome([
+    { type: "on_time_success", confirmed: true },
+  ]);
+  const late = evaluateRentalOutcome([
+    { type: "late_return", hoursLate: 0.25, confirmed: true },
+  ]);
+  const unassessed = evaluateRentalOutcome([
+    { type: "return_timing_unassessed", confirmed: true },
+  ]);
+
+  assert.equal(onTime.effectiveAdjustment, 2);
+  assert.equal(late.effectiveAdjustment, -5);
+  assert.equal(unassessed.effectiveAdjustment, 0);
+  assert.equal(unassessed.incidents[0].isWinning, false);
+});
+
+test("renter issue reports remain stage-specific, visible to lenders, and retry-safe", () => {
+  let state = createSeed("admin_demo");
+  const booking = state.bookings.find(
+    (item) => item.renterId === "demo-renter" && item.status === "active",
+  )!;
+  const checkInReport = {
+    type: "reportIssue" as const,
+    bookingId: booking.id,
+    stage: "check_in" as const,
+    text: "One accessory was missing at delivery.",
+  };
+  const checkOutReport = {
+    ...checkInReport,
+    stage: "check_out" as const,
+    text: "The case has a small new scratch.",
+  };
+
+  state = transition(state, { type: "login", userId: booking.renterId });
+  state = transition(state, checkInReport);
+  state = transition(state, checkOutReport);
+  assert.equal(state.issueReports?.length, 2);
+  assert.deepEqual(
+    state.issueReports?.map(({ stage, text }) => ({ stage, text })),
+    [
+      { stage: "check_out", text: checkOutReport.text },
+      { stage: "check_in", text: checkInReport.text },
+    ],
+  );
+  assert.ok(state.notifications.some((notice) => notice.userId === booking.ownerId));
+
+  const duplicateRetry = transition(state, checkOutReport);
+  const existingDisputeCount = state.disputes.length;
+  assert.equal(duplicateRetry.issueReports?.length, 2);
+  assert.equal(duplicateRetry.disputes.length, existingDisputeCount);
+  assert.throws(
+    () => transition(state, { ...checkOutReport, text: "Overwrite attempt" }),
+    /already been submitted/,
+  );
+
+  state = transition(state, { type: "login", userId: booking.ownerId });
+  assert.throws(() => transition(state, checkInReport), /Only the renter/);
 });
 
 test("RM10 lender boost features listing for 7 days", () => {
@@ -627,11 +688,12 @@ test("Phase 4: active rental consecutive extension updates deadline with RM0 ext
 
   const bAfter = state.bookings.find((b) => b.id === "booking-extend")!;
   assert.equal(bAfter.quote.days, origDays + 2);
+  assert.equal(origDeposit, 200);
   assert.equal(bAfter.quote.deposit, origDeposit); // Deposit unchanged, RM0 extra!
   assert.ok(bAfter.chainBookings && bAfter.chainBookings.length === 1);
 });
 
-test("Phase 4 & 5: two-sided clean return releases deposit and awards +2 score, while dispute blocks release", () => {
+test("Phase 4 & 5: clean return releases deposit with unassessed timing, while dispute blocks release", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
@@ -653,7 +715,7 @@ test("Phase 4 & 5: two-sided clean return releases deposit and awards +2 score, 
   state = transition(state, { type: "handoverConfirm", bookingId: "booking-return", role: "renter" });
 
   const scoreBefore = state.profiles.find((p) => p.id === "demo-renter")!.riskScore;
-  assert.equal(scoreBefore, 78);
+  assert.equal(scoreBefore, 80);
 
   const samplePhotos = [
     "photo-1", "photo-2", "photo-3", "photo-4", "photo-5", "photo-6"
@@ -698,7 +760,12 @@ test("Phase 4 & 5: two-sided clean return releases deposit and awards +2 score, 
   assert.equal(bCompleted.deposit, "released");
 
   const scoreAfter = state.profiles.find((p) => p.id === "demo-renter")!.riskScore;
-  assert.equal(scoreAfter, 80); // +2 awarded on on-time clean return! Initial 78 + 2 = 80
+  assert.equal(scoreAfter, 80);
+  const finalOutcome = state.profiles
+    .find((p) => p.id === "demo-renter")!
+    .riskHistory?.find((event) => event.bookingId === "booking-return");
+  assert.equal(finalOutcome?.effectiveAdjustment, 0);
+  assert.equal(finalOutcome?.incidents[0].type, "return_timing_unassessed");
 });
 
 test("Phase 5: predefined fictional dispute resolutions properly adjust deposit and risk penalties", () => {
@@ -749,7 +816,7 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
   const bResolved = state.bookings.find((b) => b.id === "booking-dispute")!;
   assert.equal(bResolved.status, "completed");
   const renterAfter = state.profiles.find((p) => p.id === "demo-renter")!;
-  assert.equal(renterAfter.riskScore, 68); // 78 - 10 = 68
+  assert.equal(renterAfter.riskScore, 70); // 80 - 10 = 70
 });
 
 test("Phase 3: Option A delayed handover collision generates conflict offer that renter accepts to activate", () => {
@@ -835,6 +902,52 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
 
   // 2. High risk user (score 25, Very High Risk) submits Request to Rent
   state = transition(state, { type: "login", userId: "high-risk-renter" });
+  state.profiles.find((profile) => profile.id === "high-risk-renter")!.riskHistory = [
+    {
+      id: "qa-risk-serious-damage",
+      bookingId: "qa-booking-serious-damage",
+      itemTitle: "QA fixture: serious damage",
+      date: "2026-01-01",
+      incidents: [{ type: "serious_damage", description: "Confirmed", penalty: -30, isWinning: true }],
+      effectiveAdjustment: -30,
+      scoreBefore: 80,
+      scoreAfter: 50,
+      appealStatus: "none",
+    },
+    {
+      id: "qa-risk-minor-damage-1",
+      bookingId: "qa-booking-minor-damage-1",
+      itemTitle: "QA fixture: minor damage",
+      date: "2026-01-02",
+      incidents: [{ type: "minor_damage", description: "Confirmed", penalty: -10, isWinning: true }],
+      effectiveAdjustment: -10,
+      scoreBefore: 50,
+      scoreAfter: 40,
+      appealStatus: "none",
+    },
+    {
+      id: "qa-risk-minor-damage-2",
+      bookingId: "qa-booking-minor-damage-2",
+      itemTitle: "QA fixture: minor damage",
+      date: "2026-01-03",
+      incidents: [{ type: "minor_damage", description: "Confirmed", penalty: -10, isWinning: true }],
+      effectiveAdjustment: -10,
+      scoreBefore: 40,
+      scoreAfter: 30,
+      appealStatus: "none",
+    },
+    {
+      id: "qa-risk-late-return",
+      bookingId: "qa-booking-late-return",
+      itemTitle: "QA fixture: late return",
+      date: "2026-01-04",
+      incidents: [{ type: "late_return", description: "Confirmed", penalty: -5, isWinning: true }],
+      effectiveAdjustment: -5,
+      scoreBefore: 30,
+      scoreAfter: 25,
+      appealStatus: "none",
+    },
+  ];
   state = transition(state, {
     type: "requestPlatformReview",
     id: "REQ-TEST-1234",
@@ -896,7 +1009,7 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
   assert.equal(booked.payment, "paid");
 });
 
-test("V3.23 Demo Account has at least 3 records per activity, 4 completed, score 78 (+2,+2,-2,-2) and single Sony review", () => {
+test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 84 (+2,+2,0,0)", () => {
   const seed = createSeed("admin_demo");
   const demoUserId = "demo-renter";
   const userBookings = seed.bookings.filter((b) => b.renterId === demoUserId);
@@ -928,17 +1041,18 @@ test("V3.23 Demo Account has at least 3 records per activity, 4 completed, score
   const disputed = userBookings.filter((b) => b.status === "disputed");
   assert.ok(disputed.length >= 3, `Expected >= 3 disputed rentals, got ${disputed.length}`);
 
-  // 7. Exactly 4 Completed rentals matching 4 linked risk adjustments (+2, +2, -2, -2)
+  // 7. Exactly 4 Completed rentals matching 4 linked risk adjustments (+2, +2, 0, 0)
   const completed = userBookings.filter((b) => b.status === "completed");
   assert.equal(completed.length, 4, `Expected exactly 4 completed rentals, got ${completed.length}`);
-  assert.equal(demoProfile.riskScore, 78, "Expected risk score 78");
-  assert.equal(demoProfile.riskLevel, "medium", "Expected medium risk tier");
+  assert.equal(demoProfile.riskScore, 84, "Expected risk score 84");
+  assert.equal(demoProfile.riskLevel, "low", "Expected low risk tier");
   assert.ok(demoProfile.riskHistory, "Risk history must be present");
   assert.equal(demoProfile.riskHistory.length, 4, "Expected 4 risk incident records");
   const adjustments = demoProfile.riskHistory.map((h) => h.effectiveAdjustment);
-  assert.deepEqual(adjustments.slice().sort(), [-2, -2, 2, 2], "Expected adjustments to be +2, +2, -2, -2");
+  assert.deepEqual(adjustments.slice().sort(), [0, 0, 2, 2], "Expected adjustments to be +2, +2, 0, 0");
   const sumAdj = adjustments.reduce((a, b) => a + b, 0);
-  assert.equal(sumAdj, 0, "Adjustments must net to 0 from 78 baseline");
+  assert.equal(sumAdj, 4, "Adjustments must net to +4 from the 80-point starting score");
+  assert.equal(riskFor(seed, demoProfile).score, 84);
 
   // 8. At least 3 saved items (favourites)
   assert.ok(demoProfile.favourites.length >= 3, `Expected >= 3 favourites, got ${demoProfile.favourites.length}`);
@@ -1160,7 +1274,7 @@ test("Section 10: consecutive extension on active/upcoming booking charges RM0 d
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
 
-  // Create an upcoming booking for Sony A7 III (2 days: RM90 rent + RM5 svc + RM400 deposit = RM495)
+  // Create an upcoming booking for Sony A7 III (2 days: RM90 rent + RM5 svc + RM200 deposit = RM295)
   const startTs = toMalaysiaUtcTimestamp(dateAfter(10), "11:00");
   const endTs = toMalaysiaUtcTimestamp(dateAfter(12), "11:00");
   const bookingId = "ext-test-1";
@@ -1177,8 +1291,8 @@ test("Section 10: consecutive extension on active/upcoming booking charges RM0 d
   const bInitial = state.bookings.find((b) => b.id === bookingId)!;
   assert.equal(bInitial.quote.days, 2);
   assert.equal(bInitial.quote.rentalFee, 90);
-  assert.equal(bInitial.quote.deposit, 400); // 10% medium deposit
-  assert.equal(bInitial.quote.total, 495); // 90 + 5 + 400
+  assert.equal(bInitial.quote.deposit, 200); // 5% low-risk deposit
+  assert.equal(bInitial.quote.total, 295); // 90 + 5 + 200
 
   // Extend by 2 contiguous days (additional RM90 rent + RM5 svc + RM0 deposit = RM95)
   state = transition(state, {
@@ -1191,8 +1305,8 @@ test("Section 10: consecutive extension on active/upcoming booking charges RM0 d
   assert.equal(bExtended.quote.days, 4);
   assert.equal(bExtended.quote.rentalFee, 180); // 90 + 90
   assert.equal(bExtended.quote.serviceFee, 10); // 5 + 5
-  assert.equal(bExtended.quote.deposit, 400); // Original deposit remains held; RM0 extra deposit
-  assert.equal(bExtended.quote.total, 590); // 495 + 95 = 590
+  assert.equal(bExtended.quote.deposit, 200); // Original deposit remains held; RM0 extra deposit
+  assert.equal(bExtended.quote.total, 390); // 295 + 95 = 390
   assert.ok(bExtended.chainBookings?.length);
 });
 
@@ -1340,8 +1454,8 @@ test("Section 8 & 30: Canonical Digital Rental Agreement parity between renter a
   assert.match(renterAgreement, /4\. FINANCIAL TERMS & CHARGES/);
   assert.match(renterAgreement, /Rental Fee: RM90\.00/);
   assert.match(renterAgreement, /CurRENT Service Fee \(5%, min RM5\): RM5\.00/);
-  assert.match(renterAgreement, /Refundable Security Deposit: RM400\.00/);
-  assert.match(renterAgreement, /Total Paid: RM495\.00 via Demo FPX/);
+  assert.match(renterAgreement, /Refundable Security Deposit: RM200\.00/);
+  assert.match(renterAgreement, /Total Paid: RM295\.00 via Demo FPX/);
   assert.match(renterAgreement, /Platform Commission \(12%\): RM10\.80/);
   assert.match(renterAgreement, /Net Lender Payout \(88%\): RM79\.20/);
   assert.match(renterAgreement, /5\. CONDITIONS & POLICIES/);
@@ -1484,6 +1598,9 @@ test("Section 4.4 & 30: Lender Check-out and Check-in condition evidence preserv
 test("Section 14.4: Customer Service chatbot answers known platform rules without escalation", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
+  const initialMessageCount = state.supportMessages.filter(
+    (m) => m.userId === "demo-renter",
+  ).length;
 
   // 1. Ask about fees
   state = transition(state, {
@@ -1492,12 +1609,13 @@ test("Section 14.4: Customer Service chatbot answers known platform rules withou
   });
 
   const msgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
-  assert.equal(msgs.length, 2); // 1 user query, 1 bot response
-  assert.equal(msgs[0].sender, "user");
-  assert.equal(msgs[1].sender, "bot");
-  assert.ok(msgs[1].text.includes("5% of rental fee, minimum RM5"));
-  assert.ok(msgs[1].text.includes("12% deducted from rent"));
-  assert.ok(msgs[1].text.includes("Low Risk (80–100): 5% deposit, capped at RM500"));
+  assert.equal(msgs.length, initialMessageCount + 3);
+  assert.equal(msgs[initialMessageCount].sender, "user");
+  assert.equal(msgs[initialMessageCount + 1].sender, "bot");
+  assert.equal(msgs[initialMessageCount + 2].sender, "bot");
+  assert.ok(msgs[initialMessageCount + 1].text.includes("5% of the rental fee, with a minimum of RM5"));
+  assert.ok(msgs[initialMessageCount + 1].text.includes("12% of the rental fee"));
+  assert.ok(msgs[initialMessageCount + 2].text.includes("Low Risk (80–100): 5% of the item value, capped at RM500"));
 
   // No human support case created for known question
   assert.equal(state.supportCases.length, 0);
@@ -1508,10 +1626,10 @@ test("Section 14.4: Customer Service chatbot answers known platform rules withou
     text: "How does delivery & return work?",
   });
   const updatedMsgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
-  assert.equal(updatedMsgs.length, 4);
-  assert.ok(updatedMsgs[3].text.includes("Delivery Only"));
-  assert.ok(updatedMsgs[3].text.includes("Confirm Received"));
-  assert.ok(updatedMsgs[3].text.includes("at least 6 photos and 1 video"));
+  assert.equal(updatedMsgs.length, initialMessageCount + 5);
+  assert.ok(updatedMsgs.at(-1)?.text.includes("Delivery Only"));
+  assert.ok(updatedMsgs.at(-1)?.text.includes("Confirm Received"));
+  assert.ok(updatedMsgs.at(-1)?.text.includes("at least 6 photos and 1 video"));
   assert.equal(state.supportCases.length, 0);
 });
 
@@ -1705,9 +1823,3 @@ test("Section 31: Profile post-verification cleanup — generic Verified badge a
   const trustAndSupportItems = ["How CurRENT Works", "Trust", "FAQ", "Customer Service"];
   assert.equal(trustAndSupportItems.length, 4);
 });
-
-
-
-
-
-

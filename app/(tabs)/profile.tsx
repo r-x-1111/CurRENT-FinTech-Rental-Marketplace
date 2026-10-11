@@ -41,6 +41,10 @@ export default function ProfileScreen() {
     (acc, item) => acc + (item.effectiveAdjustment === 2 ? 2 : 0),
     0,
   );
+  const netPoints = (user.riskHistory || []).reduce(
+    (acc, item) => acc + item.effectiveAdjustment,
+    0,
+  );
 
   function verify(status: "pending" | "verified" | "failed") {
     try {
@@ -101,6 +105,11 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
+        {state.mode === "admin_demo" && (
+          <Text style={[s.caption, { marginTop: 8 }]}>
+            Fictional account data for demonstration
+          </Text>
+        )}
         <Button
           secondary
           onPress={() => {
@@ -166,7 +175,7 @@ export default function ProfileScreen() {
             />
             <Text style={s.caption}>
               Simulate an external eKYC identity provider. In this classroom demo, no real identity documents or biometrics are collected.
-              Upon successful verification, every newly verified renter begins at strictly 78/100 (Medium Risk).
+              Upon successful verification, every newly verified renter begins at strictly 80/100 (Low Risk).
             </Text>
             {["not_verified", "failed"].includes(user.verification) && (
               <Button onPress={() => verify("pending")}>
@@ -179,7 +188,7 @@ export default function ProfileScreen() {
               <>
                 <Notice text="Verification pending. Choose a simulated provider response to test either outcome." />
                 <Button onPress={() => verify("verified")}>
-                  Simulate verified result (Initial Score 78 · Medium)
+                  Simulate verified result (Initial Score 80 · Low)
                 </Button>
                 <Button secondary onPress={() => verify("failed")}>
                   Simulate failed result
@@ -196,31 +205,11 @@ export default function ProfileScreen() {
         <View style={{ alignItems: "center", paddingVertical: 8 }}>
           <RiskGauge score={risk.score} label={risk.label} />
         </View>
-        <View style={s.row}>
-          <Text style={[s.title, { fontSize: 32 }]}>
-            {risk.score !== null ? `${risk.score} / 100` : "N/A"}
-          </Text>
-          <Badge text={risk.label} green={risk.level === "low"} />
-        </View>
         <Text style={s.caption}>
           CurRENT Rental Risk Score is a platform reliability metric, NOT a consumer credit score.
           It transparently determines your refundable security deposit tier and booking permissions.
         </Text>
-        <Row label="Initial verified score" value="78 (Medium Risk)" />
-        <Row
-          label="Verification status"
-          value={user.verification === "verified" ? "Verified" : "Not verified (N/A)"}
-        />
-        <Row
-          label="Booking route"
-          value={
-            risk.score === null
-              ? "Blocked (eKYC Required)"
-              : risk.score >= 30
-              ? "Direct Checkout"
-              : "Pending Platform Review Only"
-          }
-        />
+        <Row label="Initial verified score" value="80 (Low Risk)" />
         <Row
           label="Deposit basis"
           value={
@@ -237,7 +226,7 @@ export default function ProfileScreen() {
         />
         <Row
           label={`${completed} completed rentals`}
-          value={`+${cleanPoints} points`}
+          value={`+${netPoints} points`}
         />
         <View style={styles.rulesContainer}>
           <Text style={styles.rulesHeading}>What You Should Know</Text>
@@ -248,7 +237,7 @@ export default function ProfileScreen() {
           <Text style={styles.rulesBullet}>• Very High Risk (0–29): CurRENT Platform Review request (Pending only, no checkout)</Text>
           <Text style={styles.rulesSubheading}>How Your Score Changes</Text>
           <Text style={styles.rulesBullet}>• +2 points: Complete a rental on time with no issues.</Text>
-          <Text style={styles.rulesBullet}>• Late return: More than 2 hours late: −1 point for each additional hour or part of an hour, maximum −5, only when actual lateness is supported by return-time evidence.</Text>
+          <Text style={styles.rulesBullet}>• Late return: If the item is returned later than the scheduled return delivery time, 5 points will be deducted from your Rental Risk Score.</Text>
           <Text style={styles.rulesBullet}>• −10 points: Confirmed minor damage.</Text>
           <Text style={styles.rulesBullet}>• −30 points: Confirmed serious damage or accidental loss.</Text>
           <Text style={styles.rulesBullet}>• Confirmed intentional theft or fraud: Permanent ban, not an additional numerical penalty.</Text>
@@ -301,7 +290,7 @@ export default function ProfileScreen() {
           ))
         ) : (
           <Text style={[s.caption, { marginVertical: 8 }]}>
-            No incident records. Clean rental history established with initial verified score of 78.
+            No incident records. Clean rental history established with initial verified score of 80.
           </Text>
         )}
       </Card>

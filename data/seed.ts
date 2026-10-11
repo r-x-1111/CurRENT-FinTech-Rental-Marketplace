@@ -33,8 +33,8 @@ export function createNormalSeed(): Marketplace {
         name: "Alex Tan",
         email: "DemoCurRENT@gmail.com",
         verification: "verified",
-        riskScore: 78,
-        riskLevel: "medium",
+        riskScore: 80,
+        riskLevel: "low",
         favourites: ["sony-a7iii", "portable-projector", "dji-ronin", "ps5-console"],
         riskHistory: [],
       },
@@ -143,7 +143,7 @@ export function createNormalSeed(): Marketplace {
       {
         id: "notif-verified-status",
         userId: "demo-renter",
-        title: "Your account is verified with initial Rental Risk Score of 78 (Medium Risk).",
+        title: "Your account is verified with initial Rental Risk Score of 80 (Low Risk).",
         read: true,
         createdAt: new Date().toISOString(),
       },
@@ -176,15 +176,15 @@ export function createAdminDemoSeed(): Marketplace {
         days: 2,
         rentalFee: 90,
         serviceFee: 5,
-        deposit: 400, // 75 Medium = 10% of RM4,000 = RM400
+        deposit: 200, // 84 Low = 5% of RM4,000 = RM200 (capped at RM500)
         protection: 0,
-        total: 495,
+        total: 295,
       },
-      riskScore: 78,
+      riskScore: 84,
       payment: "paid",
       deposit: "held",
       paymentMethod: "Demo FPX",
-      agreement: "Digital Rental Agreement V3.23 — Signed by Alex Tan",
+      agreement: "Digital Rental Agreement V3.39 — Signed by Alex Tan",
       createdAt: "2026-10-08T01:00:00Z",
       scheduledPickup: "2026-11-02T02:00:00Z",
       scheduledReturn: "2026-11-04T02:00:00Z",
@@ -662,8 +662,8 @@ export function createAdminDemoSeed(): Marketplace {
     },
 
     // ------------------------------------------------------------------------
-    // 6. COMPLETED RENTALS (PRESERVE EXACTLY 4 COMPLETED RENTALS FOR SCORE 78)
-    // Linked to 4 risk adjustments: (+2, +2, −2, −2 -> Net 78 Medium Risk)
+    // 6. COMPLETED RENTALS (PRESERVE EXACTLY 4 COMPLETED RENTALS FOR SCORE 84)
+    // Linked to 4 risk adjustments: (+2, +2, 0, 0 -> Net 84 Low Risk)
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-completed-1",
@@ -680,15 +680,15 @@ export function createAdminDemoSeed(): Marketplace {
         days: 2,
         rentalFee: 90,
         serviceFee: 5,
-        deposit: 400,
+        deposit: 200,
         protection: 0,
-        total: 495,
+        total: 295,
       },
       riskScore: 80,
       payment: "paid",
       deposit: "released",
       paymentMethod: "Demo FPX",
-      agreement: "Digital Rental Agreement V3.23 — Signed by Alex Tan",
+      agreement: "Digital Rental Agreement V3.39 — Signed by Alex Tan",
       createdAt: "2026-08-30T10:00:00Z",
       scheduledPickup: "2026-09-01T10:00:00Z",
       scheduledReturn: "2026-09-03T10:00:00Z",
@@ -724,7 +724,7 @@ export function createAdminDemoSeed(): Marketplace {
       payment: "paid",
       deposit: "released",
       paymentMethod: "Demo FPX",
-      agreement: "Digital Rental Agreement V3.23 — Signed by Alex Tan",
+      agreement: "Digital Rental Agreement V3.39 — Signed by Alex Tan",
       createdAt: "2026-09-06T10:00:00Z",
       scheduledPickup: "2026-09-08T10:00:00Z",
       scheduledReturn: "2026-09-10T10:00:00Z",
@@ -756,11 +756,11 @@ export function createAdminDemoSeed(): Marketplace {
         protection: 0,
         total: 315,
       },
-      riskScore: 80,
+      riskScore: 84,
       payment: "paid",
       deposit: "released",
       paymentMethod: "Demo FPX",
-      agreement: "Digital Rental Agreement V3.23 — Signed by Alex Tan",
+      agreement: "Digital Rental Agreement V3.39 — Signed by Alex Tan",
       createdAt: "2026-09-14T10:00:00Z",
       scheduledPickup: "2026-09-15T10:00:00Z",
       scheduledReturn: "2026-09-17T10:00:00Z",
@@ -768,9 +768,8 @@ export function createAdminDemoSeed(): Marketplace {
       lenderHandoverAt: "2026-09-15T10:00:00Z",
       renterReceivedAt: "2026-09-15T10:05:00Z",
       activationTimestamp: "2026-09-15T10:05:00Z",
-      renterReturnConfirmedAt: "2026-09-17T14:00:00Z", // 4h late -> -2 penalty
-      lenderReturnConfirmedAt: "2026-09-17T14:10:00Z",
-      actualReturnTimestamp: "2026-09-17T14:00:00Z",
+      renterReturnConfirmedAt: "2026-09-17T09:50:00Z",
+      lenderReturnConfirmedAt: "2026-09-17T09:55:00Z",
       contextMode: "admin_demo",
     },
     {
@@ -792,11 +791,11 @@ export function createAdminDemoSeed(): Marketplace {
         protection: 0,
         total: 181,
       },
-      riskScore: 78,
+      riskScore: 84,
       payment: "paid",
       deposit: "released",
       paymentMethod: "Demo FPX",
-      agreement: "Digital Rental Agreement V3.23 — Signed by Alex Tan",
+      agreement: "Digital Rental Agreement V3.39 — Signed by Alex Tan",
       createdAt: "2026-09-20T10:00:00Z",
       scheduledPickup: "2026-09-22T10:00:00Z",
       scheduledReturn: "2026-09-24T10:00:00Z",
@@ -804,9 +803,104 @@ export function createAdminDemoSeed(): Marketplace {
       lenderHandoverAt: "2026-09-22T10:00:00Z",
       renterReceivedAt: "2026-09-22T10:04:00Z",
       activationTimestamp: "2026-09-22T10:04:00Z",
-      renterReturnConfirmedAt: "2026-09-24T14:00:00Z", // 4h late -> -2 penalty
-      lenderReturnConfirmedAt: "2026-09-24T14:05:00Z",
-      actualReturnTimestamp: "2026-09-24T14:00:00Z",
+      renterReturnConfirmedAt: "2026-09-24T09:45:00Z",
+      lenderReturnConfirmedAt: "2026-09-24T09:50:00Z",
+      contextMode: "admin_demo",
+    },
+
+    // ------------------------------------------------------------------------
+    // 6B. LENDER ACTIVE & UPCOMING RENTALS (V3.30: 2 Upcoming + 1 Active for KPI = 3)
+    // ------------------------------------------------------------------------
+    {
+      id: "demo-lender-upcoming-1",
+      listingId: "office-chair",
+      title: "Ergonomic Office Chair",
+      image: "/products/office-chair.jpg",
+      ownerId: "demo-renter",
+      renterId: "owner-sarah",
+      start: "2026-11-05T10:00:00Z",
+      end: "2026-11-08T10:00:00Z",
+      collectionMethod: "Delivery Only",
+      status: "upcoming",
+      quote: {
+        days: 3,
+        rentalFee: 45,
+        serviceFee: 5,
+        deposit: 85,
+        protection: 0,
+        total: 135,
+      },
+      riskScore: 80,
+      payment: "paid",
+      deposit: "held",
+      paymentMethod: "Demo FPX",
+      agreement: "Digital Rental Agreement V3.39 — Signed by Sarah Lim",
+      createdAt: "2026-10-09T10:00:00Z",
+      scheduledPickup: "2026-11-05T10:00:00Z",
+      scheduledReturn: "2026-11-08T10:00:00Z",
+      cancellationCutoff: "2026-11-04T10:00:00Z",
+      contextMode: "admin_demo",
+    },
+    {
+      id: "demo-lender-upcoming-2",
+      listingId: "party-speaker",
+      title: "Portable Party Speaker",
+      image: "/products/party-speaker.jpg",
+      ownerId: "demo-renter",
+      renterId: "unverified-renter",
+      start: "2026-11-12T14:00:00Z",
+      end: "2026-11-14T14:00:00Z",
+      collectionMethod: "Delivery Only",
+      status: "upcoming",
+      quote: {
+        days: 2,
+        rentalFee: 80,
+        serviceFee: 5,
+        deposit: 100,
+        protection: 0,
+        total: 185,
+      },
+      riskScore: 78,
+      payment: "paid",
+      deposit: "held",
+      paymentMethod: "Demo FPX",
+      agreement: "Digital Rental Agreement V3.39 — Signed by Chloe Ng",
+      createdAt: "2026-10-10T12:00:00Z",
+      scheduledPickup: "2026-11-12T14:00:00Z",
+      scheduledReturn: "2026-11-14T14:00:00Z",
+      cancellationCutoff: "2026-11-11T14:00:00Z",
+      contextMode: "admin_demo",
+    },
+    {
+      id: "demo-lender-active-1",
+      listingId: "office-chair",
+      title: "Ergonomic Office Chair",
+      image: "/products/office-chair.jpg",
+      ownerId: "demo-renter",
+      renterId: "high-risk-renter",
+      start: "2026-10-10T09:00:00Z",
+      end: "2026-10-13T09:00:00Z",
+      collectionMethod: "Delivery Only",
+      status: "active",
+      quote: {
+        days: 3,
+        rentalFee: 45,
+        serviceFee: 5,
+        deposit: 85,
+        protection: 0,
+        total: 135,
+      },
+      riskScore: 65,
+      payment: "paid",
+      deposit: "held",
+      paymentMethod: "Demo FPX",
+      agreement: "Digital Rental Agreement V3.39 — Signed by Kenji Sato",
+      createdAt: "2026-10-08T15:00:00Z",
+      scheduledPickup: "2026-10-10T09:00:00Z",
+      scheduledReturn: "2026-10-13T09:00:00Z",
+      lenderHandoverAt: "2026-10-10T09:00:00Z",
+      renterReceivedAt: "2026-10-10T09:05:00Z",
+      activationTimestamp: "2026-10-10T09:05:00Z",
       contextMode: "admin_demo",
     },
 
@@ -1007,6 +1101,60 @@ export function createAdminDemoSeed(): Marketplace {
       createdAt: "2026-09-08T10:05:00Z",
       read: true,
     },
+
+    // Thread 5: Lender upcoming rental 1 (Office Chair with Sarah Lim)
+    {
+      id: "msg-10",
+      bookingId: "demo-lender-upcoming-1",
+      authorId: "owner-sarah",
+      text: "Hi Alex, looking forward to the ergonomic office chair delivery on Thursday!",
+      createdAt: "2026-10-09T10:15:00Z",
+      read: false,
+    },
+    {
+      id: "msg-11",
+      bookingId: "demo-lender-upcoming-1",
+      authorId: "demo-renter",
+      text: "Hi Sarah! It is scheduled for delivery between 10:00 AM and 11:00 AM.",
+      createdAt: "2026-10-09T10:20:00Z",
+      read: true,
+    },
+
+    // Thread 6: Lender upcoming rental 2 (Party Speaker with Chloe Ng)
+    {
+      id: "msg-12",
+      bookingId: "demo-lender-upcoming-2",
+      authorId: "unverified-renter",
+      text: "Hi Alex, will the party speaker be fully charged for our event?",
+      createdAt: "2026-10-10T12:30:00Z",
+      read: false,
+    },
+    {
+      id: "msg-13",
+      bookingId: "demo-lender-upcoming-2",
+      authorId: "demo-renter",
+      text: "Yes Chloe, 100% fully charged with power cord and cables included.",
+      createdAt: "2026-10-10T12:35:00Z",
+      read: true,
+    },
+
+    // Thread 7: Lender active rental 1 (Office Chair with Kenji Sato)
+    {
+      id: "msg-14",
+      bookingId: "demo-lender-active-1",
+      authorId: "high-risk-renter",
+      text: "Hi Alex, the chair arrived in great condition, thanks for the fast delivery!",
+      createdAt: "2026-10-10T09:10:00Z",
+      read: true,
+    },
+    {
+      id: "msg-15",
+      bookingId: "demo-lender-active-1",
+      authorId: "demo-renter",
+      text: "Glad to hear Kenji! Feel free to reach out if you need anything else.",
+      createdAt: "2026-10-10T09:15:00Z",
+      read: true,
+    },
   ];
 
   // --------------------------------------------------------------------------
@@ -1154,11 +1302,12 @@ export function createAdminDemoSeed(): Marketplace {
   ];
 
   // --------------------------------------------------------------------------
-  // MATHEMATICALLY CONSISTENT RISK SCORE HISTORY (+2, +2, −2, −2 -> NET 78)
-  // Clean points: +4. Completed rentals: 4. Final score: 78 Medium Risk.
+  // MATHEMATICALLY CONSISTENT RISK SCORE HISTORY (+2, +2, 0, 0 -> NET 84 LOW RISK)
+  // Clean points: +4. Completed rentals: 4. Final score: 84 Low Risk.
+  // Breakdown: +4 clean points, two 0-point return timing unassessed completions.
   // --------------------------------------------------------------------------
   const demoRiskHistory = [
-    // Rental 4 (Latest settled): Portable Projector late return 4 hours (−2 points -> 78)
+    // Rental 4 (Latest settled): Portable Projector clean return, timing unassessed (0 points -> 84)
     {
       id: "inc-4",
       bookingId: "demo-booking-completed-4",
@@ -1166,19 +1315,18 @@ export function createAdminDemoSeed(): Marketplace {
       date: "2026-10-03",
       incidents: [
         {
-          type: "late_return" as const,
-          hoursLate: 4,
-          description: "Evidence-confirmed 4-hour late return (−2 points)",
-          penalty: -2,
-          isWinning: true,
+          type: "return_timing_unassessed" as const,
+          description: "Clean condition return, return timing unassessed (0 points)",
+          penalty: 0,
+          isWinning: false,
         },
       ],
-      effectiveAdjustment: -2,
-      scoreBefore: 80,
-      scoreAfter: 78,
+      effectiveAdjustment: 0,
+      scoreBefore: 84,
+      scoreAfter: 84,
       appealStatus: "none" as const,
     },
-    // Rental 3: PlayStation 5 late return 4 hours (−2 points -> 80)
+    // Rental 3: PlayStation 5 + Gamepad clean return, timing unassessed (0 points -> 84)
     {
       id: "inc-3",
       bookingId: "demo-booking-completed-3",
@@ -1186,19 +1334,18 @@ export function createAdminDemoSeed(): Marketplace {
       date: "2026-09-26",
       incidents: [
         {
-          type: "late_return" as const,
-          hoursLate: 4,
-          description: "Evidence-confirmed 4-hour late return (−2 points)",
-          penalty: -2,
-          isWinning: true,
+          type: "return_timing_unassessed" as const,
+          description: "Clean condition return, return timing unassessed (0 points)",
+          penalty: 0,
+          isWinning: false,
         },
       ],
-      effectiveAdjustment: -2,
-      scoreBefore: 82,
-      scoreAfter: 80,
+      effectiveAdjustment: 0,
+      scoreBefore: 84,
+      scoreAfter: 84,
       appealStatus: "none" as const,
     },
-    // Rental 2: Camping Tent clean on-time return (+2 points -> 82)
+    // Rental 2: Camping Tent clean on-time return (+2 points -> 84)
     {
       id: "inc-2",
       bookingId: "demo-booking-completed-2",
@@ -1213,11 +1360,11 @@ export function createAdminDemoSeed(): Marketplace {
         },
       ],
       effectiveAdjustment: 2,
-      scoreBefore: 80,
-      scoreAfter: 82,
+      scoreBefore: 82,
+      scoreAfter: 84,
       appealStatus: "none" as const,
     },
-    // Rental 1 (Earliest): Sony A7 III Mirrorless Camera clean on-time return (+2 points -> 80)
+    // Rental 1 (Earliest): Sony A7 III Mirrorless Camera clean on-time return (+2 points -> 82)
     {
       id: "inc-1",
       bookingId: "demo-booking-completed-1",
@@ -1232,8 +1379,8 @@ export function createAdminDemoSeed(): Marketplace {
         },
       ],
       effectiveAdjustment: 2,
-      scoreBefore: 78,
-      scoreAfter: 80,
+      scoreBefore: 80,
+      scoreAfter: 82,
       appealStatus: "none" as const,
     },
   ];
@@ -1287,8 +1434,8 @@ export function createAdminDemoSeed(): Marketplace {
       p.id === "demo-renter"
         ? {
             ...p,
-            riskScore: 78,
-            riskLevel: "medium",
+            riskScore: 84,
+            riskLevel: "low",
             riskHistory: demoRiskHistory,
             favourites: [
               "sony-a7iii",

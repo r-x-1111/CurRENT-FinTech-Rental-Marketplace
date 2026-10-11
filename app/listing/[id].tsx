@@ -234,7 +234,7 @@ export default function ListingDetailScreen() {
 
   // Dynamic cancellation cutoff calculation per README V3.23 Section 7.4
   let cancellationNotice = "";
-  if (start && end && !dateError && (renterRisk?.score ?? 78) >= 30) {
+  if (start && end && !dateError && (renterRisk?.score ?? 80) >= 30) {
     if (!pickupTime) {
       cancellationNotice =
         "Free cancellation until 24 hours before your chosen rental start time";

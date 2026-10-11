@@ -6,15 +6,14 @@ import { Ionicons } from "@expo/vector-icons";
 import {
   Button,
   Card,
-  Chips,
   Field,
   Notice,
   Screen,
   s,
 } from "../components/ui";
 import { useMarketplace } from "../context/Marketplace";
-import { newId } from "../services/marketplace";
 import { colors } from "../constants/theme";
+import { newId } from "../services/marketplace";
 
 export default function Auth() {
   const { state, act } = useMarketplace();
@@ -78,16 +77,6 @@ export default function Auth() {
           throw new Error("Enter your password.");
         }
 
-        // Check for DemoCurRENT@gmail.com or alex@demo.current demo account
-        if (address === "democurrent@gmail.com" || address === "alex@demo.current") {
-          const demoUser = state.profiles.find((p) => p.id === "demo-renter") || state.profiles[0];
-          if (demoUser) {
-            act({ type: "resetDemoState" });
-            router.replace("/(tabs)");
-            return;
-          }
-        }
-
         // Check ordinary hashed accounts
         const profile = state.profiles.find(
           (p) => p.email.toLowerCase() === address && p.passwordHash,
@@ -99,9 +88,7 @@ export default function Auth() {
             `${profile.salt}:${password}`,
           )) !== profile.passwordHash
         ) {
-          throw new Error(
-            "Email or password is incorrect. For demo access, sign in with DemoCurRENT@gmail.com.",
-          );
+          throw new Error("Email or password is incorrect.");
         }
         act({ type: "login", userId: profile.id });
       }
@@ -120,11 +107,7 @@ export default function Auth() {
   }
 
   return (
-    <Screen
-      back
-      title="CurRENT"
-      subtitle="Rent Smarter. Own Less. Live More."
-    >
+    <Screen>
       <View style={styles.authContainer}>
         <Card>
           <View style={styles.headerArea}>
@@ -134,23 +117,6 @@ export default function Auth() {
             </Text>
             <Text style={styles.tagline}>Rent Smarter. Own Less. Live More.</Text>
           </View>
-
-          <View style={styles.demoCallout}>
-            <Ionicons name="information-circle-outline" size={18} color={colors.blue} />
-            <Text style={styles.demoCalloutText}>
-              Classroom Demo · Sign in with your account or <Text style={{ fontWeight: "700" }}>DemoCurRENT@gmail.com</Text>
-            </Text>
-          </View>
-
-          <Chips
-            options={["Sign in", "Create account"]}
-            selected={mode}
-            onSelect={(m) => {
-              setMode(m);
-              setError("");
-              setInfoNotice("");
-            }}
-          />
 
           {mode === "Create account" && (
             <Field
@@ -163,7 +129,7 @@ export default function Auth() {
           )}
 
           <Field
-            label="Email"
+            label="Email Address"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -179,6 +145,7 @@ export default function Auth() {
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
+              autoComplete={mode === "Sign in" ? "current-password" : "new-password"}
               placeholder="Enter your password"
             />
             <TouchableOpacity
@@ -208,7 +175,7 @@ export default function Auth() {
 
           <View style={{ marginTop: 8 }}>
             <Button disabled={busy} onPress={submit}>
-              {busy ? "Please wait…" : mode}
+              {busy ? "Please wait…" : mode === "Sign in" ? "Sign In" : "Create Account"}
             </Button>
           </View>
 
@@ -261,23 +228,6 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 13,
     color: colors.muted,
-  },
-  demoCallout: {
-    backgroundColor: colors.paleBlue,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.softBlue,
-    padding: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 16,
-  },
-  demoCalloutText: {
-    fontSize: 12,
-    color: colors.navy,
-    flex: 1,
-    lineHeight: 16,
   },
   passwordContainer: {
     position: "relative",

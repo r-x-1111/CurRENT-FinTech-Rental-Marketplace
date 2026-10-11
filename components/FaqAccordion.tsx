@@ -37,17 +37,9 @@ export function FaqAccordion({ faqs }: { faqs: FaqItem[] }) {
               accessibilityRole="button"
               accessibilityState={{ expanded: isOpen }}
               onPress={() => toggle(index)}
-              style={[
-                styles.header,
-                isOpen && { backgroundColor: colors.paleBlue },
-              ]}
+              style={styles.header}
             >
-              <Text
-                style={[
-                  styles.question,
-                  isOpen && { color: colors.blue },
-                ]}
-              >
+              <Text style={styles.question}>
                 {faq.question}
               </Text>
               <Ionicons
@@ -80,6 +72,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   header: {
+    backgroundColor: "#C5DBFA",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -88,8 +81,8 @@ const styles = StyleSheet.create({
   },
   question: {
     fontSize: 15,
-    fontWeight: "700",
-    color: colors.navy,
+    fontWeight: "800",
+    color: "#111827",
     flex: 1,
   },
   body: {
@@ -104,4 +97,3 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
 });
-

@@ -323,18 +323,13 @@ export default function HomeScreen() {
             2. DISCOVERY CATALOGUE SECTION (Merged Explore Functionality)
            ========================================================================= */}
         <View style={styles.catalogueSection}>
-          <View style={styles.trustBanner}>
-            <Ionicons name="shield-checkmark" size={17} color={colors.blue} />
-            <Text style={styles.trustBannerText}>
-              Klang Valley Verified Rentals · Delivery Only · Risk-Based Security Deposits
-            </Text>
-          </View>
-
           <View style={styles.catalogueControlsRow}>
             {/* Left: Results count & active category indicator */}
             <View style={{ flex: 1 }}>
               <Text style={styles.resultsCount}>
-                {selectedCategory !== "All items" ? selectedCategory : "Marketplace"}{" "}
+                {(selectedCategory === "All items" || selectedCategory === "All Items")
+                  ? "All Items"
+                  : selectedCategory}{" "}
                 <Text style={styles.resultsCountNum}>({filteredListings.length} available)</Text>
               </Text>
             </View>

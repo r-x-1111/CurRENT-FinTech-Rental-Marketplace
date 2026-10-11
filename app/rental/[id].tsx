@@ -23,7 +23,6 @@ import {
   calculateOwnerPayout,
 } from "../../services/deposit";
 import {
-  formatDigitalRentalAgreement,
   formatMalaysiaDateTime,
   isCancellationEligible,
   money,
@@ -39,9 +38,11 @@ export default function RentalDetail() {
   const [checkInPhotos, setCheckInPhotos] = useState<string[]>([]);
   const [checkInVideos, setCheckInVideos] = useState<string[]>([]);
   const [checkInNotes, setCheckInNotes] = useState("");
+  const [checkInIssue, setCheckInIssue] = useState("");
   const [returnPhotos, setReturnPhotos] = useState<string[]>([]);
   const [returnVideos, setReturnVideos] = useState<string[]>([]);
   const [returnNotes, setReturnNotes] = useState("");
+  const [checkOutIssue, setCheckOutIssue] = useState("");
   const [disputePhotos, setDisputePhotos] = useState<string[]>([]);
   const [disputeVideos, setDisputeVideos] = useState<string[]>([]);
   const [disputeNotes, setDisputeNotes] = useState("");
@@ -73,10 +74,13 @@ export default function RentalDetail() {
       </Screen>
     );
 
+  const rental = b;
   const owner = user.id === b.ownerId;
   const other = state.profiles.find(
     (p) => p.id === (owner ? b.renterId : b.ownerId),
   );
+  const renterName = state.profiles.find((p) => p.id === b.renterId)?.name || "Renter";
+  const lenderName = state.profiles.find((p) => p.id === b.ownerId)?.name || "Lender";
   const payout = calculateOwnerPayout(b.quote.rentalFee);
   const renter = state.profiles.find((profile) => profile.id === b.renterId);
   const currentRisk = renter ? riskFor(state, renter) : null;
@@ -110,9 +114,11 @@ export default function RentalDetail() {
       setCheckInPhotos([]);
       setCheckInVideos([]);
       setCheckInNotes("");
+      setCheckInIssue("");
       setReturnPhotos([]);
       setReturnVideos([]);
       setReturnNotes("");
+      setCheckOutIssue("");
       setDisputePhotos([]);
       setDisputeVideos([]);
       setDisputeNotes("");
@@ -158,6 +164,64 @@ export default function RentalDetail() {
     "completed",
     "disputed",
   ].includes(b.status);
+  function renderIssueReport(stage: "check_in" | "check_out", stageAvailable: boolean) {
+    const report = state.issueReports?.find(
+      (item) => item.bookingId === rental.id && item.stage === stage,
+    );
+    const canSubmit =
+      !owner &&
+      stageAvailable &&
+      ["active", "return_pending", "disputed"].includes(rental.status);
+    const value = stage === "check_in" ? checkInIssue : checkOutIssue;
+    const setValue = stage === "check_in" ? setCheckInIssue : setCheckOutIssue;
+
+    return (
+      <View style={{ marginTop: 14, gap: 8 }}>
+        <Text style={s.bold}>Report an Issue</Text>
+        {report ? (
+          <>
+            <Text style={s.body}>{report.text}</Text>
+            <Text style={s.caption}>
+              Submitted by renter · {formatMalaysiaDateTime(report.createdAt)} MYT
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={s.caption}>No issue reported.</Text>
+            {canSubmit ? (
+              <>
+                <Field
+                  label="Describe any damage, missing parts or other issues"
+                  value={value}
+                  onChangeText={setValue}
+                  multiline
+                  placeholder="Describe the issue (optional)."
+                />
+                <Button
+                  secondary
+                  disabled={!value.trim()}
+                  onPress={() =>
+                    run({
+                      type: "reportIssue",
+                      bookingId: id,
+                      stage,
+                      text: value,
+                    })
+                  }
+                >
+                  Submit Report
+                </Button>
+              </>
+            ) : (
+              <Text style={s.caption}>
+                This report area is read-only until the rental reaches this stage.
+              </Text>
+            )}
+          </>
+        )}
+      </View>
+    );
+  }
 
   const startMs = parseMalaysiaTimestamp(b.scheduledPickup || b.start);
   const endMs = parseMalaysiaTimestamp(
@@ -166,6 +230,18 @@ export default function RentalDetail() {
   const nowMs = Date.now();
   const isStartReached = nowMs >= startMs;
   const isEndReached = nowMs >= endMs;
+  const confirmationStatus: Record<string, string> = {
+    pending: "Pending",
+    approved: "Approved",
+    upcoming: "Confirmed",
+    confirmed: "Confirmed",
+    active: "Active",
+    return_pending: "Return pending",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    rejected: "Rejected",
+    disputed: "Disputed",
+  };
 
   function renderRenterActionButtons() {
     if (!b) return null;
@@ -225,33 +301,45 @@ export default function RentalDetail() {
   }
 
   return (
-    <Screen back title="Rental details" subtitle={`Reference ${b.id}`}>
+    <Screen back title="Rental details">
+      <Card>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <Text style={[s.h2, { flex: 1 }]}>Rental Confirmation</Text>
+          <Badge
+            text={confirmationStatus[b.status] || b.status}
+            green={["upcoming", "confirmed", "active", "completed"].includes(b.status)}
+          />
+        </View>
+        <Text style={[s.bold, { fontSize: 17 }]}>{b.title}</Text>
+        <Text style={s.body}>
+          Renter: {renterName} · Lender: {lenderName}
+        </Text>
+        <View style={[s.divider, { marginVertical: 4 }]} />
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+          <Text style={[s.body, { flex: 1, fontWeight: "700" }]}>Rental period</Text>
+          <View style={{ alignItems: "flex-end", gap: 2 }}>
+            <Text style={[s.body, { textAlign: "right" }]}>
+              {formatMalaysiaDateTime(b.start)}
+            </Text>
+            <Text style={[s.body, { textAlign: "right" }]}>
+              to {formatMalaysiaDateTime(b.effectiveReturnDeadline || b.scheduledReturn || b.end)}
+            </Text>
+            <Text style={s.caption}>
+              {b.quote.days} {b.quote.days === 1 ? "day" : "days"} · Delivery Only
+            </Text>
+          </View>
+        </View>
+      </Card>
+
       <Card>
         <Image
           source={{ uri: b.image }}
           style={{ width: "100%", height: 190, borderRadius: 12 }}
         />
         <Text style={s.h2}>{b.title}</Text>
-        <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
-          <Badge text={b.status} green={b.status === "completed"} />
-          {b.activationTimestamp && (
-            <Badge text="Rental Clock Active" green />
-          )}
-        </View>
-        <Text style={s.body}>
-          {b.start} → {b.end} · {b.quote.days} billable days
-        </Text>
-        {b.effectiveReturnDeadline && (
-          <Text style={[s.bold, { color: "#0066CC" }]}>
-            Effective Return Deadline: {new Date(b.effectiveReturnDeadline).toLocaleString()}
-          </Text>
-        )}
         <Text style={s.caption}>
-          {owner ? "Renter" : "Owner"}: {other?.name} ·{" "}
+          {owner ? "Renter" : "Lender"}: {other?.name} ·{" "}
           {other?.verification.replace("_", " ")}
-        </Text>
-        <Text style={s.caption}>
-          Fulfilment: Delivery Only
         </Text>
         <Button secondary onPress={() => router.push(`/conversation/${b.id}`)}>
           Message {other?.name.split(" ")[0] || "participant"}
@@ -425,18 +513,6 @@ export default function RentalDetail() {
 
           {/* Renter Action Buttons (Two-Button Time-Gated Design) */}
           {!owner && !b.conflictOffer && renderRenterActionButtons()}
-
-          {/* Admin Demo Helper for Lender dispatch */}
-          {owner && !b.lenderHandoverAt && !b.conflictOffer && state.mode === "admin_demo" && (
-            <Button
-              secondary
-              onPress={() =>
-                run({ type: "handoverConfirm", bookingId: id, role: "owner" })
-              }
-            >
-              Confirm Dispatch for Delivery (Admin Demo)
-            </Button>
-          )}
 
           {/* Cancellation Window */}
           <View style={{ marginTop: 14, borderTopWidth: 1, borderTopColor: "#EEE", paddingTop: 12 }}>
@@ -649,6 +725,7 @@ export default function RentalDetail() {
             />
           </>
         )}
+        {renderIssueReport("check_in", isDelivered)}
       </Card>
 
       {/* STAGE 2: CHECK-OUT — BEFORE RETURN */}
@@ -686,46 +763,50 @@ export default function RentalDetail() {
               minPhotos={6}
               minVideos={1}
             />
+            {renderIssueReport("check_out", false)}
           </>
         ) : !owner ? (
           <>
             {b.renterReturnConfirmedAt ? (
-              <View style={{ gap: 8, marginTop: 4 }}>
-                <View style={{ backgroundColor: "#ECFDF5", borderWidth: 1, borderColor: "#A7F3D0", padding: 10, borderRadius: 8 }}>
-                  <Text style={[s.bold, { color: "#065F46" }]}>
-                    ✓ Return Confirmed · Awaiting Lender Review
-                  </Text>
-                  <Text style={[s.caption, { color: "#047857", marginTop: 2 }]}>
-                    Your return evidence has been submitted. Your simulated security deposit remains held until the lender completes the return inspection.
-                  </Text>
+              <>
+                <View style={{ gap: 8, marginTop: 4 }}>
+                  <View style={{ backgroundColor: "#ECFDF5", borderWidth: 1, borderColor: "#A7F3D0", padding: 10, borderRadius: 8 }}>
+                    <Text style={[s.bold, { color: "#065F46" }]}>
+                      ✓ Return Confirmed · Awaiting Lender Review
+                    </Text>
+                    <Text style={[s.caption, { color: "#047857", marginTop: 2 }]}>
+                      Your return evidence has been submitted. Your simulated security deposit remains held until the lender completes the return inspection.
+                    </Text>
+                  </View>
+                  {checkOutEvidence && (
+                    <>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                        <Text style={[s.caption, { fontWeight: "700", color: colors.navy }]}>
+                          {(checkOutEvidence.photos?.length || (checkOutEvidence.photo ? 1 : 0))} photos · {(checkOutEvidence.videos?.length || 0)} video(s)
+                        </Text>
+                        <Text style={s.caption}>
+                          {new Date(checkOutEvidence.createdAt).toLocaleString()}
+                        </Text>
+                      </View>
+                      <MediaPicker
+                        disabled
+                        photos={
+                          checkOutEvidence.photos && checkOutEvidence.photos.length > 0
+                            ? checkOutEvidence.photos
+                            : (checkOutEvidence.photo ? [checkOutEvidence.photo] : [])
+                        }
+                        onPhotosChange={() => {}}
+                        videos={checkOutEvidence.videos || []}
+                        onVideosChange={() => {}}
+                        minPhotos={6}
+                        minVideos={1}
+                      />
+                      <Text style={s.body}>{checkOutEvidence.notes || "Check-out condition evidence recorded."}</Text>
+                    </>
+                  )}
                 </View>
-                {checkOutEvidence && (
-                  <>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                      <Text style={[s.caption, { fontWeight: "700", color: colors.navy }]}>
-                        {(checkOutEvidence.photos?.length || (checkOutEvidence.photo ? 1 : 0))} photos · {(checkOutEvidence.videos?.length || 0)} video(s)
-                      </Text>
-                      <Text style={s.caption}>
-                        {new Date(checkOutEvidence.createdAt).toLocaleString()}
-                      </Text>
-                    </View>
-                    <MediaPicker
-                      disabled
-                      photos={
-                        checkOutEvidence.photos && checkOutEvidence.photos.length > 0
-                          ? checkOutEvidence.photos
-                          : (checkOutEvidence.photo ? [checkOutEvidence.photo] : [])
-                      }
-                      onPhotosChange={() => {}}
-                      videos={checkOutEvidence.videos || []}
-                      onVideosChange={() => {}}
-                      minPhotos={6}
-                      minVideos={1}
-                    />
-                    <Text style={s.body}>{checkOutEvidence.notes || "Check-out condition evidence recorded."}</Text>
-                  </>
-                )}
-              </View>
+                {renderIssueReport("check_out", isReturnEligible)}
+              </>
             ) : (
               <>
                 <Text style={s.caption}>
@@ -747,6 +828,7 @@ export default function RentalDetail() {
                   multiline
                   placeholder="Confirm all accessories are included and condition is clean."
                 />
+                {renderIssueReport("check_out", isReturnEligible)}
                 <Button
                   disabled={returnPhotos.length < 6 || returnVideos.length < 1}
                   onPress={() =>
@@ -762,20 +844,6 @@ export default function RentalDetail() {
                 >
                   Confirm Return
                 </Button>
-                <View style={{ marginTop: 8 }}>
-                  <Button
-                    danger
-                    secondary
-                    onPress={() => {
-                      setDispute(!dispute);
-                      setDisputePhotos([]);
-                      setDisputeVideos([]);
-                      setDisputeNotes("");
-                    }}
-                  >
-                    {dispute ? "Close Dispute Form" : "Raise Dispute / Report Issue"}
-                  </Button>
-                </View>
               </>
             )}
           </>
@@ -824,6 +892,8 @@ export default function RentalDetail() {
                 />
               </>
             )}
+
+            {renderIssueReport("check_out", isReturnEligible)}
 
             {["active", "return_pending"].includes(b.status) && (
               <View style={{ marginTop: 14, gap: 10 }}>
@@ -1038,17 +1108,6 @@ export default function RentalDetail() {
         )}
       </Card>
 
-      {/* AGREEMENT */}
-      {b.agreement && (
-        <>
-          <Section title="Digital rental agreement" />
-          <Card>
-            <Text selectable style={s.body}>
-              {formatDigitalRentalAgreement(b, state, owner ? "owner" : "renter")}
-            </Text>
-          </Card>
-        </>
-      )}
 
       {/* REVIEWS — HOW DID IT GO? */}
       {b.status === "completed" && (

@@ -84,7 +84,7 @@ export default function OwnerDashboard() {
 
       <Section title="Listing" />
       <Chips
-        options={["Listings", "Rentals", "Payouts & Commission"]}
+        options={["Listings", "Rentals", "Payout"]}
         selected={tab}
         onSelect={setTab}
       />
@@ -272,7 +272,7 @@ export default function OwnerDashboard() {
           />
         ))}
 
-      {tab === "Payouts & Commission" && (
+      {tab === "Payout" && (
         <>
           <Notice text="Demo payouts are recorded after return inspection and deposit release. Platform commission is 12% of the rental fee. Estimated lender payout is 88%. No real funds are transferred." />
           {complete.length ? (
@@ -291,7 +291,6 @@ export default function OwnerDashboard() {
                   value={money(calculateOwnerPayout(b.quote.rentalFee).payout)}
                   strong
                 />
-                <Badge text="Recorded · classroom simulation" green />
               </Card>
             ))
           ) : (
@@ -397,4 +396,3 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 });
-

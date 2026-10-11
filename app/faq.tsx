@@ -13,15 +13,7 @@ export default function FaqScreen() {
         <Text style={styles.heading}>Questions, answered.</Text>
       </View>
 
-      {/* Six canonical founder accordion cards */}
       <FaqAccordion faqs={sampleFaqs} />
-
-      {/* Required separate independent demo context note outside accordion cards */}
-      <View style={styles.demoNoticeCard}>
-        <Text style={styles.demoNoticeText}>
-          CurRENT is an academic demonstration. External eKYC, deposit-handling and BNPL providers are not connected. FPX payments and deposits are simulated; BNPL is not currently available in the demo.
-        </Text>
-      </View>
     </Screen>
   );
 }
@@ -42,19 +34,5 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "800",
     color: colors.navy,
-  },
-  demoNoticeCard: {
-    backgroundColor: "#F0F4F8",
-    borderWidth: 1,
-    borderColor: "#D9E3EF",
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 24,
-    marginBottom: 16,
-  },
-  demoNoticeText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.muted,
   },
 });

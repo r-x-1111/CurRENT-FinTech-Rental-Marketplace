@@ -36,7 +36,7 @@ export default function TrustScreen() {
           <Text style={styles.trustCardTitle}>Verified Users</Text>
           <Text style={styles.trustCardBody}>
             Identity checks are completed by authorised external eKYC
-            providers before booking (simulated in demo). New verified renters begin at score 78 Medium.
+            providers before booking (simulated in demo). New verified renters begin at score 80 Low.
           </Text>
         </View>
 
@@ -47,8 +47,8 @@ export default function TrustScreen() {
           </View>
           <Text style={styles.trustCardTitleFeatured}>Renter Rental Risk Score</Text>
           <RiskGauge
-            score={78}
-            label="Medium Risk"
+            score={80}
+            label="Low Risk"
           />
           <Text style={styles.trustCardBodyFeatured}>
             Assessed based on identity verification, rental history and

@@ -113,56 +113,37 @@ export function riskFor(state: Marketplace, profile: Profile) {
     };
   }
 
-  if (
-    profile.riskHistory &&
-    profile.riskHistory.length > 0 &&
-    profile.riskScore !== undefined &&
-    profile.riskScore !== null
-  ) {
-    const tier = tierForScore(profile.riskScore);
+  if (profile.riskHistory && profile.riskHistory.length > 0) {
+    const seenBookings = new Set<string>();
+    const history = [...profile.riskHistory]
+      .filter((entry) => {
+        if (!entry.bookingId) return true;
+        if (seenBookings.has(entry.bookingId)) return false;
+        seenBookings.add(entry.bookingId);
+        return true;
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const score = history.reduce(
+      (current, entry) =>
+        Math.max(0, Math.min(100, current + entry.effectiveAdjustment)),
+      80,
+    );
+    const tier = tierForScore(score);
     return {
-      score: profile.riskScore,
+      score,
       level: tier.level,
       label: tier.label,
       canDirectBook: tier.canDirectBook,
     };
   }
 
-  const completed = state.bookings.filter(
-    (b) => b.renterId === profile.id && b.status === "completed",
-  );
-  const disputes = state.disputes.filter((d) =>
-    state.bookings.some(
-      (b) => b.id === d.bookingId && b.renterId === profile.id,
-    ),
-  );
-
-  if (completed.length > 0 || disputes.length > 0) {
-    return calculateRiskScore({
-      verified: profile.verification === "verified",
-      completedRentals: completed.length,
-      lateReturns: 0,
-      resolvedDisputes: disputes.filter((d) => d.status === "resolved").length,
-      unresolvedSeriousDisputes: disputes.filter(
-        (d) => d.status === "under_review",
-      ).length,
-    });
-  }
-
-  if (profile.riskScore !== undefined && profile.riskScore !== null) {
-    const tier = tierForScore(profile.riskScore);
-    return {
-      score: profile.riskScore,
-      level: tier.level,
-      label: tier.label,
-      canDirectBook: tier.canDirectBook,
-    };
-  }
-
-  return calculateRiskScore({
-    verified: profile.verification === "verified",
-    completedRentals: 0,
-  });
+  const tier = tierForScore(80);
+  return {
+    score: 80,
+    level: tier.level,
+    label: tier.label,
+    canDirectBook: tier.canDirectBook,
+  };
 }
 
 export function quoteFor(
@@ -415,5 +396,3 @@ export function formatDigitalRentalAgreement(
     `• Status: Confirmed & Digitally Executed`,
   ].join("\n");
 }
-
-

@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Badge, Chips, Empty, Screen, s } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
-import { dateAfter } from "../../services/booking";
+import { parseMalaysiaTimestamp } from "../../services/booking";
 import { colors } from "../../constants/theme";
 
 export default function RentalsScreen() {
@@ -15,11 +15,8 @@ export default function RentalsScreen() {
     return <Redirect href="/auth" />;
   }
 
-  // In Admin Demo, show classroom presentation fixtures or user's requests; in Normal mode, show only user's own requests
-  const visiblePlatformRequests = state.platformReviewRequests.filter((r) =>
-    state.mode === "admin_demo"
-      ? r.renterId === user?.id || r.contextMode === "admin_demo"
-      : r.renterId === user?.id,
+  const visiblePlatformRequests = state.platformReviewRequests.filter(
+    (request) => request.renterId === user.id,
   );
 
   const tabs = [
@@ -29,8 +26,8 @@ export default function RentalsScreen() {
     "Completed",
     "Cancelled",
     "Disputed",
-    ...(visiblePlatformRequests.length > 0 ? ["Platform Review Requests"] : []),
     "Payment & Transaction History",
+    ...(visiblePlatformRequests.length > 0 ? ["Platform Review Requests"] : []),
   ];
 
   const [activeTab, setActiveTab] = useState("Upcoming");
@@ -43,11 +40,14 @@ export default function RentalsScreen() {
       case "Upcoming":
         return b.status === "upcoming";
       case "Active":
-        return b.status === "active";
+        return b.status === "active" || b.status === "return_pending";
       case "Return Due":
         return (
-          b.status === "return_pending" ||
-          (b.status === "active" && b.end <= dateAfter(1))
+          b.status === "active" &&
+          !b.renterReturnConfirmedAt &&
+          parseMalaysiaTimestamp(
+            b.effectiveReturnDeadline || b.scheduledReturn || b.end,
+          ) <= Date.now()
         );
       case "Completed":
         return b.status === "completed";
@@ -68,7 +68,7 @@ export default function RentalsScreen() {
           title="No transaction history yet"
           text="Complete your first rental to see your simulated receipt, held deposit and settlement ledger."
           action="Explore rentals"
-          onPress={() => router.push("/(tabs)/explore")}
+          onPress={() => router.push("/(tabs)")}
         />
       );
     }
@@ -170,7 +170,7 @@ export default function RentalsScreen() {
           title="No platform review requests"
           text="Applications submitted for CurRENT platform review will appear here."
           action="Explore rentals"
-          onPress={() => router.push("/(tabs)/explore")}
+          onPress={() => router.push("/(tabs)")}
         />
       );
     }
@@ -274,7 +274,7 @@ export default function RentalsScreen() {
                 title="No rentals in this category"
                 text="Your upcoming, active, and completed bookings will appear here."
                 action="Explore rentals"
-                onPress={() => router.push("/(tabs)/explore")}
+                onPress={() => router.push("/(tabs)")}
               />
             )}
           </View>

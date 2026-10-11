@@ -7,7 +7,13 @@ import type {
 } from "./index";
 
 export interface RiskIncidentDetail {
-  type: "on_time_success" | "late_return" | "minor_damage" | "serious_damage" | "theft_fraud";
+  type:
+    | "on_time_success"
+    | "late_return"
+    | "return_timing_unassessed"
+    | "minor_damage"
+    | "serious_damage"
+    | "theft_fraud";
   description: string;
   penalty: number;
   hoursLate?: number;
@@ -139,6 +145,16 @@ export interface Evidence {
   createdAt: string;
 }
 
+export interface ConditionIssueReport {
+  id: string;
+  bookingId: string;
+  chainId: string;
+  authorId: string;
+  stage: "check_in" | "check_out";
+  text: string;
+  createdAt: string;
+}
+
 export interface Message {
   id: string;
   bookingId: string;
@@ -204,6 +220,7 @@ export interface Marketplace {
   bookings: Booking[];
   messages: Message[];
   evidence: Evidence[];
+  issueReports?: ConditionIssueReport[];
   reviews: Review[];
   notifications: Notice[];
   disputes: Dispute[];

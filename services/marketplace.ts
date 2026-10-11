@@ -85,7 +85,6 @@ export type Action =
       type: "returnConfirm";
       bookingId: string;
       role: "owner" | "renter";
-      actualReturnTimestamp?: string;
       photo?: string;
       photos?: string[];
       videos?: string[];
@@ -98,6 +97,12 @@ export type Action =
       photos: string[];
       videos: string[];
       notes?: string;
+    }
+  | {
+      type: "reportIssue";
+      bookingId: string;
+      stage: "check_in" | "check_out";
+      text: string;
     }
   | {
       type: "consecutiveExtend";
@@ -166,7 +171,11 @@ function requireThat(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-export function resolveAutomatedSupportQuery(query: string): { answered: boolean; response?: string } {
+export function resolveAutomatedSupportQuery(query: string): {
+  answered: boolean;
+  response?: string;
+  responses?: string[];
+} {
   const q = query.trim().toLowerCase();
 
   // If question involves external banking, overdrafts, personal loans, or non-CurRENT topics, escalate to human support
@@ -193,22 +202,53 @@ export function resolveAutomatedSupportQuery(query: string): { answered: boolean
     return {
       answered: true,
       response:
-        "To rent an item on CurRENT:\n\n1. Browse listings on Home and select your desired item.\n2. Choose your rental dates on the calendar.\n3. Pick an available Scheduled Delivery Time slot (10:00 AM – 5:00 PM).\n4. Enter your private delivery address.\n5. Complete simulated FPX checkout (for risk scores 30–100) or submit a platform review request (for scores 0–29).\n6. Your item will be delivered with Delivery Only fulfillment.",
+        "To rent an item on CurRENT:\n\n1. Browse the listings on Home and select the item you want to rent.\n2. Choose your rental dates on the calendar.\n3. Select an available Scheduled Delivery Time slot (10:00 AM–5:00 PM).\n4. Enter your delivery address.\n5. Make your FPX payment if your Risk Score is 30–100, or submit a request to CurRENT for review if your score is 0–29.\n6. Your item will arrive at your selected Scheduled Delivery Time.",
     };
   }
 
-  // 2. Fees & deposits
+  // 7. How is my risk score calculated? (Must match before general score / fees)
   if (
-    q.includes("fees & deposits") ||
-    q.includes("fees and deposits") ||
-    q.includes("how much does current charge") ||
-    (q.includes("deposit") && (q.includes("security") || q.includes("calculate") || q.includes("how much") || q.includes("rate"))) ||
-    (q.includes("fee") && (q.includes("service") || q.includes("renter") || q.includes("charge") || q.includes("cost") || q.includes("commission")))
+    q === "how is my risk score calculated?" ||
+    q.includes("how is my risk score calculated") ||
+    q.includes("how is the risk score calculated") ||
+    (q.includes("calculate") && q.includes("score"))
   ) {
     return {
       answered: true,
       response:
-        "CurRENT Pricing & Security Deposit Rules:\n\n• Renter Service Fee: 5% of rental fee, minimum RM5.\n• Lender Commission: 12% deducted from rent upon completed rental (88% net lender payout).\n• Refundable Security Deposit: Determined by your Rental Risk Score and item replacement value:\n  - Low Risk (80–100): 5% deposit, capped at RM500\n  - Medium Risk (40–79): 10% deposit, capped at RM1,000\n  - High Risk (30–39): 15% deposit, capped at RM1,500\n  - Very High Risk (0–29): Submit request to CurRENT for review\n• All payments and deposits are simulated via FPX in this demo.",
+        "Your Rental Risk Score starts at 80 after verification and changes based on your completed rentals:\n\n- +2 points: Complete a rental on time with no issues.\n- Late return: If the item is returned later than the scheduled return delivery time, 5 points will be deducted from your Rental Risk Score once the late return is confirmed.\n- −10 points: Confirmed minor damage.\n- −30 points: Confirmed serious damage or accidental loss.\n- Confirmed intentional fraud or theft: Permanent ban.\n\nOnly the single most serious confirmed outcome applies to each rental or consecutive rental chain.",
+    };
+  }
+
+  // 8. When will the lender receive rental money?
+  if (
+    q === "when will the lender receive rental money?" ||
+    q.includes("receive rental money") ||
+    q.includes("when will the lender receive") ||
+    q.includes("lender receive money") ||
+    (q.includes("lender") && (q.includes("receive") || q.includes("payout timing")))
+  ) {
+    return {
+      answered: true,
+      response:
+        "The lender receives their rental payout once the rental has been successfully settled. The platform releases the payout at the same settlement stage when the security deposit is settled.\n\nCurRENT deducts a 12% commission, so the lender receives 88% of the rental fee.",
+    };
+  }
+
+  // 2. Fees & deposits (produces two distinct consecutive assistant messages)
+  if (
+    q.includes("fees & deposits") ||
+    q.includes("fees and deposits") ||
+    q === "fees & deposits" ||
+    q === "fees" ||
+    (q.includes("fee") && (q.includes("deposit") || q.includes("service") || q.includes("commission")))
+  ) {
+    return {
+      answered: true,
+      responses: [
+        "Here are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 12% of the rental fee, deducted when the rental is completed.\n- Lender payout: The lender receives the remaining 88% of the rental fee.",
+        "Your refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through FPX.",
+      ],
     };
   }
 
@@ -216,13 +256,14 @@ export function resolveAutomatedSupportQuery(query: string): { answered: boolean
   if (
     q.includes("delivery & return") ||
     q.includes("delivery and return") ||
+    q === "delivery & return" ||
     (q.includes("delivery") && (q.includes("return") || q.includes("work") || q.includes("receive") || q.includes("receipt") || q.includes("courier"))) ||
     (q.includes("return") && (q.includes("item") || q.includes("evidence") || q.includes("process") || q.includes("confirm")))
   ) {
     return {
       answered: true,
       response:
-        "Delivery & Return Fulfillment:\n\n• CurRENT is Delivery Only. There is no physical pickup or meeting.\n• Delivery Receipt: When your item arrives, tap 'Confirm Received' in Rental Details.\n• Return Process: Upload at least 6 photos and 1 video condition evidence at Check-out, then tap 'Confirm Return'.\n• Lender Review: The lender inspects the shared evidence and selects 'No Issue – End Rental' to release your deposit, or 'Apply Dispute' if damage is observed.",
+        "CurRENT is Delivery Only, so there is no physical pickup or in-person meeting.\n\n- Delivery: When your item arrives, open Rental Details and tap Confirm Received.\n- Return: When it is time to return the item, upload at least 6 photos and 1 video of its condition under Check-out, then tap Confirm Return.\n- Lender review: Once the lender receives the returned item and confirms that there is no damage, they select No Issue – End Rental. CurRENT then releases your security deposit.\n- If there is an issue: The lender can select Apply Dispute, and the deposit will remain on hold while CurRENT reviews the case.",
     };
   }
 
@@ -239,7 +280,7 @@ export function resolveAutomatedSupportQuery(query: string): { answered: boolean
     return {
       answered: true,
       response:
-        "Rental Extensions (Consecutive Bookings):\n\n• You can extend your rental by booking immediately contiguous time starting exactly at your current scheduled return time.\n• Extensions charge only extra rental and service fees.\n• Additional deposit is RM0.00 — your original deposit remains held until final return.",
+        "You can extend your rental by booking an available period that starts exactly when your current rental is scheduled to end.\n\n- You only pay the additional rental fee and service fee.\n- Additional deposit: RM0.00. Your original deposit remains held until the final return and settlement.",
     };
   }
 
@@ -254,7 +295,7 @@ export function resolveAutomatedSupportQuery(query: string): { answered: boolean
     return {
       answered: true,
       response:
-        "CurRENT Rental Risk Score (0–100):\n\n• Starting Score: Every newly verified account begins at 78 (Medium Risk).\n• +2 points: On-time, issue-free completed rental.\n• Late return (>2 hours late): -1 point per additional hour (up to -5 max) when supported by evidence.\n• Confirmed Minor Damage: -10 points.\n• Confirmed Serious Damage/Loss: -30 points.\n• Intentional Fraud/Theft: Permanent ban.\n• Only the single most serious outcome applies per rental chain.",
+        "CurRENT's Rental Risk Score ranges from 0 to 100, with four risk levels:\n\n- Low Risk: 80–100\n- Medium Risk: 40–79\n- High Risk: 30–39\n- Very High Risk: 0–29\n\nUnverified users do not have a Rental Risk Score (N/A). Once verification is successfully completed, the user receives an initial score of 80 (Low Risk).",
     };
   }
 
@@ -270,11 +311,11 @@ export function resolveAutomatedSupportQuery(query: string): { answered: boolean
     return {
       answered: true,
       response:
-        "Disputes & Issue Resolution:\n\n• If an item arrives damaged, is not returned, or condition is disputed, either party can report an issue or apply for dispute.\n• Filing a dispute pauses clean completion and holds the security deposit pending CurRENT review.\n• CurRENT reviews the submitted condition photos/videos to determine claim liability.",
+        "If an item arrives damaged, is not returned, or its condition is disputed, either party can report an issue through the relevant Condition Evidence section. The lender can also select Apply Dispute.\n\n- Filing a dispute places the rental under review and keeps the security deposit on hold.\n- CurRENT reviews the submitted condition photos, videos and other relevant information to determine liability.",
     };
   }
 
-  // 7. Cancellation
+  // Additional covered topics
   if (q.includes("cancel") || q.includes("cancellation")) {
     return {
       answered: true,
@@ -283,7 +324,6 @@ export function resolveAutomatedSupportQuery(query: string): { answered: boolean
     };
   }
 
-  // 8. Fixed time slots
   if (
     q.includes("time slot") ||
     q.includes("slots") ||
@@ -297,7 +337,6 @@ export function resolveAutomatedSupportQuery(query: string): { answered: boolean
     };
   }
 
-  // 9. BNPL
   if (q.includes("bnpl") || q.includes("buy now pay later")) {
     return {
       answered: true,
@@ -401,8 +440,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       user.verification = action.status;
       if (action.status === "verified" && (user.riskScore === undefined || user.riskScore === null)) {
-        user.riskScore = 78;
-        user.riskLevel = "medium";
+        user.riskScore = 80;
+        user.riskLevel = "low";
       }
       state.listings
         .filter((l) => l.ownerId === user.id)
@@ -510,7 +549,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const renter = state.profiles.find((p) => p.id === action.renterId);
       requireThat(renter, "Renter not found.");
       const evaluation = evaluateRentalOutcome(action.rawIncidents);
-      const scoreBefore = renter.riskScore ?? 78;
+      const scoreBefore = renter.riskScore ?? 80;
       const scoreAfter = Math.max(
         0,
         Math.min(100, scoreBefore + evaluation.effectiveAdjustment),
@@ -600,7 +639,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           action.end,
           action.protection,
         ),
-        riskScore: riskFor(state, user).score ?? 78,
+        riskScore: riskFor(state, user).score ?? 80,
         payment: "required",
         deposit: "required",
         createdAt: now,
@@ -661,7 +700,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         deliveryAddress: action.deliveryAddress,
         status: "upcoming",
         quote,
-        riskScore: risk.score ?? 78,
+        riskScore: risk.score ?? 80,
         payment: "paid",
         deposit: "held",
         paymentMethod: action.paymentMethod || "Demo FPX",
@@ -887,7 +926,6 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             }
           } else {
             b.renterReturnConfirmedAt = now;
-            b.actualReturnTimestamp = now;
           }
           notify(
             checkIn ? b.renterId : b.ownerId,
@@ -910,12 +948,31 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           b.deposit = "released";
 
           const renterProfile = state.profiles.find((p) => p.id === b.renterId);
-          if (renterProfile) {
-            const evaluation = evaluateRentalOutcome([
-              { type: "on_time_success", confirmed: true, description: "On-time return with no issues" },
-            ]);
-            const scoreBefore = renterProfile.riskScore ?? 78;
-            const scoreAfter = Math.min(100, scoreBefore + evaluation.effectiveAdjustment);
+          if (
+            renterProfile &&
+            !renterProfile.riskHistory?.some((event) => event.bookingId === b.id)
+          ) {
+            const returnInstant = b.actualReturnTimestamp
+              ? parseMalaysiaTimestamp(b.actualReturnTimestamp)
+              : null;
+            const deadlineInstant = b.effectiveReturnDeadline
+              ? parseMalaysiaTimestamp(b.effectiveReturnDeadline)
+              : parseTimestamp(b.end);
+            const outcome = returnInstant === null
+              ? [{ type: "return_timing_unassessed" as const, confirmed: true }]
+              : returnInstant > deadlineInstant
+                ? [{
+                    type: "late_return" as const,
+                    hoursLate: (returnInstant - deadlineInstant) / 3600000,
+                    confirmed: true,
+                  }]
+                : [{ type: "on_time_success" as const, confirmed: true }];
+            const evaluation = evaluateRentalOutcome(outcome);
+            const scoreBefore = riskFor(state, renterProfile).score ?? 80;
+            const scoreAfter = Math.max(
+              0,
+              Math.min(100, scoreBefore + evaluation.effectiveAdjustment),
+            );
             renterProfile.riskScore = scoreAfter;
             renterProfile.riskLevel = tierForScore(scoreAfter).level;
             if (!renterProfile.riskHistory) renterProfile.riskHistory = [];
@@ -1118,7 +1175,6 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         );
 
         b.renterReturnConfirmedAt = now;
-        b.actualReturnTimestamp = action.actualReturnTimestamp || b.actualReturnTimestamp || now;
         b.status = "return_pending";
         b.deposit = "release_pending";
         notify(
@@ -1134,9 +1190,6 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         );
 
         b.lenderReturnConfirmedAt = now;
-        if (action.actualReturnTimestamp && !b.actualReturnTimestamp) {
-          b.actualReturnTimestamp = action.actualReturnTimestamp;
-        }
         notify(
           b.renterId,
           `Owner inspected and confirmed return for ${b.title}.`,
@@ -1155,67 +1208,53 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         b.deposit = "released";
 
         const returnInstant = b.actualReturnTimestamp
-          ? new Date(b.actualReturnTimestamp).getTime()
-          : Date.now();
+          ? parseMalaysiaTimestamp(b.actualReturnTimestamp)
+          : null;
         const deadlineInstant = b.effectiveReturnDeadline
-          ? new Date(b.effectiveReturnDeadline).getTime()
+          ? parseMalaysiaTimestamp(b.effectiveReturnDeadline)
           : parseTimestamp(b.end);
 
-        const diffHours = (returnInstant - deadlineInstant) / 3600000;
         const renter = state.profiles.find((p) => p.id === b.renterId);
-        if (renter) {
-          if (diffHours <= 2) {
-            const evaluation = evaluateRentalOutcome([
-              { type: "on_time_success", confirmed: true, description: "On-time return with no disputes" },
-            ]);
-            const scoreBefore = renter.riskScore ?? 78;
-            const scoreAfter = Math.min(100, scoreBefore + evaluation.effectiveAdjustment);
-            renter.riskScore = scoreAfter;
-            renter.riskLevel = tierForScore(scoreAfter).level;
-            if (!renter.riskHistory) renter.riskHistory = [];
-            renter.riskHistory.unshift({
-              id: newId(),
-              bookingId: b.id,
-              itemTitle: b.title,
-              date: new Date().toISOString().slice(0, 10),
-              incidents: evaluation.incidents,
-              effectiveAdjustment: evaluation.effectiveAdjustment,
-              scoreBefore,
-              scoreAfter,
-              appealStatus: "none",
-            });
-            notify(
-              b.renterId,
-              `Rental complete! Full simulated deposit (RM${b.quote.deposit.toFixed(2)}) released. +2 Reliability Score awarded! New score: ${scoreAfter}.`,
-              b.id,
-            );
-          } else {
-            const hoursLate = Math.ceil(diffHours);
-            const evaluation = evaluateRentalOutcome([
-              { type: "late_return", hoursLate, confirmed: true, description: `Returned ${hoursLate} hours late` },
-            ]);
-            const scoreBefore = renter.riskScore ?? 78;
-            const scoreAfter = Math.max(0, scoreBefore + evaluation.effectiveAdjustment);
-            renter.riskScore = scoreAfter;
-            renter.riskLevel = tierForScore(scoreAfter).level;
-            if (!renter.riskHistory) renter.riskHistory = [];
-            renter.riskHistory.unshift({
-              id: newId(),
-              bookingId: b.id,
-              itemTitle: b.title,
-              date: new Date().toISOString().slice(0, 10),
-              incidents: evaluation.incidents,
-              effectiveAdjustment: evaluation.effectiveAdjustment,
-              scoreBefore,
-              scoreAfter,
-              appealStatus: "none",
-            });
-            notify(
-              b.renterId,
-              `Rental complete! Full simulated deposit (RM${b.quote.deposit.toFixed(2)}) released. Return was ${hoursLate} hours late (${evaluation.effectiveAdjustment} points). New score: ${scoreAfter}.`,
-              b.id,
-            );
-          }
+        if (renter && !renter.riskHistory?.some((event) => event.bookingId === b.id)) {
+          const outcome = returnInstant === null
+            ? [{ type: "return_timing_unassessed" as const, confirmed: true }]
+            : returnInstant > deadlineInstant
+              ? [{
+                  type: "late_return" as const,
+                  hoursLate: (returnInstant - deadlineInstant) / 3600000,
+                  confirmed: true,
+                }]
+              : [{ type: "on_time_success" as const, confirmed: true }];
+          const evaluation = evaluateRentalOutcome(outcome);
+          const scoreBefore = riskFor(state, renter).score ?? 80;
+          const scoreAfter = Math.max(
+            0,
+            Math.min(100, scoreBefore + evaluation.effectiveAdjustment),
+          );
+          renter.riskScore = scoreAfter;
+          renter.riskLevel = tierForScore(scoreAfter).level;
+          if (!renter.riskHistory) renter.riskHistory = [];
+          renter.riskHistory.unshift({
+            id: newId(),
+            bookingId: b.id,
+            itemTitle: b.title,
+            date: new Date().toISOString().slice(0, 10),
+            incidents: evaluation.incidents,
+            effectiveAdjustment: evaluation.effectiveAdjustment,
+            scoreBefore,
+            scoreAfter,
+            appealStatus: "none",
+          });
+          const resultText = returnInstant === null
+            ? "Return timing could not be assessed."
+            : returnInstant > deadlineInstant
+              ? "Return was confirmed late (−5 points)."
+              : "Return was confirmed on time (+2 points).";
+          notify(
+            b.renterId,
+            `Rental complete. The simulated deposit was released. ${resultText} New score: ${scoreAfter}.`,
+            b.id,
+          );
         }
         notify(
           b.ownerId,
@@ -1260,6 +1299,45 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       notify(
         b.ownerId,
         `Renter submitted ${action.kind === "check_in" ? "check-in" : "check-out"} condition evidence for ${b.title}.`,
+        b.id,
+      );
+      break;
+    }
+
+    case "reportIssue": {
+      const b = bookingFor(action.bookingId);
+      requireThat(user.id === b.renterId, "Only the renter can submit a condition issue report.");
+      const text = action.text.trim();
+      requireThat(text.length > 0, "Describe the issue before submitting the report.");
+
+      if (!state.issueReports) state.issueReports = [];
+      const existing = state.issueReports.find(
+        (report) => report.bookingId === b.id && report.stage === action.stage,
+      );
+      if (existing) {
+        requireThat(
+          existing.authorId === user.id && existing.text === text,
+          "An issue report has already been submitted for this stage.",
+        );
+        break;
+      }
+
+      requireThat(
+        ["active", "return_pending", "disputed"].includes(b.status),
+        "Issue reports can only be submitted during an active rental stage.",
+      );
+      state.issueReports.unshift({
+        id: newId(),
+        bookingId: b.id,
+        chainId: b.consecutiveParentId || b.id,
+        authorId: user.id,
+        stage: action.stage,
+        text,
+        createdAt: now,
+      });
+      notify(
+        b.ownerId,
+        `Renter reported an issue during ${action.stage === "check_in" ? "check-in" : "check-out"} for ${b.title}.`,
         b.id,
       );
       break;
@@ -1350,7 +1428,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             description: "Fictional damage claim approved (Demo): RM150 assessed repair cost.",
           },
         ]);
-        const scoreBefore = renter.riskScore ?? 78;
+        const scoreBefore = renter.riskScore ?? 80;
         const scoreAfter = Math.max(0, Math.min(100, scoreBefore + evaluation.effectiveAdjustment));
         renter.riskScore = scoreAfter;
         renter.riskLevel = tierForScore(scoreAfter).level;
@@ -1388,7 +1466,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             description: "Fictional major damage claim approved (Demo): Full deposit applied to replacement liability.",
           },
         ]);
-        const scoreBefore = renter.riskScore ?? 78;
+        const scoreBefore = renter.riskScore ?? 80;
         const scoreAfter = Math.max(0, Math.min(100, scoreBefore + evaluation.effectiveAdjustment));
         renter.riskScore = scoreAfter;
         renter.riskLevel = tierForScore(scoreAfter).level;
@@ -1590,14 +1668,17 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       });
 
       const result = resolveAutomatedSupportQuery(action.text);
-      if (result.answered && result.response) {
-        state.supportMessages.push({
-          id: newId(),
-          userId: user.id,
-          sender: "bot",
-          text: result.response,
-          createdAt: now,
-        });
+      if (result.answered) {
+        const msgs = result.responses || (result.response ? [result.response] : []);
+        for (const msgText of msgs) {
+          state.supportMessages.push({
+            id: newId(),
+            userId: user.id,
+            sender: "bot",
+            text: msgText,
+            createdAt: now,
+          });
+        }
       } else {
         let activeCase = state.supportCases.find(
           (c) => c.userId === user.id && c.status === "waiting",
