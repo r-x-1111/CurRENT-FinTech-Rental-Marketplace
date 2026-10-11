@@ -14,7 +14,7 @@ export default function HelpScreen() {
       title="Help & Trust"
       subtitle="Practical answers and safety rules for peer-to-peer rentals."
     >
-      <Notice text="CurRENT is an academic classroom demonstration in Klang Valley. Real identity checks, payments, deposit escrow, BNPL, item insurance and delivery would be supported by external authorised partners. No real money or personal data is collected." />
+      <Notice text="CurRENT is a classroom simulation. Identity checks, payments, deposits, insurance and delivery are not performed by real providers. Do not submit identity documents or bank credentials." />
 
       {/* Step-by-Step Rental Workflow */}
       <Section title="How CurRENT Works" />
@@ -52,9 +52,9 @@ export default function HelpScreen() {
             <Text style={styles.stepNumText}>3</Text>
           </View>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={styles.stepTitle}>Two-Party Physical Handover</Text>
+            <Text style={styles.stepTitle}>Delivery & Check-in</Text>
             <Text style={s.caption}>
-              Meet at the arranged public or private venue. Both renter and lender independently confirm handover in the app to activate the rental clock.
+              The rental becomes Active at its scheduled start time. Confirm Received records delivery only; it does not change the rental clock. The renter records check-in condition with the required photos and video.
             </Text>
           </View>
         </View>
@@ -68,7 +68,7 @@ export default function HelpScreen() {
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={styles.stepTitle}>Clean Return & Deposit Release</Text>
             <Text style={s.caption}>
-              Renter uploads condition evidence photos. Once both parties confirm return (No-Issues), the simulated deposit is released and +2 reliability points are awarded.
+              At the scheduled end, the renter submits check-out evidence (at least 6 photos and 1 video) and confirms return. The lender reviews the same evidence and may end the rental without issue or apply a dispute. Deposit release and any score change follow the final simulated outcome.
             </Text>
           </View>
         </View>

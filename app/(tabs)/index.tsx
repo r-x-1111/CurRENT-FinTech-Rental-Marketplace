@@ -23,6 +23,9 @@ export default function HomeScreen() {
   const { state, user } = useMarketplace();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 800;
+  const unreadNotifications = state.notifications.filter(
+    (notice) => notice.userId === user?.id && !notice.read,
+  ).length;
 
   const params = useLocalSearchParams<{
     q?: string;
@@ -112,9 +115,33 @@ export default function HomeScreen() {
                 { width: isDesktop ? "62%" : "100%" },
               ]}
             >
-              {/* Eyebrow badge */}
-              <View style={styles.eyebrowBadge}>
-                <Text style={styles.eyebrowText}>KLANG VALLEY RENTALS</Text>
+              <View style={styles.heroTopRow}>
+                <View style={styles.eyebrowBadge}>
+                  <Text style={styles.eyebrowText}>KLANG VALLEY RENTALS</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    unreadNotifications > 0
+                      ? `Notifications, ${unreadNotifications} unread`
+                      : "Notifications"
+                  }
+                  onPress={() => router.push("/notifications")}
+                  style={styles.notificationButton}
+                >
+                  <Ionicons
+                    name="notifications-outline"
+                    size={21}
+                    color="white"
+                  />
+                  {unreadNotifications > 0 && (
+                    <View style={styles.notificationCount}>
+                      <Text style={styles.notificationCountText}>
+                        {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
               </View>
 
               {/* Main Headline */}
@@ -173,6 +200,7 @@ export default function HomeScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Search marketplace"
+                  onPress={() => router.setParams({ q: searchQuery.trim() })}
                   style={styles.searchSubmitBtn}
                 >
                   <Ionicons name="search" size={18} color="white" />
@@ -405,6 +433,38 @@ const styles = StyleSheet.create({
   },
   heroContent: {
     gap: 16,
+  },
+  heroTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  notificationButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#16335C",
+    position: "relative",
+  },
+  notificationCount: {
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 3,
+    borderRadius: 9,
+    backgroundColor: colors.danger,
+    position: "absolute",
+    right: -2,
+    top: -2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationCountText: {
+    color: "white",
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "800",
   },
   eyebrowBadge: {
     backgroundColor: "#16335C",

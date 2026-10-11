@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Redirect, router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge, Chips, Empty, Screen, s } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
-import { parseMalaysiaTimestamp } from "../../services/booking";
+import {
+  getEffectiveBookingStatus,
+  parseMalaysiaTimestamp,
+} from "../../services/booking";
 import { colors } from "../../constants/theme";
 
 export default function RentalsScreen() {
@@ -31,23 +34,28 @@ export default function RentalsScreen() {
   ];
 
   const [activeTab, setActiveTab] = useState("Upcoming");
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const userBookings = state.bookings.filter((b) => b.renterId === user?.id);
 
   // Filter bookings based on activeTab
   const filteredBookings = userBookings.filter((b) => {
+    const status = getEffectiveBookingStatus(b, now);
     switch (activeTab) {
       case "Upcoming":
-        return b.status === "upcoming";
+        return status === "upcoming";
       case "Active":
-        return b.status === "active" || b.status === "return_pending";
+        return status === "active" || status === "return_pending";
       case "Return Due":
         return (
-          b.status === "active" &&
+          status === "active" &&
           !b.renterReturnConfirmedAt &&
-          parseMalaysiaTimestamp(
-            b.effectiveReturnDeadline || b.scheduledReturn || b.end,
-          ) <= Date.now()
+          parseMalaysiaTimestamp(b.end) <= now
         );
       case "Completed":
         return b.status === "completed";

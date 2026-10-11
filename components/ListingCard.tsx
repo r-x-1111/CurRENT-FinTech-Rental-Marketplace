@@ -21,91 +21,87 @@ export function ListingCard({
     new Date(listing.featuredUntil).getTime() > Date.now();
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`View item details: ${listing.title}`}
-      onPress={onPress}
-      style={styles.card}
-    >
-      <View style={{ position: "relative" }}>
-        <Image source={{ uri: listing.imageUrl }} style={styles.image} />
+    <View style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`View item details: ${listing.title}`}
+        onPress={onPress}
+      >
+        <View style={styles.imageArea}>
+          <Image source={{ uri: listing.imageUrl }} style={styles.image} />
 
-        {/* Favourite heart button */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${saved ? "Unsave" : "Save"} ${listing.title}`}
-          onPress={(event) => {
-            event.stopPropagation();
-            if (user) act({ type: "favourite", listingId: listing.id });
-            else router.push("/auth");
-          }}
-          style={styles.heart}
-        >
-          <Ionicons
-            name={saved ? "heart" : "heart-outline"}
-            size={18}
-            color={saved ? colors.blue : colors.navy}
-          />
-        </Pressable>
+          {isFeatured && (
+            <View style={styles.featuredBadge}>
+              <Text style={styles.featuredText}>Featured</Text>
+            </View>
+          )}
 
-        {/* Featured badge if boosted */}
-        {isFeatured && (
-          <View style={styles.featuredBadge}>
-            <Text style={styles.featuredText}>Featured</Text>
-          </View>
-        )}
-
-        {/* Category pill */}
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryText}>
-            {listing.category.toUpperCase()}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.body}>
-        {/* Verification & Rating row */}
-        <View style={styles.topRow}>
-          <View style={styles.verifiedRow}>
-            {listing.verifiedOwner ? (
-              <Text style={styles.verifiedText}>✓ Verified Owner</Text>
-            ) : (
-              <Text style={styles.unverifiedText}>Community listing</Text>
-            )}
-          </View>
-          <View style={styles.ratingRow}>
-            <Ionicons name="star" size={13} color="#F59E0B" />
-            <Text style={styles.ratingText}>
-              {listing.rating ? listing.rating.toFixed(1) : "New"}
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>
+              {listing.category.toUpperCase()}
             </Text>
           </View>
         </View>
 
-        {/* Title */}
-        <Text style={styles.title} numberOfLines={1}>
-          {listing.title}
-        </Text>
+        <View style={styles.body}>
+          <View style={styles.topRow}>
+            <View style={styles.verifiedRow}>
+              {listing.verifiedOwner ? (
+                <Text style={styles.verifiedText}>✓ Verified Owner</Text>
+              ) : (
+                <Text style={styles.unverifiedText}>Community listing</Text>
+              )}
+            </View>
+            <View style={styles.ratingRow}>
+              <Ionicons name="star" size={13} color="#F59E0B" />
+              <Text style={styles.ratingText}>
+                {listing.rating ? listing.rating.toFixed(1) : "New"}
+              </Text>
+            </View>
+          </View>
 
-        {/* Location */}
-        <View style={styles.locationRow}>
-          <Ionicons name="location-outline" size={13} color={colors.muted} />
-          <Text style={styles.locationText}>{listing.location}</Text>
-        </View>
-
-        {/* Price Row */}
-        <View style={styles.bottomRow}>
-          <Text style={styles.priceText}>
-            RM{listing.dailyPrice}
-            <Text style={styles.perDayText}>/day</Text>
+          <Text style={styles.title} numberOfLines={1}>
+            {listing.title}
           </Text>
+
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={13} color={colors.muted} />
+            <Text style={styles.locationText}>{listing.location}</Text>
+          </View>
+
+          <View style={styles.bottomRow}>
+            <Text style={styles.priceText}>
+              RM{listing.dailyPrice}
+              <Text style={styles.perDayText}>/day</Text>
+            </Text>
+          </View>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${saved ? "Unsave" : "Save"} ${listing.title}`}
+        accessibilityState={{ selected: Boolean(saved) }}
+        onPress={() => {
+          if (user) act({ type: "favourite", listingId: listing.id });
+          else router.push("/auth");
+        }}
+        style={styles.heart}
+        hitSlop={8}
+      >
+        <Ionicons
+          name={saved ? "heart" : "heart-outline"}
+          size={18}
+          color={saved ? colors.blue : colors.navy}
+        />
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
+    position: "relative",
     backgroundColor: "white",
     borderRadius: 16,
     borderWidth: 1,
@@ -117,6 +113,9 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
     marginBottom: 4,
+  },
+  imageArea: {
+    position: "relative",
   },
   image: {
     width: "100%",

@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { createSeed } from "../data/seed";
 import {
+  getIssueReportPermissions,
+  isLenderDisputeEligible,
   resolveAutomatedSupportQuery,
   transition,
   type Action,
@@ -13,8 +15,8 @@ import {
   availabilityCalendar,
   calculateCancellationCutoff,
   dateAfter,
-  formatDigitalRentalAgreement,
   formatMalaysiaDateTime,
+  getEffectiveBookingStatus,
   isCancellationEligible,
   parseMalaysiaTimestamp,
   quoteFor,
@@ -26,16 +28,48 @@ import { calculateOwnerPayout } from "../services/deposit";
 import { evaluateRentalOutcome } from "../services/riskScore";
 import {
   authenticateWithPassword,
+  DEMO_OTP_CODE,
+  describeSupabaseAuthError,
+  normalizeMalaysianPhone,
   signOutAuthenticatedAccount,
 } from "../services/auth";
 import { provisionDemoAccount } from "../services/demoAccountProvisioning";
 import { createNormalAccountWorkspace } from "../services/marketplacePersistence";
+import {
+  DEMO_LISTING_TEMPLATE,
+  DEMO_SAVED_DELIVERY_ADDRESSES,
+} from "../services/demoWorkspaceDefaults";
+import {
+  closeDemoWorkspaceSession,
+  loadDemoWorkspaceSession,
+  saveDemoWorkspaceSession,
+  startDemoWorkspaceSession,
+} from "../services/demoWorkspaceSessions";
+
+test("Demo workspace starts fresh, persists in-session, and clears on sign out", () => {
+  const accountId = "demo-auth-user";
+  const first = startDemoWorkspaceSession(accountId);
+  first.profiles[0].name = "Changed for this session";
+  saveDemoWorkspaceSession(accountId, first);
+
+  assert.equal(
+    loadDemoWorkspaceSession(accountId).profiles[0].name,
+    "Changed for this session",
+  );
+
+  closeDemoWorkspaceSession(accountId);
+  assert.notEqual(
+    loadDemoWorkspaceSession(accountId).profiles[0].name,
+    "Changed for this session",
+  );
+});
 
 test("new Supabase Normal workspaces start empty and are bound to their auth account", () => {
   const workspace = createNormalAccountWorkspace({
     id: "normal-auth-user",
     email: "member@example.com",
     name: "Member",
+    phone: "+60123456789",
     verified: false,
   });
 
@@ -47,6 +81,11 @@ test("new Supabase Normal workspaces start empty and are bound to their auth acc
     "member@example.com",
   );
   assert.equal(
+    workspace.profiles.find((profile) => profile.id === "normal-auth-user")
+      ?.phone,
+    "+60123456789",
+  );
+  assert.equal(
     workspace.profiles.some((profile) => profile.id === "demo-renter"),
     false,
   );
@@ -56,6 +95,42 @@ test("new Supabase Normal workspaces start empty and are bound to their auth acc
   assert.equal(workspace.reviews.length, 0);
   assert.equal(workspace.disputes.length, 0);
   assert.equal(workspace.notifications.length, 0);
+});
+
+test("signup normalizes Malaysian mobile numbers and rejects invalid values", () => {
+  assert.equal(DEMO_OTP_CODE, "123456");
+  assert.equal(normalizeMalaysianPhone("12 345 6789"), "+60123456789");
+  assert.equal(normalizeMalaysianPhone("012-345-6789"), "+60123456789");
+  assert.equal(normalizeMalaysianPhone("+60 11 1234 5678"), "+601112345678");
+  assert.throws(
+    () => normalizeMalaysianPhone("234 567 890"),
+    /valid Malaysian/,
+  );
+});
+
+test("Supabase sign-up errors retain provider code, status, and trigger guidance", () => {
+  assert.equal(
+    describeSupabaseAuthError(
+      {
+        message: "Database error saving new user",
+        code: "unexpected_failure",
+        status: 500,
+      },
+      "sign-up",
+    ),
+    "Supabase sign-up failed [unexpected_failure] (HTTP 500): Database error saving new user Supabase rejected the Auth user hook; verify the initial profiles migration and handle_new_user trigger in the Dashboard.",
+  );
+  assert.equal(
+    describeSupabaseAuthError(
+      {
+        message: "Password should be at least 10 characters",
+        code: "weak_password",
+        status: 422,
+      },
+      "sign-up",
+    ),
+    "Supabase sign-up failed [weak_password] (HTTP 422): Password should be at least 10 characters",
+  );
 });
 
 test("Demo provisioning sets a provider-managed password for existing and new accounts", async () => {
@@ -140,14 +215,14 @@ function journey() {
   const act = (action: Action) => {
     state = transition(state, action);
   };
-  const request = (id = "booking-1", listingId = "sony-a7iii") =>
+  const book = (id = "booking-1", listingId = "sony-a7iii") =>
     act({
-      type: "request",
+      type: "instantBook",
       id,
       listingId,
-      start: dateAfter(1),
-      end: dateAfter(3),
-      protection: true,
+      start: `${dateAfter(2)}T11:00:00+08:00`,
+      end: `${dateAfter(4)}T11:00:00+08:00`,
+      paymentMethod: "Demo FPX",
     });
   const login = (userId: string) => act({ type: "login", userId });
   const operation = (
@@ -159,10 +234,20 @@ function journey() {
       return state;
     },
     act,
-    request,
+    book,
     login,
     operation,
   };
+}
+
+function withMockedNow<T>(timestamp: number, run: () => T): T {
+  const originalNow = Date.now;
+  Date.now = () => timestamp;
+  try {
+    return run();
+  } finally {
+    Date.now = originalNow;
+  }
 }
 
 test("Demo password authentication rejects wrong credentials and supports logout plus fresh login", async () => {
@@ -326,96 +411,20 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
     ).serviceFee,
     22.5,
   );
+  assert.throws(
+    () =>
+      quoteFor(
+        state,
+        state.profiles[0],
+        { ...state.listings[0], estimatedValue: undefined },
+        dateAfter(1),
+        dateAfter(3),
+      ),
+    /protected platform valuation is not available/,
+  );
   assert.throws(() => rentalDays("2027-02-30", "2027-03-04"), /valid calendar/);
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(1)), /1 to 90/);
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(92)), /1 to 90/);
-});
-test("rental completes through participant-controlled steps, evidence, deposit release and reviews", () => {
-  const j = journey();
-  j.request();
-  assert.throws(
-    () => j.operation("pay", { method: "Demo card" }),
-    /owner approval/,
-  );
-  assert.throws(() => j.operation("approve"), /Only the owner/);
-  j.login("owner-aiman");
-  j.operation("approve");
-  assert.throws(
-    () => j.operation("pay", { method: "Demo card" }),
-    /owner approval/,
-  );
-  j.login("demo-renter");
-  j.operation("pay", { method: "Demo card" });
-  assert.equal(j.state.bookings[0].payment, "processing");
-  assert.throws(() => j.operation("cancel"), /unpaid requests/);
-  j.operation("payment_result", { failed: true });
-  assert.equal(j.state.bookings[0].deposit, "required");
-  j.operation("pay", { method: "Demo FPX" });
-  j.operation("payment_result");
-  assert.equal(j.state.bookings[0].status, "upcoming");
-  assert.match(j.state.bookings[0].agreement!, /Alex Tan/);
-  assert.throws(() => j.operation("payment_result"), /No payment/);
-  j.login("owner-aiman");
-  assert.throws(() => j.operation("check_in"), /photo/);
-  j.operation("check_in", {
-    photo: "data:image/png;base64,test",
-    notes: "No damage.",
-  });
-  assert.equal(j.state.bookings[0].deposit, "held");
-  assert.throws(() => j.operation("release"), /inspect/);
-  j.login("demo-renter");
-  j.operation("check_out", { photo: "data:image/png;base64,test" });
-  assert.equal(j.state.bookings[0].deposit, "release_pending");
-  assert.throws(() => j.operation("release"), /owner/);
-  j.login("owner-aiman");
-  j.operation("release");
-  assert.equal(j.state.bookings[0].deposit, "released");
-  j.act({
-    type: "review",
-    bookingId: "booking-1",
-    rating: 5,
-    text: "Careful renter.",
-  });
-  assert.throws(
-    () =>
-      j.act({ type: "review", bookingId: "booking-1", rating: 5, text: "" }),
-    /already reviewed/,
-  );
-  j.login("demo-renter");
-  j.act({
-    type: "review",
-    bookingId: "booking-1",
-    rating: 4,
-    text: "Great camera.",
-  });
-  assert.equal(j.state.reviews.length, 2);
-  assert.equal(j.state.listings[0].rating, 4);
-  assert.equal(j.state.evidence.length, 2);
-  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 80);
-});
-test("approval atomically rejects overlapping requests but permits adjacent rentals", () => {
-  const j = journey();
-  j.request();
-  j.login("owner-sarah");
-  j.request("booking-2");
-  j.login("owner-aiman");
-  j.operation("approve");
-  const calendar = availabilityCalendar(j.state, j.state.listings[0], 5);
-  assert.equal(calendar[1].status, "reserved");
-  assert.equal(calendar[2].status, "reserved");
-  assert.equal(calendar[3].status, "available");
-  assert.throws(
-    () => j.act({ type: "booking", id: "booking-2", operation: "approve" }),
-    /already reserved/,
-  );
-  assert.equal(
-    j.state.bookings.find((b) => b.id === "booking-2")?.status,
-    "pending",
-  );
-  availability(j.state, j.state.listings[0], dateAfter(3), dateAfter(4));
-  j.login("demo-renter");
-  j.operation("cancel");
-  availability(j.state, j.state.listings[0], dateAfter(1), dateAfter(3));
 });
 test("the final available date can be rented with an exclusive next-day return", () => {
   const state = createSeed();
@@ -440,27 +449,35 @@ test("the final available date can be rented with an exclusive next-day return",
     /outside the owner/,
   );
 });
-test("dispute preserves evidence and freezes deposit release", () => {
-  const j = journey();
-  j.request();
-  j.login("owner-aiman");
-  j.operation("approve");
-  j.login("demo-renter");
-  j.operation("pay", { method: "Demo card" });
-  j.operation("payment_result");
-  j.login("owner-aiman");
-  j.operation("check_in", { photo: "photo" });
-  j.act({
-    type: "dispute",
-    bookingId: "booking-1",
-    reason: "The lens is damaged.",
-    photo: "evidence",
-  });
-  assert.equal(j.state.bookings[0].deposit, "disputed");
-  assert.throws(() => j.operation("release"), /inspect/);
-  assert.throws(() => j.operation("cancel"), /unpaid/);
-  assert.equal(j.state.disputes.length, 1);
-  assert.equal(riskFor(j.state, j.state.profiles[0]).score, 80);
+test("monthly availability calendar handles leap months and reservations across month boundaries", () => {
+  const state = createSeed();
+  const listing = {
+    ...state.listings[0],
+    id: "calendar-listing",
+    availableFrom: "2028-02-01",
+    availableTo: "2028-03-31",
+    availabilityPeriods: [],
+  };
+  const booking = {
+    ...state.bookings[0],
+    id: "calendar-booking",
+    listingId: listing.id,
+    start: toMalaysiaUtcTimestamp("2028-02-28", "11:00"),
+    end: toMalaysiaUtcTimestamp("2028-03-02", "11:00"),
+    status: "upcoming" as const,
+  };
+  const withBooking = { ...state, bookings: [booking] };
+
+  const february = availabilityCalendar(withBooking, listing, 29, "2028-02-01");
+  const march = availabilityCalendar(withBooking, listing, 31, "2028-03-01");
+
+  assert.equal(february.length, 29);
+  assert.equal(february[27].date, "2028-02-28");
+  assert.equal(february[27].status, "reserved");
+  assert.equal(february[28].status, "reserved");
+  assert.equal(march[0].status, "reserved");
+  assert.equal(march[1].status, "reserved");
+  assert.equal(march[2].status, "available");
 });
 test("listing publication, dates, ownership, verification and deletion are enforced", () => {
   const j = journey();
@@ -473,7 +490,7 @@ test("listing publication, dates, ownership, verification and deletion are enfor
   };
   assert.throws(() => j.act({ type: "saveListing", listing }), /photo/);
   j.act({ type: "saveListing", listing: { ...listing, status: "draft" } });
-  assert.throws(() => j.request("bad", "new"), /own item/);
+  assert.throws(() => j.book("bad", "new"), /own item/);
   assert.throws(
     () =>
       j.act({ type: "saveListing", listing: { ...listing, dailyPrice: NaN } }),
@@ -487,19 +504,200 @@ test("listing publication, dates, ownership, verification and deletion are enfor
       }),
     /Only the owner/,
   );
-  j.request();
+  j.book();
   j.login("owner-aiman");
   assert.throws(
     () => j.act({ type: "deleteListing", id: "sony-a7iii" }),
     /outstanding rentals/,
   );
-  j.operation("reject");
+  j.operation("cancel");
   j.act({ type: "deleteListing", id: "sony-a7iii" });
   assert.equal(j.state.bookings[0].title, "Sony A7 III Mirrorless Camera");
 });
+test("Demo baseline restores complete fictional addresses and permits zero-media listing publication", () => {
+  const state = createSeed("admin_demo");
+  const demoRenter = state.profiles.find(
+    (profile) => profile.id === "demo-renter",
+  )!;
+  assert.deepEqual(
+    demoRenter.savedDeliveryAddresses,
+    DEMO_SAVED_DELIVERY_ADDRESSES,
+  );
+  assert.equal(demoRenter.defaultDeliveryAddressIndex, 0);
+  assert.equal(demoRenter.savedDeliveryAddress?.postcode, "47300");
+  assert.equal(DEMO_LISTING_TEMPLATE.title, "Portable Projector");
+  assert.equal(DEMO_LISTING_TEMPLATE.estimatedValue, 1200);
+
+  const loggedIn = transition(state, {
+    type: "login",
+    userId: "demo-renter",
+  });
+
+  test("support handoff confirmation is added only by an explicit successful queue result", () => {
+    const base = transition(createSeed("admin_demo"), {
+      type: "login",
+      userId: "demo-renter",
+    });
+    const failed = transition(base, {
+      type: "supportHandoffResult",
+      query: "I need a person to review a specific account issue.",
+      messageId: "failed-message-id",
+      accepted: false,
+    });
+    assert.equal(
+      failed.supportMessages.at(-1)?.text,
+      "I couldn't send your message to our support team right now. Please try again.",
+    );
+
+    const accepted = transition(base, {
+      type: "supportHandoffResult",
+      query: "I need a person to review a specific account issue.",
+      caseId: "internal-case-id",
+      messageId: "saved-message-id",
+      accepted: true,
+    });
+    assert.equal(
+      accepted.supportMessages.at(-1)?.text,
+      "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+    );
+    assert.equal(accepted.supportMessages.at(-1)?.caseId, "internal-case-id");
+  });
+  const period = { start: dateAfter(2), end: dateAfter(30) };
+  const published = transition(loggedIn, {
+    type: "saveListing",
+    listing: {
+      id: "demo-zero-media-listing",
+      ownerId: "demo-renter",
+      title: "Demo Portable Projector",
+      description:
+        "Pre-filled classroom listing details for the portable projector.",
+      category: "Electronics",
+      location: "Kuala Lumpur",
+      privateMeetingVenue: "Lot 10 Concierge, Kuala Lumpur",
+      dailyPrice: 28,
+      estimatedValue: 1200,
+      images: [],
+      videos: [],
+      imageUrl: "",
+      availableFrom: period.start,
+      availableTo: period.end,
+      availabilityPeriods: [period],
+      collectionMethods: ["Delivery Only"],
+      rating: 0,
+      verifiedOwner: true,
+      status: "published",
+      deliveryTimeSlots: ["10:00", "14:00"],
+      pickupTimeWindows: [
+        { start: "10:00", end: "10:00" },
+        { start: "14:00", end: "14:00" },
+      ],
+    },
+  });
+  assert.equal(
+    published.listings.find(
+      (listing) => listing.id === "demo-zero-media-listing",
+    )?.status,
+    "published",
+  );
+  const normal = transition(createSeed("normal"), {
+    type: "login",
+    userId: "demo-renter",
+  });
+  assert.throws(
+    () =>
+      transition(normal, {
+        type: "saveListing",
+        listing: {
+          ...published.listings.find(
+            (listing) => listing.id === "demo-zero-media-listing",
+          )!,
+          id: "normal-zero-media-listing",
+          status: "published",
+        },
+      }),
+    /at least 6 photos and 1 video/,
+  );
+});
+test("unverified accounts cannot use any lender listing mutation", () => {
+  const state = createSeed();
+  const accountId = "normal-unverified";
+  state.profiles.push({
+    id: accountId,
+    name: "New Account",
+    email: "new@example.com",
+    verification: "not_verified",
+    favourites: [],
+    riskScore: null,
+    riskLevel: "unverified",
+  });
+  state.currentUserId = accountId;
+
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "saveListing",
+        listing: {
+          ...state.listings[0],
+          id: "new-draft",
+          ownerId: accountId,
+          status: "draft",
+        },
+      }),
+    /Complete Identity Verification to create or publish a listing/,
+  );
+  assert.throws(
+    () => transition(state, { type: "deleteListing", id: "sony-a7iii" }),
+    /Complete Identity Verification to create or publish a listing/,
+  );
+  assert.throws(
+    () => transition(state, { type: "boostListing", listingId: "sony-a7iii" }),
+    /Complete Identity Verification to create or publish a listing/,
+  );
+});
+
+test("renters can save a validated delivery address in their own profile", () => {
+  const state = createSeed("admin_demo");
+  state.currentUserId = "demo-renter";
+  const initialAddress = state.profiles.find(
+    (profile) => profile.id === "demo-renter",
+  )?.savedDeliveryAddress;
+  const address = {
+    recipientName: "Demo Renter",
+    phone: "+60123456789",
+    addressLine1: "12 Jalan SS 15/4",
+    addressLine2: "Unit 3A",
+    postcode: "47500",
+    city: "Subang Jaya",
+    state: "Selangor",
+    instructions: "Call on arrival",
+  };
+
+  const saved = transition(state, {
+    type: "saveDeliveryAddress",
+    address,
+  });
+  assert.deepEqual(
+    saved.profiles.find((profile) => profile.id === "demo-renter")
+      ?.savedDeliveryAddress,
+    address,
+  );
+  assert.equal(
+    state.profiles.find((profile) => profile.id === "demo-renter")
+      ?.savedDeliveryAddress,
+    initialAddress,
+  );
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "saveDeliveryAddress",
+        address: { ...address, postcode: " " },
+      }),
+    /Complete the required delivery address fields/,
+  );
+});
 test("accounts, private messages and notifications stay separated", () => {
   const j = journey();
-  j.request();
+  j.book();
   j.act({
     type: "message",
     bookingId: "booking-1",
@@ -521,7 +719,7 @@ test("accounts, private messages and notifications stay separated", () => {
     () => j.act({ type: "message", bookingId: "booking-1", text: "Intruding" }),
     /access denied/,
   );
-  assert.throws(() => j.operation("approve"), /access denied/);
+  assert.throws(() => j.operation("cancel"), /access denied/);
   j.act({ type: "readNotices" });
   assert.ok(
     j.state.notifications.some((n) => n.userId === "owner-aiman" && !n.read),
@@ -536,61 +734,51 @@ test("accounts, private messages and notifications stay separated", () => {
       favourites: [],
     },
   });
-  assert.throws(() => j.request("unverified"), /identity verification/);
+  assert.throws(() => j.book("unverified"), /identity verification/);
   j.act({ type: "verify", status: "pending" });
   j.act({ type: "verify", status: "failed" });
   j.act({ type: "verify", status: "pending" });
   j.act({ type: "verify", status: "verified" });
-  j.request("verified");
-  assert.equal(j.state.bookings[0].renterId, "new-user");
+  j.act({
+    type: "instantBook",
+    id: "verified",
+    listingId: "sony-a7iii",
+    start: `${dateAfter(5)}T11:00:00+08:00`,
+    end: `${dateAfter(7)}T11:00:00+08:00`,
+    paymentMethod: "Demo FPX",
+  });
+  assert.equal(
+    j.state.bookings.find((booking) => booking.id === "verified")?.renterId,
+    "new-user",
+  );
 });
 test("Delivery Only is enforced and recorded in the agreement", () => {
   let state = createSeed();
   state = transition(state, {
-    type: "request",
+    type: "instantBook",
     id: "collection-booking",
     listingId: "sony-a7iii",
-    start: dateAfter(1),
-    end: dateAfter(3),
-    protection: false,
+    start: `${dateAfter(2)}T11:00:00+08:00`,
+    end: `${dateAfter(4)}T11:00:00+08:00`,
+    paymentMethod: "Demo FPX",
   });
-  assert.equal(state.bookings[0].collectionMethod, "Delivery Only");
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "booking",
-    id: "collection-booking",
-    operation: "approve",
-  });
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "booking",
-    id: "collection-booking",
-    operation: "pay",
-    method: "Demo FPX",
-  });
-  state = transition(state, {
-    type: "booking",
-    id: "collection-booking",
-    operation: "payment_result",
-  });
-  assert.match(state.bookings[0].agreement || "", /Fulfilment: Delivery Only/);
+  assert.equal(
+    state.bookings.find((booking) => booking.id === "collection-booking")
+      ?.collectionMethod,
+    "Delivery Only",
+  );
+  assert.equal(state.bookings[0].agreement, undefined);
 });
-test("state snapshots can reload mid-payment without losing fees or agreement progress", () => {
+test("state snapshots preserve a confirmed booking and its financial terms without fictional agreement signatures", () => {
   const j = journey();
-  j.request();
-  j.login("owner-aiman");
-  j.operation("approve");
-  j.login("demo-renter");
-  j.operation("pay", { method: "Demo card" });
+  j.book();
   const loaded = JSON.parse(JSON.stringify(j.state));
-  const paid = transition(loaded, {
-    type: "booking",
-    id: "booking-1",
-    operation: "payment_result",
-  });
-  assert.equal(paid.bookings[0].quote.total, 295);
-  assert.equal(paid.bookings[0].payment, "paid");
-  assert.equal(loaded.bookings[0].payment, "processing");
+  const booking = loaded.bookings.find(
+    (rental: { id: string }) => rental.id === "booking-1",
+  );
+  assert.equal(booking.quote.total, 295);
+  assert.equal(booking.payment, "paid");
+  assert.equal(booking.agreement, undefined);
 });
 
 test("V1.8 deposit caps at RM12,000 replacement value correctly enforce caps across all tiers", () => {
@@ -743,6 +931,8 @@ test("renter issue reports remain stage-specific, visible to lenders, and retry-
   const booking = state.bookings.find(
     (item) => item.renterId === "demo-renter" && item.status === "active",
   )!;
+  booking.end = new Date(Date.now() - 1).toISOString();
+  booking.effectiveReturnDeadline = undefined;
   const checkInReport = {
     type: "reportIssue" as const,
     bookingId: booking.id,
@@ -790,6 +980,94 @@ test("renter issue reports remain stage-specific, visible to lenders, and retry-
   assert.throws(() => transition(state, checkInReport), /Only the renter/);
 });
 
+test("issue comment boxes follow delivery/end-stage access in Normal and Demo rentals", () => {
+  for (const _mode of ["normal", "admin_demo"] as const) {
+    for (const stage of ["check_in", "check_out"] as const) {
+      assert.deepEqual(
+        getIssueReportPermissions({
+          stage,
+          status: "upcoming",
+          stageAvailable: false,
+          isLender: false,
+          reportSubmitted: false,
+        }),
+        { canEdit: false, canSubmit: false },
+      );
+    }
+
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_in",
+        status: "upcoming",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: true, canSubmit: false },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_in",
+        status: "active",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: true, canSubmit: true },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_out",
+        status: "active",
+        stageAvailable: false,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: false, canSubmit: false },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_out",
+        status: "active",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: true, canSubmit: true },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_out",
+        status: "completed",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: false,
+      }),
+      { canEdit: true, canSubmit: false },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_out",
+        status: "active",
+        stageAvailable: true,
+        isLender: true,
+        reportSubmitted: true,
+      }),
+      { canEdit: false, canSubmit: false },
+    );
+    assert.deepEqual(
+      getIssueReportPermissions({
+        stage: "check_in",
+        status: "active",
+        stageAvailable: true,
+        isLender: false,
+        reportSubmitted: true,
+      }),
+      { canEdit: false, canSubmit: false },
+    );
+  }
+});
+
 test("issue report drafts can be prepared while pending but submitted only in their active stage", () => {
   for (const mode of ["normal", "admin_demo"] as const) {
     let state = createSeed(mode);
@@ -827,7 +1105,15 @@ test("issue report drafts can be prepared while pending but submitted only in th
     state = {
       ...state,
       bookings: state.bookings.map((item) =>
-        item.id === booking.id ? { ...item, status: "return_pending" } : item,
+        item.id === booking.id
+          ? {
+              ...item,
+              status: "return_pending",
+              start: new Date(Date.now() - 86_400_000).toISOString(),
+              end: new Date(Date.now() - 1).toISOString(),
+              effectiveReturnDeadline: undefined,
+            }
+          : item,
       ),
     };
     assert.throws(
@@ -863,12 +1149,12 @@ test("restrictions block rental requests for overdue obligations and banned user
   assert.throws(
     () =>
       transition(state, {
-        type: "request",
+        type: "instantBook",
         id: "req-overdue",
         listingId: "sony-a7iii",
-        start: dateAfter(1),
-        end: dateAfter(3),
-        protection: false,
+        start: `${dateAfter(2)}T11:00:00+08:00`,
+        end: `${dateAfter(4)}T11:00:00+08:00`,
+        paymentMethod: "Demo FPX",
       }),
     /outstanding damage obligation/,
   );
@@ -879,126 +1165,159 @@ test("restrictions block rental requests for overdue obligations and banned user
   assert.throws(
     () =>
       transition(state, {
-        type: "request",
+        type: "instantBook",
         id: "req-banned",
         listingId: "sony-a7iii",
-        start: dateAfter(1),
-        end: dateAfter(3),
-        protection: false,
+        start: `${dateAfter(2)}T11:00:00+08:00`,
+        end: `${dateAfter(4)}T11:00:00+08:00`,
+        paymentMethod: "Demo FPX",
       }),
     /banned from booking/,
   );
 });
 
-test("consecutive chain booking quote formula adds rental fee and service fee with RM0 extra deposit", () => {
-  const { calculateConsecutiveQuote } = require("../services/deposit");
-  const quote = calculateConsecutiveQuote(90); // RM90 extra rental
-  assert.deepEqual(quote, {
-    additionalRentalFee: 90,
-    serviceFee: 5, // 5% of 90 is 4.50, min RM5
-    deposit: 0, // RM0 extra deposit
-    total: 95,
-  });
-});
-
-test("Phase 3: two-sided handover requires both lender and renter confirmations to activate rental", () => {
+test("Confirm Received records delivery without gating or shifting the rental clock", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
+  const start = `${dateAfter(20)}T11:00:00+08:00`;
+  const end = `${dateAfter(22)}T11:00:00+08:00`;
   state = transition(state, {
-    type: "request",
+    type: "instantBook",
     id: "booking-handover",
     listingId: "sony-a7iii",
-    start: dateAfter(2),
-    end: dateAfter(4),
-    protection: false,
+    start,
+    end,
+    paymentMethod: "Demo FPX",
   });
 
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-handover",
-    operation: "approve",
-  });
-
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-handover",
-    operation: "pay",
-    method: "Demo card",
-  });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-handover",
-    operation: "payment_result",
-  });
-
-  const bUpcoming = state.bookings.find((b) => b.id === "booking-handover")!;
-  assert.equal(bUpcoming.status, "upcoming");
-  assert.equal(bUpcoming.activationTimestamp, undefined);
-
-  // Lender confirms handover first
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-handover",
-    role: "owner",
-  });
-
-  const bAfterOwner = state.bookings.find((b) => b.id === "booking-handover")!;
-  assert.ok(bAfterOwner.lenderHandoverAt);
-  assert.equal(bAfterOwner.status, "upcoming"); // Still upcoming! Only 1 side confirmed.
-
-  // Renter confirms receipt
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-handover",
-    role: "renter",
-  });
-
-  const bActive = state.bookings.find((b) => b.id === "booking-handover")!;
-  assert.ok(bActive.renterReceivedAt);
-  assert.ok(bActive.activationTimestamp);
-  assert.ok(bActive.effectiveReturnDeadline);
-  assert.equal(bActive.status, "active");
-  assert.equal(bActive.deposit, "held");
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "confirmReceived",
+        bookingId: "booking-handover",
+      }),
+    /available from scheduled rental start/,
+  );
+  state = withMockedNow(parseMalaysiaTimestamp(start), () =>
+    transition(state, {
+      type: "confirmReceived",
+      bookingId: "booking-handover",
+    }),
+  );
+  const updatedBooking = state.bookings.find(
+    (rental) => rental.id === "booking-handover",
+  )!;
+  assert.ok(updatedBooking.renterReceivedAt);
+  assert.equal(updatedBooking.status, "upcoming");
+  assert.equal(updatedBooking.activationTimestamp, undefined);
+  assert.equal(updatedBooking.lenderHandoverAt, undefined);
+  assert.equal(updatedBooking.start, start);
+  assert.equal(updatedBooking.end, end);
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "confirmReceived",
+        bookingId: "booking-handover",
+      }),
+    /already been confirmed/,
+  );
 });
 
-test("Phase 3: cancellation requires >= 24h before scheduled pickup with 100% refund and RM0 fee", () => {
+test("scheduled start derives Active independently of delivery receipt or later bookings", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
-  // Start is 3 days in future (>= 24h)
+  const start = `${dateAfter(20)}T11:00:00+08:00`;
+  const end = `${dateAfter(22)}T11:00:00+08:00`;
   state = transition(state, {
-    type: "request",
+    type: "instantBook",
+    id: "booking-auto-active",
+    listingId: "sony-a7iii",
+    start,
+    end,
+    paymentMethod: "Demo FPX",
+  });
+  const booking = state.bookings.find(
+    (rental) => rental.id === "booking-auto-active",
+  )!;
+  const scheduledStart = parseMalaysiaTimestamp(booking.start);
+  assert.equal(
+    getEffectiveBookingStatus(booking, scheduledStart - 1),
+    "upcoming",
+  );
+  assert.equal(getEffectiveBookingStatus(booking, scheduledStart), "active");
+  assert.equal(booking.renterReceivedAt, undefined);
+  assert.equal(booking.start, start);
+  assert.equal(booking.end, end);
+});
+
+test("check-out media and return confirmation stay locked until the final scheduled end", () => {
+  let state = createSeed("admin_demo");
+  const initialBooking = state.bookings.find(
+    (item) => item.id === "demo-booking-active-1",
+  )!;
+  initialBooking.end = new Date(Date.now() + 60_000).toISOString();
+  initialBooking.scheduledReturn = new Date(Date.now() - 1).toISOString();
+  initialBooking.effectiveReturnDeadline = new Date(
+    Date.now() - 1,
+  ).toISOString();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  const booking = state.bookings.find(
+    (item) => item.id === "demo-booking-active-1",
+  )!;
+
+  const evidence = {
+    type: "conditionEvidence" as const,
+    bookingId: booking.id,
+    kind: "check_out" as const,
+    photos: ["1", "2", "3", "4", "5", "6"],
+    videos: ["video"],
+  };
+  const returnAction = {
+    type: "returnConfirm" as const,
+    bookingId: booking.id,
+    role: "renter" as const,
+    photos: evidence.photos,
+    videos: evidence.videos,
+  };
+  assert.throws(() => transition(state, evidence), /scheduled rental end/);
+  assert.throws(() => transition(state, returnAction), /scheduled rental end/);
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "reportIssue",
+        bookingId: booking.id,
+        stage: "check_out",
+        text: "A late-stage issue.",
+      }),
+    /relevant active rental stage/,
+  );
+
+  booking.end = new Date(Date.now() - 1).toISOString();
+  booking.scheduledReturn = new Date(Date.now() + 86_400_000).toISOString();
+  booking.effectiveReturnDeadline = new Date(
+    Date.now() + 86_400_000,
+  ).toISOString();
+  state = transition(state, returnAction);
+  assert.equal(
+    state.bookings.find((item) => item.id === booking.id)?.status,
+    "return_pending",
+  );
+});
+
+test("confirmed booking cancellation is available to both participants only before the 24-hour cutoff", () => {
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  const start = `${dateAfter(20)}T11:00:00+08:00`;
+  const end = `${dateAfter(22)}T11:00:00+08:00`;
+  state = transition(state, {
+    type: "instantBook",
     id: "booking-cancel-ok",
     listingId: "sony-a7iii",
-    start: dateAfter(3),
-    end: dateAfter(5),
-    protection: false,
+    start,
+    end,
+    paymentMethod: "Demo FPX",
   });
-
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-cancel-ok",
-    operation: "approve",
-  });
-
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-cancel-ok",
-    operation: "pay",
-    method: "Demo card",
-  });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-cancel-ok",
-    operation: "payment_result",
-  });
-
-  // Cancel eligible booking
   state = transition(state, {
     type: "booking",
     id: "booking-cancel-ok",
@@ -1008,34 +1327,72 @@ test("Phase 3: cancellation requires >= 24h before scheduled pickup with 100% re
   assert.equal(bCancelled.status, "cancelled");
   assert.equal(bCancelled.payment, "refunded");
   assert.equal(bCancelled.deposit, "released");
+  assert.equal(bCancelled.cancelledById, "owner-aiman");
+  assert.ok(bCancelled.cancelledAt);
+  assert.equal(bCancelled.start, start);
+  assert.equal(bCancelled.end, end);
+  assert.ok(
+    state.notifications.some(
+      (notice) =>
+        notice.userId === "demo-renter" &&
+        notice.title.includes(
+          "simulated ledger now records a full rental/service fee refund",
+        ) &&
+        notice.title.includes("No real funds were moved"),
+    ),
+  );
+  assert.ok(
+    state.notifications.some(
+      (notice) =>
+        notice.userId === "owner-aiman" &&
+        notice.title.includes("no real funds were moved"),
+    ),
+  );
 
-  // Ineligible booking: pickup starts today (less than 24h away)
-  state = transition(state, {
-    type: "request",
-    id: "booking-cancel-late",
-    listingId: "sony-a7iii",
-    start: dateAfter(0),
-    end: dateAfter(2),
-    protection: false,
-  });
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-cancel-late",
-    operation: "approve",
-  });
+  const notificationCountAfterCancellation = state.notifications.length;
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "booking",
+        id: "booking-cancel-ok",
+        operation: "cancel",
+      }),
+    /Only a confirmed upcoming booking can be cancelled/,
+  );
+  assert.equal(state.notifications.length, notificationCountAfterCancellation);
+
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
-    type: "booking",
-    id: "booking-cancel-late",
-    operation: "pay",
-    method: "Demo card",
+    type: "instantBook",
+    id: "booking-cancel-renter",
+    listingId: "sony-a7iii",
+    start: `${dateAfter(25)}T11:00:00+08:00`,
+    end: `${dateAfter(27)}T11:00:00+08:00`,
+    paymentMethod: "Demo FPX",
   });
   state = transition(state, {
     type: "booking",
-    id: "booking-cancel-late",
-    operation: "payment_result",
+    id: "booking-cancel-renter",
+    operation: "cancel",
   });
+  assert.equal(
+    state.bookings.find((booking) => booking.id === "booking-cancel-renter")
+      ?.cancelledById,
+    "demo-renter",
+  );
+
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  state = transition(state, {
+    type: "instantBook",
+    id: "booking-cancel-late",
+    listingId: "sony-a7iii",
+    start: `${dateAfter(25)}T11:00:00+08:00`,
+    end: `${dateAfter(27)}T11:00:00+08:00`,
+    paymentMethod: "Demo FPX",
+  });
+  state.bookings.find(
+    (booking) => booking.id === "booking-cancel-late",
+  )!.start = new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString();
 
   assert.throws(
     () =>
@@ -1044,112 +1401,148 @@ test("Phase 3: cancellation requires >= 24h before scheduled pickup with 100% re
         id: "booking-cancel-late",
         operation: "cancel",
       }),
-    /at least 24 hours/,
+    /only until 24 hours/,
   );
 });
 
-test("Phase 4: active rental consecutive extension updates deadline with RM0 extra deposit", () => {
-  let state = createSeed();
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "request",
-    id: "booking-extend",
-    listingId: "sony-a7iii",
-    start: dateAfter(1),
-    end: dateAfter(3),
-    protection: false,
-  });
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-extend",
-    operation: "approve",
-  });
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-extend",
-    operation: "pay",
-    method: "Demo card",
-  });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-extend",
-    operation: "payment_result",
-  });
+test("Lender Rental Details renders one persistent action panel without the old inline dispute workflow", () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "app/rental/[id].tsx"),
+    "utf8",
+  );
+  const disputeSource = fs.readFileSync(
+    path.resolve(process.cwd(), "app/dispute/[id].tsx"),
+    "utf8",
+  );
 
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-extend",
-    role: "owner",
-  });
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-extend",
-    role: "renter",
-  });
-
-  const bBefore = state.bookings.find((b) => b.id === "booking-extend")!;
-  const origDays = bBefore.quote.days;
-  const origDeposit = bBefore.quote.deposit;
-
-  // Extend by 2 additional days
-  state = transition(state, {
-    type: "consecutiveExtend",
-    bookingId: "booking-extend",
-    additionalDays: 2,
-  });
-
-  const bAfter = state.bookings.find((b) => b.id === "booking-extend")!;
-  assert.equal(bAfter.quote.days, origDays + 2);
-  assert.equal(origDeposit, 200);
-  assert.equal(bAfter.quote.deposit, origDeposit); // Deposit unchanged, RM0 extra!
-  assert.ok(bAfter.chainBookings && bAfter.chainBookings.length === 1);
+  const messageButton = source.indexOf(
+    'Message {other?.name.split(" ")[0] || "participant"}',
+  );
+  const actionPanel = source.indexOf("Lender Actions");
+  const lenderCancelButton = source.indexOf(
+    "Cancel Booking (100% Simulated Refund & RM0 Fee)",
+  );
+  const lenderDisputeButton = source.indexOf("Apply Dispute");
+  assert.ok(messageButton >= 0);
+  assert.ok(messageButton < actionPanel);
+  assert.ok(actionPanel < lenderCancelButton);
+  assert.ok(lenderCancelButton < lenderDisputeButton);
+  assert.match(
+    source,
+    /disabled={!disputeEligible \|\| !!existingDispute}/,
+  );
+  assert.doesNotMatch(source, /Submit Dispute & Freeze Deposit/);
+  assert.doesNotMatch(source, /Close Dispute Form/);
+  assert.match(disputeSource, /Dispute Submitted/);
+  assert.match(disputeSource, /"PENDING"/);
+  assert.match(disputeSource, /actAndPersist/);
+  assert.match(disputeSource, /New financial charge/);
 });
 
-test("Phase 4 & 5: clean return releases deposit with unassessed timing, while dispute blocks release", () => {
+test("lender disputes unlock at scheduled end, persist once, and do not change financial state", () => {
+  let state = createSeed("admin_demo");
+  const booking = state.bookings.find(
+    (item) => item.id === "demo-lender-completed-1",
+  )!;
+  booking.status = "completed";
+  booking.end = new Date(Date.now() - 1).toISOString();
+  booking.deposit = "released";
+  booking.payment = "paid";
+
+  assert.equal(
+    isLenderDisputeEligible(booking, parseMalaysiaTimestamp(booking.end) - 1),
+    false,
+  );
+  assert.equal(
+    isLenderDisputeEligible(booking, parseMalaysiaTimestamp(booking.end)),
+    true,
+  );
+
+  state = transition(state, {
+    type: "dispute",
+    bookingId: booking.id,
+    category: "Item damaged",
+    reason: "A post-return inspection found a damaged component.",
+  });
+
+  const unchangedBooking = state.bookings.find(
+    (item) => item.id === booking.id,
+  )!;
+  assert.equal(unchangedBooking.status, "completed");
+  assert.equal(unchangedBooking.deposit, "released");
+  assert.equal(unchangedBooking.payment, "paid");
+  assert.equal(
+    state.disputes.filter((item) => item.bookingId === booking.id).length,
+    1,
+  );
+  assert.equal(
+    state.disputes.find((item) => item.bookingId === booking.id)?.status,
+    "under_review",
+  );
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "dispute",
+        bookingId: booking.id,
+        category: "Item damaged",
+        reason: "A duplicate dispute submission should be rejected.",
+      }),
+    /already been submitted/,
+  );
+
+  const cancelledState = createSeed("admin_demo");
+  const cancelledBooking = cancelledState.bookings.find(
+    (item) => item.id === "demo-lender-completed-1",
+  )!;
+  cancelledBooking.status = "cancelled";
+  cancelledBooking.end = new Date(Date.now() - 1).toISOString();
+  assert.equal(isLenderDisputeEligible(cancelledBooking), false);
+  assert.throws(
+    () =>
+      transition(cancelledState, {
+        type: "dispute",
+        bookingId: cancelledBooking.id,
+        category: "Item damaged",
+        reason: "Cancelled bookings must remain ineligible for disputes.",
+      }),
+    /Cancelled bookings cannot be disputed/,
+  );
+
+  const earlyState = createSeed("admin_demo");
+  const earlyBooking = earlyState.bookings.find(
+    (item) => item.id === "demo-lender-upcoming-1",
+  )!;
+  earlyBooking.end = new Date(Date.now() + 86_400_000).toISOString();
+  assert.ok(parseMalaysiaTimestamp(earlyBooking.end) > Date.now());
+  assert.throws(
+    () =>
+      transition(earlyState, {
+        type: "dispute",
+        bookingId: earlyBooking.id,
+        category: "Item damaged",
+        reason: "This dispute is too early and must remain frozen.",
+      }),
+    /available from the scheduled rental end/,
+  );
+});
+
+test("return evidence releases the deposit and preserves the unassessed timing outcome", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
-    type: "request",
+    type: "instantBook",
     id: "booking-return",
     listingId: "sony-a7iii",
-    start: dateAfter(1),
-    end: dateAfter(3),
-    protection: false,
+    start: `${dateAfter(20)}T11:00:00+08:00`,
+    end: `${dateAfter(22)}T11:00:00+08:00`,
+    paymentMethod: "Demo FPX",
   });
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-return",
-    operation: "approve",
-  });
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-return",
-    operation: "pay",
-    method: "Demo card",
-  });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-return",
-    operation: "payment_result",
-  });
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-return",
-    role: "owner",
-  });
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-return",
-    role: "renter",
-  });
+  const returnBooking = state.bookings.find(
+    (booking) => booking.id === "booking-return",
+  )!;
+  returnBooking.status = "active";
+  returnBooking.deposit = "held";
+  returnBooking.end = new Date(Date.now() - 1).toISOString();
 
   const scoreBefore = state.profiles.find(
     (p) => p.id === "demo-renter",
@@ -1218,43 +1611,19 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
-    type: "request",
+    type: "instantBook",
     id: "booking-dispute",
     listingId: "sony-a7iii",
-    start: dateAfter(1),
-    end: dateAfter(3),
-    protection: false,
+    start: `${dateAfter(20)}T11:00:00+08:00`,
+    end: `${dateAfter(22)}T11:00:00+08:00`,
+    paymentMethod: "Demo FPX",
   });
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-dispute",
-    operation: "approve",
-  });
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-dispute",
-    operation: "pay",
-    method: "Demo card",
-  });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-dispute",
-    operation: "payment_result",
-  });
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-dispute",
-    role: "owner",
-  });
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-dispute",
-    role: "renter",
-  });
+  const disputedBooking = state.bookings.find(
+    (booking) => booking.id === "booking-dispute",
+  )!;
+  disputedBooking.status = "active";
+  disputedBooking.deposit = "held";
+  disputedBooking.end = new Date(Date.now() - 1).toISOString();
 
   // Owner raises a dispute for scratched lens
   state = transition(state, { type: "login", userId: "owner-aiman" });
@@ -1262,13 +1631,12 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
     type: "dispute",
     bookingId: "booking-dispute",
     reason: "Front lens element has a deep scratch.",
-    photo: "data:image/png;base64,scratchPhoto",
     category: "Item damaged",
   });
 
   const bDisputed = state.bookings.find((b) => b.id === "booking-dispute")!;
-  assert.equal(bDisputed.status, "disputed");
-  assert.equal(bDisputed.deposit, "disputed");
+  assert.equal(bDisputed.status, "active");
+  assert.equal(bDisputed.deposit, "held");
 
   const dispute = state.disputes.find(
     (d) => d.bookingId === "booking-dispute",
@@ -1286,100 +1654,6 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
   assert.equal(bResolved.status, "completed");
   const renterAfter = state.profiles.find((p) => p.id === "demo-renter")!;
   assert.equal(renterAfter.riskScore, 70); // 80 - 10 = 70
-});
-
-test("Phase 3: Option A delayed handover collision generates conflict offer that renter accepts to activate", () => {
-  let state = createSeed();
-  // Renter 1 books Nov 2 to Nov 5 (72h)
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "request",
-    id: "booking-r1",
-    listingId: "sony-a7iii",
-    start: dateAfter(2),
-    end: dateAfter(5),
-    protection: false,
-  });
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-r1",
-    operation: "approve",
-  });
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-r1",
-    operation: "pay",
-    method: "Demo card",
-  });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-r1",
-    operation: "payment_result",
-  });
-
-  // Renter 2 books Nov 5 to Nov 7
-  state = transition(state, { type: "login", userId: "owner-sarah" });
-  state = transition(state, {
-    type: "request",
-    id: "booking-r2",
-    listingId: "sony-a7iii",
-    start: dateAfter(5),
-    end: dateAfter(7),
-    protection: false,
-  });
-  state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-r2",
-    operation: "approve",
-  });
-  state = transition(state, { type: "login", userId: "owner-sarah" });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-r2",
-    operation: "pay",
-    method: "Demo card",
-  });
-  state = transition(state, {
-    type: "booking",
-    id: "booking-r2",
-    operation: "payment_result",
-  });
-
-  // Simulate late handover for Renter 1 (shifts 12 hours later, overlapping Renter 2)
-  const b1 = state.bookings.find((b) => b.id === "booking-r1")!;
-  const latePickupTs = new Date(
-    Date.now() + 2 * 86400000 + 12 * 3600000,
-  ).toISOString();
-  b1.lenderHandoverAt = latePickupTs;
-
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  // Renter 1 confirms receipt, which triggers collision check
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-r1",
-    role: "renter",
-  });
-
-  const b1Checked = state.bookings.find((b) => b.id === "booking-r1")!;
-  // Conflicting booking exists, so b1 receives a conflictOffer and is NOT yet active
-  if (b1Checked.conflictOffer) {
-    assert.ok(b1Checked.conflictOffer);
-    assert.equal(b1Checked.status, "upcoming");
-
-    // Renter 1 accepts revised rental offer
-    state = transition(state, {
-      type: "acceptRevisedRental",
-      bookingId: "booking-r1",
-    });
-
-    const b1Activated = state.bookings.find((b) => b.id === "booking-r1")!;
-    assert.equal(b1Activated.status, "active");
-    assert.equal(b1Activated.deposit, "held");
-    assert.equal(b1Activated.conflictOffer, null);
-  }
 });
 
 test("Very High Risk renters (0-29) submit Request to Rent applications to CurRENT platform without reserving inventory or charging payment", () => {
@@ -1653,13 +1927,13 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
     1,
     `Expected exactly 1 lender payout, got ${lenderPayouts.length}`,
   );
-  assert.equal(lenderBookings.filter((b) => b.status === "upcoming").length, 1);
+  assert.equal(lenderBookings.filter((b) => b.status === "upcoming").length, 2);
   assert.equal(
     lenderBookings.filter((b) =>
       ["active", "upcoming", "return_pending"].includes(b.status),
     ).length,
-    1,
-    "The lender Active / Upcoming Rentals counter should match its single upcoming booking.",
+    2,
+    "The lender Active / Upcoming Rentals counter should match its two upcoming bookings.",
   );
   assert.equal(lenderPayouts[0].id, "demo-lender-completed-1");
   assert.equal(
@@ -1670,7 +1944,7 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
     seed.messages.filter((message) =>
       lenderBookings.some((booking) => booking.id === message.bookingId),
     ).length,
-    4,
+    6,
     "The retained lender bookings should keep their message threads.",
   );
 
@@ -1938,48 +2212,55 @@ test("Sony A7 III image gallery has 4 distinct original reference images in exac
   }
 });
 
-test("Section 10: consecutive extension on active/upcoming booking charges RM0 deposit and updates end date", () => {
+test("Section 10: contiguous rental dates create a new booking and charge a new deposit", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
 
-  // Create an upcoming booking for Sony A7 III (2 days: RM90 rent + RM5 svc + RM200 deposit = RM295)
   const startTs = toMalaysiaUtcTimestamp(dateAfter(10), "11:00");
   const endTs = toMalaysiaUtcTimestamp(dateAfter(12), "11:00");
-  const bookingId = "ext-test-1";
+  const nextEndTs = toMalaysiaUtcTimestamp(dateAfter(14), "11:00");
 
   state = transition(state, {
     type: "instantBook",
-    id: bookingId,
+    id: "first-independent-rental",
     listingId: "sony-a7iii",
     start: startTs,
     end: endTs,
     paymentMethod: "FPX",
   });
 
-  const bInitial = state.bookings.find((b) => b.id === bookingId)!;
-  assert.equal(bInitial.quote.days, 2);
-  assert.equal(bInitial.quote.rentalFee, 90);
-  assert.equal(bInitial.quote.deposit, 200); // 5% low-risk deposit
-  assert.equal(bInitial.quote.total, 295); // 90 + 5 + 200
-
-  // Extend by 2 contiguous days (additional RM90 rent + RM5 svc + RM0 deposit = RM95)
   state = transition(state, {
-    type: "consecutiveExtend",
-    bookingId,
-    additionalDays: 2,
+    type: "instantBook",
+    id: "second-independent-rental",
+    listingId: "sony-a7iii",
+    start: endTs,
+    end: nextEndTs,
+    paymentMethod: "FPX",
   });
 
-  const bExtended = state.bookings.find((b) => b.id === bookingId)!;
-  assert.equal(bExtended.quote.days, 4);
-  assert.equal(bExtended.quote.rentalFee, 180); // 90 + 90
-  assert.equal(bExtended.quote.serviceFee, 10); // 5 + 5
-  assert.equal(bExtended.quote.deposit, 200); // Original deposit remains held; RM0 extra deposit
-  assert.equal(bExtended.quote.total, 390); // 295 + 95 = 390
-  assert.ok(bExtended.chainBookings?.length);
+  const first = state.bookings.find(
+    (booking) => booking.id === "first-independent-rental",
+  )!;
+  const second = state.bookings.find(
+    (booking) => booking.id === "second-independent-rental",
+  )!;
+  assert.ok(first);
+  assert.ok(second);
+  assert.notEqual(first.id, second.id);
+  assert.equal(first.end, second.start);
+  assert.equal(first.quote.days, 2);
+  assert.equal(second.quote.days, 2);
+  assert.equal(first.quote.deposit, 200);
+  assert.equal(second.quote.deposit, 200);
 });
 
 test("Section 4.4 & 16: Renter condition evidence requires >= 6 photos and >= 1 video, and lender ends rental without media upload", () => {
   let state = createSeed("admin_demo");
+  const booking = state.bookings.find(
+    (item) => item.id === "demo-booking-active-1",
+  )!;
+  booking.end = new Date(Date.now() - 1).toISOString();
+  booking.effectiveReturnDeadline = undefined;
   const samplePhotos = [
     "/photo-1.jpg",
     "/photo-2.jpg",
@@ -2103,58 +2384,19 @@ test("Section 4.3: Owner listing supports 8 fixed delivery time slots", () => {
   assert.deepEqual(saved.deliveryTimeSlots, validSlots);
 });
 
-test("Section 8 & 30: Canonical Digital Rental Agreement parity between renter and lender views with complete terms", () => {
+test("Section 8: booking confirmation records do not claim fictional digital agreements or signatures", () => {
   const state = createSeed("admin_demo");
   const booking = state.bookings.find(
     (b) => b.id === "demo-booking-upcoming-1",
   );
   assert.ok(booking);
 
-  const renterAgreement = formatDigitalRentalAgreement(
-    booking,
-    state,
-    "renter",
-  );
-  const lenderAgreement = formatDigitalRentalAgreement(booking, state, "owner");
-
-  // Parity: identical full agreement content
-  assert.equal(renterAgreement, lenderAgreement);
-
-  // Must be multiline structured agreement
-  assert.ok(renterAgreement.split("\n").length >= 20);
-  assert.match(renterAgreement, /DIGITAL RENTAL AGREEMENT V3\.23/);
-  assert.match(renterAgreement, /Reference: demo-booking-upcoming-1/);
-  assert.match(renterAgreement, /1\. PARTIES/);
-  assert.match(renterAgreement, /• Renter: Alex Tan/);
-  assert.match(renterAgreement, /• Lender: Aiman Rahman/);
-  assert.match(renterAgreement, /2\. RENTAL ITEM & FULFILMENT/);
-  assert.match(renterAgreement, /• Item: Sony A7 III Mirrorless Camera/);
-  assert.match(renterAgreement, /• Fulfilment: Delivery Only/);
-  assert.match(renterAgreement, /3\. SCHEDULE & DURATION/);
-  assert.match(renterAgreement, /Asia\/Kuala_Lumpur/);
-  assert.match(renterAgreement, /4\. FINANCIAL TERMS & CHARGES/);
-  assert.match(renterAgreement, /Rental Fee: RM90\.00/);
-  assert.match(renterAgreement, /CurRENT Service Fee \(5%, min RM5\): RM5\.00/);
-  assert.match(renterAgreement, /Refundable Security Deposit: RM200\.00/);
-  assert.match(renterAgreement, /Total Paid: RM295\.00 via Demo FPX/);
-  assert.match(renterAgreement, /Platform Commission \(12%\): RM10\.80/);
-  assert.match(renterAgreement, /Net Lender Payout \(88%\): RM79\.20/);
-  assert.match(renterAgreement, /5\. CONDITIONS & POLICIES/);
-  assert.match(
-    renterAgreement,
-    /Free cancellation up to 24 hours prior to scheduled rental start/,
-  );
-  assert.match(renterAgreement, /Renter records ≥6 photos and ≥1 video/);
-  assert.match(renterAgreement, /6\. DIGITAL SIGNATURES & ACKNOWLEDGEMENT/);
-  assert.match(renterAgreement, /Signed by Renter: Alex Tan/);
-  assert.match(renterAgreement, /Acknowledged by Lender: Aiman Rahman/);
-
-  // Verify all seeded demo bookings have multiline agreements rather than truncated one-liners
-  for (const b of state.bookings) {
-    assert.ok(b.agreement);
-    assert.match(b.agreement, /DIGITAL RENTAL AGREEMENT V3\.23/);
-    assert.match(b.agreement, /1\. PARTIES/);
-    assert.match(b.agreement, /Fulfilment: Delivery Only/);
+  assert.equal(booking.title, "Sony A7 III Mirrorless Camera");
+  assert.equal(booking.start, "2026-11-02T02:00:00Z");
+  assert.equal(booking.end, "2026-11-04T02:00:00Z");
+  assert.equal(booking.agreement, undefined);
+  for (const seededBooking of state.bookings) {
+    assert.equal(seededBooking.agreement, undefined);
   }
 });
 
@@ -2164,6 +2406,7 @@ test("Section 30: Post-rental 'How did it go?' rating and review submission for 
     (b) => b.status === "completed" && b.renterId === "demo-renter",
   );
   assert.ok(completedBooking);
+  completedBooking.end = new Date(Date.now() - 1).toISOString();
 
   // 1. Renter submits review
   state = transition(state, { type: "login", userId: "demo-renter" });
@@ -2231,6 +2474,35 @@ test("Section 30: Post-rental 'How did it go?' rating and review submission for 
       }),
     /Reviews are available after the rental is completed\./,
   );
+
+  // 5. Completed status alone does not unlock reviews before scheduled end
+  const futureState = createSeed("admin_demo");
+  const futureCompletedBooking = futureState.bookings.find(
+    (b) => b.status === "completed" && b.renterId === "demo-renter",
+  );
+  assert.ok(futureCompletedBooking);
+  futureCompletedBooking.end = new Date(Date.now() + 86_400_000).toISOString();
+  assert.throws(
+    () =>
+      transition(futureState, {
+        type: "review",
+        bookingId: futureCompletedBooking.id,
+        rating: 5,
+        text: "The scheduled end has not arrived yet.",
+      }),
+    /Reviews are available after the scheduled rental end\./,
+  );
+
+  const rentalDetailSource = fs.readFileSync(
+    path.resolve(process.cwd(), "app/rental/[id].tsx"),
+    "utf8",
+  );
+  assert.match(rentalDetailSource, /const reviewEligible =/);
+  assert.match(rentalDetailSource, /editable={reviewEligible}/);
+  assert.match(
+    rentalDetailSource,
+    /disabled={!reviewEligible \|\| isSavingAction}/,
+  );
 });
 
 test("Section 4.4 & 30: Lender Check-out and Check-in condition evidence preservation and settlement visibility", () => {
@@ -2239,6 +2511,8 @@ test("Section 4.4 & 30: Lender Check-out and Check-in condition evidence preserv
     (b) => b.status === "active" && b.renterId === "demo-renter",
   );
   assert.ok(activeBooking);
+  activeBooking.end = new Date(Date.now() - 1).toISOString();
+  activeBooking.effectiveReturnDeadline = undefined;
 
   // Renter submits check-out condition evidence
   state = transition(state, { type: "login", userId: "demo-renter" });
@@ -2295,9 +2569,8 @@ test("Section 14.4: Customer Service separates fee chips and answers approved to
   const topics = [
     "How to rent",
     "Fees",
-    "Security deposits",
+    "Deposits",
     "Delivery & return",
-    "Rental extensions",
     "Risk score",
     "Disputes",
     "How is my risk score calculated?",
@@ -2316,19 +2589,20 @@ test("Section 14.4: Customer Service separates fee chips and answers approved to
     ),
   );
   assert.ok(
-    resolveAutomatedSupportQuery("Security deposits").response?.includes(
+    resolveAutomatedSupportQuery("Deposits").response?.includes(
       "Low Risk (80–100)",
     ),
   );
   assert.equal(resolveAutomatedSupportQuery("Fees").responses, undefined);
-  assert.equal(
-    resolveAutomatedSupportQuery("Security deposits").responses,
-    undefined,
-  );
+  assert.equal(resolveAutomatedSupportQuery("Deposits").responses, undefined);
   const combinedFees = resolveAutomatedSupportQuery("Fees & deposits");
   assert.deepEqual(
     combinedFees.responses?.map((message) => message.split("\n")[0]),
     ["Fees", "Security deposits"],
+  );
+  assert.equal(
+    resolveAutomatedSupportQuery("Rental extensions").answered,
+    false,
   );
 
   assert.ok(
@@ -2355,7 +2629,7 @@ test("Section 14.4: Customer Service separates fee chips and answers approved to
   }
 });
 
-test("Section 14.4: Unmatched questions and human requests never claim a local case was queued", () => {
+test("Section 14.4: Unmatched questions and Talk to a Human use the approved reply", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
 
@@ -2368,7 +2642,7 @@ test("Section 14.4: Unmatched questions and human requests never claim a local c
   assert.equal(msgs.length, 2);
   assert.equal(
     msgs[1].text,
-    "I couldn't send your message to our support team right now. Please try again.",
+    "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
   );
   assert.equal(state.supportCases.length, 0);
 
@@ -2382,7 +2656,7 @@ test("Section 14.4: Unmatched questions and human requests never claim a local c
   );
   assert.equal(
     allMsgs.at(-1)?.text,
-    "I couldn't send your message to our support team right now. Please try again.",
+    "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
   );
   assert.equal(allMsgs.at(-2)?.text, "Talk to a Human");
   assert.equal(state.supportCases.length, 0);
@@ -2472,13 +2746,12 @@ test("Section 14.3: Exactly six updated FAQs match founder screenshot copy and d
   );
 });
 
-test("Section 8 & 9: Time-controlled confirmation buttons enforce scheduled start time lock", () => {
+test("Confirm Received is gated by scheduled start and does not activate or reschedule a rental", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
 
-  // Booking with start on 2026-10-15 10:00 AM MYT
-  const bookingStartIso = "2026-10-15T02:00:00.000Z"; // 10:00 AM MYT
-  const bookingEndIso = "2026-10-17T02:00:00.000Z";
+  const bookingStartIso = new Date(Date.now() + 86_400_000).toISOString();
+  const bookingEndIso = new Date(Date.now() + 3 * 86_400_000).toISOString();
   state = transition(state, {
     type: "instantBook",
     id: "booking-time-gated",
@@ -2491,38 +2764,34 @@ test("Section 8 & 9: Time-controlled confirmation buttons enforce scheduled star
   const b = state.bookings.find((x) => x.id === "booking-time-gated")!;
   assert.equal(b.status, "upcoming");
 
-  // Attempting Confirm Received BEFORE start time (e.g. 2026-10-15 09:00 AM MYT) is rejected
-  const prematureServerTime = "2026-10-15T01:00:00.000Z";
+  // Attempting Confirm Received before the scheduled rental start is rejected.
   assert.throws(() => {
     transition(state, {
-      type: "handoverConfirm",
+      type: "confirmReceived",
       bookingId: "booking-time-gated",
-      role: "renter",
-      serverTime: prematureServerTime,
     });
   }, /Confirm Received is available from scheduled rental start/);
 
-  // Attempting Confirm Received AT or AFTER start time (2026-10-15 10:00 AM MYT) succeeds
-  const validServerTime = "2026-10-15T02:00:00.000Z";
-  state = transition(state, {
-    type: "handoverConfirm",
-    bookingId: "booking-time-gated",
-    role: "renter",
-    serverTime: validServerTime,
-  });
+  state = withMockedNow(parseMalaysiaTimestamp(bookingStartIso), () =>
+    transition(state, {
+      type: "confirmReceived",
+      bookingId: "booking-time-gated",
+    }),
+  );
 
   const updatedBooking = state.bookings.find(
     (x) => x.id === "booking-time-gated",
   )!;
   assert.ok(updatedBooking.renterReceivedAt);
+  assert.equal(updatedBooking.status, "upcoming");
+  assert.equal(updatedBooking.start, bookingStartIso);
+  assert.equal(updatedBooking.end, bookingEndIso);
 
   // Duplicate submission rejected
   assert.throws(() => {
     transition(state, {
-      type: "handoverConfirm",
+      type: "confirmReceived",
       bookingId: "booking-time-gated",
-      role: "renter",
-      serverTime: validServerTime,
     });
   }, /Delivery receipt has already been confirmed/);
 });

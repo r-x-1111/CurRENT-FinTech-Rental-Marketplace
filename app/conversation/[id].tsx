@@ -53,7 +53,7 @@ export default function Conversation() {
       <Button secondary onPress={() => router.push(`/rental/${id}`)}>
         View rental
       </Button>
-      <Notice text="Messages are saved on this device. Use Profile → Demo accounts to reply as the other participant." />
+      <Notice text="Messages are saved with this account's rental workspace." />
       <View style={{ gap: 12, marginVertical: 18 }}>
         {state.messages
           .filter((m) => m.bookingId === id)
@@ -104,7 +104,7 @@ export default function Conversation() {
         onChangeText={setText}
         multiline
         maxLength={2000}
-        placeholder="Ask about pickup, accessories or the return…"
+        placeholder="Ask about delivery, included accessories or the return…"
       />
       <Button disabled={!text.trim()} onPress={send}>
         Send message

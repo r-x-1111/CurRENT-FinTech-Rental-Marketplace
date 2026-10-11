@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -17,7 +24,11 @@ import { useMarketplace } from "../../context/Marketplace";
 import { categories } from "../../constants/categories";
 import { newId } from "../../services/marketplace";
 import { colors } from "../../constants/theme";
-import type { AvailabilityPeriod } from "../../types";
+import type { AvailabilityPeriod, Listing } from "../../types";
+import {
+  DEMO_LISTING_TEMPLATE,
+  getDemoListingAvailability,
+} from "../../services/demoWorkspaceDefaults";
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10 AM", fullLabel: "10:00 AM" },
   { value: "11:00", label: "11 AM", fullLabel: "11:00 AM" },
@@ -29,30 +40,86 @@ export const FIXED_DELIVERY_SLOTS = [
   { value: "17:00", label: "5 PM", fullLabel: "5:00 PM" },
 ];
 
+function formatAvailabilityDate(date: string) {
+  return new Date(`${date}T12:00:00`).toLocaleDateString("en-MY", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function parseDispatchAddress(address = "") {
+  const parts = address.split(",").map((part) => part.trim()).filter(Boolean);
+  const locality = parts.at(-1)?.match(/^(\d{5})\s+(.+)$/);
+  if (!locality) {
+    return {
+      line1: parts.shift() || "",
+      line2: parts.join(", "),
+      postcode: "",
+      city: "",
+      state: "",
+    };
+  }
+  parts.pop();
+  return {
+    line1: parts.shift() || "",
+    line2: parts.join(", "),
+    postcode: locality[1],
+    city: locality[2],
+    state: "",
+  };
+}
+
 export default function EditListing() {
   const { id } = useLocalSearchParams<{ id?: string }>();
-  const { state, user, act } = useMarketplace();
+  const { state, user, actAndPersist } = useMarketplace();
   const existing = state.listings.find(
     (l) => l.id === id && l.ownerId === user?.id,
   );
+  const existingAddress = parseDispatchAddress(existing?.privateMeetingVenue);
+  const demoAccount = state.mode === "admin_demo";
+  const demoAvailability = getDemoListingAvailability();
 
-  const [title, setTitle] = useState(existing?.title || "");
-  const [description, setDescription] = useState(existing?.description || "");
-  const [category, setCategory] = useState(existing?.category || "Electronics");
-  const [location, setLocation] = useState(existing?.location || "Petaling Jaya");
+  const [title, setTitle] = useState(
+    existing?.title || (demoAccount ? DEMO_LISTING_TEMPLATE.title : ""),
+  );
+  const [description, setDescription] = useState(
+    existing?.description ||
+      (demoAccount ? DEMO_LISTING_TEMPLATE.description : ""),
+  );
+  const [category, setCategory] = useState(
+    existing?.category ||
+      (demoAccount ? DEMO_LISTING_TEMPLATE.category : "Electronics"),
+  );
+  const [location, setLocation] = useState(
+    existing?.location || (demoAccount ? DEMO_LISTING_TEMPLATE.location : ""),
+  );
   
-  // Private dispatch address fields
+  // Dispatch address fields
   const [addressLine1, setAddressLine1] = useState(
-    existing?.privateMeetingVenue?.split(", ")[0] || "No. 12, Jalan SS 15/4",
+    existingAddress.line1 ||
+      (demoAccount ? DEMO_LISTING_TEMPLATE.addressLine1 : ""),
   );
   const [addressLine2, setAddressLine2] = useState(
-    existing?.privateMeetingVenue?.split(", ")[1]?.includes("Jaya") ? "" : existing?.privateMeetingVenue?.split(", ")[1] || "",
+    existingAddress.line2 ||
+      (demoAccount ? DEMO_LISTING_TEMPLATE.addressLine2 : ""),
   );
-  const [postcode, setPostcode] = useState("47500");
-  const [city, setCity] = useState("Subang Jaya");
-  const [stateName, setStateName] = useState("Selangor");
+  const [postcode, setPostcode] = useState(
+    existingAddress.postcode ||
+      (demoAccount ? DEMO_LISTING_TEMPLATE.postcode : ""),
+  );
+  const [city, setCity] = useState(
+    existingAddress.city || (demoAccount ? DEMO_LISTING_TEMPLATE.city : ""),
+  );
+  const [stateName, setStateName] = useState(
+    existingAddress.state ||
+      (demoAccount ? DEMO_LISTING_TEMPLATE.state : ""),
+  );
 
-  const [price, setPrice] = useState(existing?.dailyPrice?.toString() || "");
+  const [price, setPrice] = useState(
+    existing?.dailyPrice?.toString() ||
+      (demoAccount ? DEMO_LISTING_TEMPLATE.dailyPrice : ""),
+  );
   
   const [photos, setPhotos] = useState<string[]>(
     existing?.images && existing.images.length >= 6
@@ -71,10 +138,25 @@ export default function EditListing() {
       ? existing.availabilityPeriods
       : existing?.availableFrom && existing?.availableTo
       ? [{ start: existing.availableFrom, end: existing.availableTo }]
-      : [{ start: "2026-10-20", end: "2026-11-20" }],
+      : demoAccount
+        ? [{ start: demoAvailability.start, end: demoAvailability.end }]
+        : [],
   );
   const [inputStart, setInputStart] = useState("");
   const [inputEnd, setInputEnd] = useState("");
+  const [editingPeriodIndex, setEditingPeriodIndex] = useState<number | null>(
+    null,
+  );
+  const [calendarField, setCalendarField] = useState<"start" | "end" | null>(
+    null,
+  );
+  const [calendarSelector, setCalendarSelector] = useState<
+    "month" | "year" | null
+  >(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
 
   // 8 Fixed Delivery Slots (README V3.23 Section 4.3 & 17.8)
   const initialSlots =
@@ -82,7 +164,9 @@ export default function EditListing() {
       ? existing.deliveryTimeSlots
       : existing?.pickupTimeWindows && existing.pickupTimeWindows.length > 0
       ? existing.pickupTimeWindows.map((w) => w.start)
-      : ["10:00", "11:00", "14:00", "17:00"];
+      : demoAccount
+        ? DEMO_LISTING_TEMPLATE.deliveryTimeSlots
+        : [];
   const [selectedSlots, setSelectedSlots] = useState<string[]>(initialSlots);
 
   // Listing Boost (RM10 for 7 days)
@@ -91,9 +175,30 @@ export default function EditListing() {
   );
 
   const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   if (!user) {
     return <Redirect href="/auth" />;
+  }
+
+  if (user.verification !== "verified" || typeof user.riskScore !== "number") {
+    return (
+      <Screen
+        back
+        title="Listing"
+        subtitle="Listing management is locked for this account."
+      >
+        <Card>
+          <Text style={s.h2}>
+            Complete Identity Verification to manage listings.
+          </Text>
+          <Notice text="Complete Identity Verification to create or publish a listing." />
+          <Button onPress={() => router.push("/(tabs)/profile")}>
+            Complete Identity Verification
+          </Button>
+        </Card>
+      </Screen>
+    );
   }
 
   if (id && !existing) {
@@ -118,22 +223,74 @@ export default function EditListing() {
       setError("Please specify both Start Date and End Date.");
       return;
     }
+    if (inputEnd < inputStart) {
+      setError("End Date must be on or after Start Date.");
+      return;
+    }
     setError("");
-    setPeriods((prev) => [...prev, { start: inputStart.trim(), end: inputEnd.trim() }]);
+    const updatedPeriod = { start: inputStart.trim(), end: inputEnd.trim() };
+    setPeriods((prev) =>
+      editingPeriodIndex === null
+        ? [...prev, updatedPeriod]
+        : prev.map((period, index) =>
+            index === editingPeriodIndex ? updatedPeriod : period,
+          ),
+    );
+    setEditingPeriodIndex(null);
     setInputStart("");
     setInputEnd("");
   }
 
+  function openCalendar(field: "start" | "end") {
+    const value = field === "start" ? inputStart : inputEnd;
+    const selectedDate = value ? new Date(`${value}T12:00:00`) : new Date();
+    setCalendarMonth(
+      new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1),
+    );
+    setCalendarSelector(null);
+    setCalendarField(field);
+  }
+
+  const calendarYear = calendarMonth.getFullYear();
+  const calendarMonthIndex = calendarMonth.getMonth();
+  const calendarMonthLength = new Date(
+    calendarYear,
+    calendarMonthIndex + 1,
+    0,
+  ).getDate();
+  const calendarFirstWeekday = new Date(
+    calendarYear,
+    calendarMonthIndex,
+    1,
+  ).getDay();
+  const calendarMondayOffset = (calendarFirstWeekday + 6) % 7;
+  const calendarCells = Array.from({ length: 42 }, (_, index) => {
+    const day = index - calendarMondayOffset + 1;
+    if (day < 1 || day > calendarMonthLength) return null;
+    return `${calendarYear}-${String(calendarMonthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  });
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const earliestCalendarDate =
+    calendarField === "end" && inputStart ? inputStart : todayKey;
+
   function handleRemovePeriod(index: number) {
     setPeriods((prev) => prev.filter((_, i) => i !== index));
+    if (editingPeriodIndex === index) {
+      setEditingPeriodIndex(null);
+      setInputStart("");
+      setInputEnd("");
+    } else if (editingPeriodIndex !== null && index < editingPeriodIndex) {
+      setEditingPeriodIndex(editingPeriodIndex - 1);
+    }
   }
 
   function handleEditPeriod(index: number) {
     const p = periods[index];
     if (p) {
+      setEditingPeriodIndex(index);
       setInputStart(p.start);
       setInputEnd(p.end);
-      setPeriods((prev) => prev.filter((_, i) => i !== index));
     }
   }
 
@@ -146,7 +303,9 @@ export default function EditListing() {
     );
   }
 
-  function save(status: "draft" | "published") {
+  async function save(status: "draft" | "published") {
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       if (selectedSlots.length < 2 && status === "published") {
         setError("Select at least 2 delivery time slots.");
@@ -167,42 +326,48 @@ export default function EditListing() {
         .filter(Boolean)
         .join(", ");
 
-      const internalEstimatedValue =
-        existing?.estimatedValue ?? (dailyPriceNum > 0 ? dailyPriceNum * 10 : 500);
-
-      act({
+      const listing: Listing = {
+        id: existing?.id || newId(),
+        ownerId: user!.id,
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        location: location.trim(),
+        publicArea: location.trim(),
+        privateMeetingVenue: formattedDispatchAddress,
+        dailyPrice: Number(price),
+        estimatedValue:
+          existing?.estimatedValue ||
+          (demoAccount ? DEMO_LISTING_TEMPLATE.estimatedValue : undefined),
+        images: photos,
+        videos,
+        imageUrl: photos[0] || "",
+        availableFrom: periods[0]?.start || undefined,
+        availableTo: periods[periods.length - 1]?.end || undefined,
+        availabilityPeriods: periods,
+        collectionMethods: ["Delivery Only"],
+        rating: existing?.rating || 0,
+        verifiedOwner: user!.verification === "verified",
+        status,
+        featuredUntil: boostListing
+          ? new Date(Date.now() + 7 * 86400000).toISOString()
+          : existing?.featuredUntil,
+        deliveryTimeSlots: selectedSlots,
+        pickupTimeWindows: selectedSlots.map((s) => ({ start: s, end: s })),
+      };
+      await actAndPersist({
         type: "saveListing",
-        listing: {
-          id: existing?.id || newId(),
-          ownerId: user!.id,
-          title: title.trim(),
-          description: description.trim(),
-          category,
-          location: location.trim(),
-          publicArea: location.trim(),
-          privateMeetingVenue: formattedDispatchAddress,
-          dailyPrice: Number(price),
-          estimatedValue: internalEstimatedValue,
-          images: photos,
-          videos,
-          imageUrl: photos[0] || "",
-          availableFrom: periods[0]?.start || undefined,
-          availableTo: periods[periods.length - 1]?.end || undefined,
-          availabilityPeriods: periods,
-          collectionMethods: ["Delivery Only"],
-          rating: existing?.rating || 0,
-          verifiedOwner: user!.verification === "verified",
-          status,
-          featuredUntil: boostListing
-            ? new Date(Date.now() + 7 * 86400000).toISOString()
-            : existing?.featuredUntil,
-          deliveryTimeSlots: selectedSlots,
-          pickupTimeWindows: selectedSlots.map((s) => ({ start: s, end: s })),
-        },
+        listing,
       });
-      router.replace("/owner");
+      router.replace(
+        status === "published"
+          ? { pathname: "/owner", params: { published: "1" } }
+          : "/owner",
+      );
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -211,9 +376,12 @@ export default function EditListing() {
     description.trim().length > 0 &&
     location.trim().length > 0 &&
     addressLine1.trim().length > 0 &&
+    postcode.trim().length > 0 &&
+    city.trim().length > 0 &&
+    stateName.trim().length > 0 &&
     dailyPriceNum > 0 &&
-    photos.length >= 6 &&
-    videos.length >= 1 &&
+    (demoAccount || photos.length >= 6) &&
+    (demoAccount || videos.length >= 1) &&
     periods.length >= 1 &&
     selectedSlots.length >= 2;
 
@@ -229,14 +397,18 @@ export default function EditListing() {
         {/* Media Upload Section: Min 6 photos and 1 video required per V3.23 */}
         <MediaPicker
           title="Listing Media (Photos & Video)"
-          subtitle="Publishing requires at least 6 photos and 1 video. Upload clear pictures of your item, accessories, and a short functional video."
+          subtitle={
+            demoAccount
+              ? "Media is optional for the Demo Account."
+              : "Publishing requires at least 6 photos and 1 video. Upload clear pictures of your item, accessories, and a short functional video."
+          }
           photos={photos}
           onPhotosChange={setPhotos}
           videos={videos}
           onVideosChange={setVideos}
-          minPhotos={6}
+          minPhotos={demoAccount ? 0 : 6}
           maxPhotos={10}
-          minVideos={1}
+          minVideos={demoAccount ? 0 : 1}
           maxVideos={3}
           allowMainSelect
           samplePrefix="listing"
@@ -262,25 +434,16 @@ export default function EditListing() {
           onSelect={setCategory}
         />
 
-        {/* Public locality vs Private dispatch address */}
+        {/* Public service area and dispatch address */}
         <Field
-          label="Service area / locality (Public)"
+          label="Service area / locality"
           value={location}
           onChangeText={setLocation}
           placeholder="e.g. Petaling Jaya"
         />
-        <Text style={[s.caption, { marginTop: -8, marginBottom: 14 }]}>
-          Shown on public listing cards next to the map pin icon.
-        </Text>
 
-        <View style={styles.privateAddressBox}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <Ionicons name="lock-closed" size={16} color={colors.navy} />
-            <Text style={styles.privateAddressTitle}>Private Item / Dispatch Address</Text>
-          </View>
-          <Text style={styles.privateAddressSub}>
-            Private to you and CurRENT. Never revealed publicly to browsers or renters. Used strictly for courier dispatch.
-          </Text>
+        <View style={styles.addressBox}>
+          <Text style={[s.label, { marginBottom: 10 }]}>Address</Text>
 
           <Field
             label="Street / Address line 1"
@@ -363,7 +526,7 @@ export default function EditListing() {
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
                     <Ionicons name="calendar-outline" size={16} color={colors.blue} />
                     <Text style={styles.periodDateText}>
-                      {p.start} – {p.end}
+                      {formatAvailabilityDate(p.start)} – {formatAvailabilityDate(p.end)}
                     </Text>
                   </View>
                   <View style={{ flexDirection: "row", gap: 8 }}>
@@ -391,20 +554,32 @@ export default function EditListing() {
           <View style={styles.addPeriodBox}>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Field
-                  label="Start Date"
-                  value={inputStart}
-                  onChangeText={setInputStart}
-                  placeholder="2026-10-20"
-                />
+                <Text style={s.label}>Start Date</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Choose start date${inputStart ? `, ${inputStart}` : ""}`}
+                  onPress={() => openCalendar("start")}
+                  style={styles.datePickerTrigger}
+                >
+                  <Ionicons name="calendar-outline" size={17} color={colors.blue} />
+                  <Text style={styles.datePickerTriggerText}>
+                    {inputStart ? formatAvailabilityDate(inputStart) : "Choose date"}
+                  </Text>
+                </Pressable>
               </View>
               <View style={{ flex: 1 }}>
-                <Field
-                  label="End Date"
-                  value={inputEnd}
-                  onChangeText={setInputEnd}
-                  placeholder="2026-11-20"
-                />
+                <Text style={s.label}>End Date</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Choose end date${inputEnd ? `, ${inputEnd}` : ""}`}
+                  onPress={() => openCalendar("end")}
+                  style={styles.datePickerTrigger}
+                >
+                  <Ionicons name="calendar-outline" size={17} color={colors.blue} />
+                  <Text style={styles.datePickerTriggerText}>
+                    {inputEnd ? formatAvailabilityDate(inputEnd) : "Choose date"}
+                  </Text>
+                </Pressable>
               </View>
             </View>
             <Pressable
@@ -413,10 +588,210 @@ export default function EditListing() {
               style={styles.addAvailabilityBtn}
             >
               <Ionicons name="add-circle-outline" size={18} color={colors.blue} />
-              <Text style={styles.addAvailabilityText}>+ Add Availability</Text>
+              <Text style={styles.addAvailabilityText}>
+                {editingPeriodIndex === null
+                  ? "+ Add Availability"
+                  : "Update Availability"}
+              </Text>
             </Pressable>
           </View>
         </View>
+
+        <Modal
+          transparent
+          visible={calendarField !== null}
+          animationType="fade"
+          onRequestClose={() => {
+            setCalendarField(null);
+            setCalendarSelector(null);
+          }}
+        >
+          <View style={styles.calendarBackdrop}>
+            <View
+              accessibilityViewIsModal
+              style={styles.calendarPanel}
+            >
+              <View style={styles.calendarHeader}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous month"
+                  disabled={
+                    calendarYear < today.getFullYear() ||
+                    (calendarYear === today.getFullYear() &&
+                      calendarMonthIndex <= today.getMonth())
+                  }
+                  onPress={() =>
+                    setCalendarMonth(
+                      new Date(calendarYear, calendarMonthIndex - 1, 1),
+                    )
+                  }
+                  style={styles.calendarNavButton}
+                >
+                  <Ionicons name="chevron-back" size={18} color={colors.blue} />
+                </Pressable>
+                <View style={styles.calendarSelectors}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select month, ${calendarMonth.toLocaleDateString("en-MY", { month: "long" })}`}
+                    onPress={() => setCalendarSelector("month")}
+                    style={styles.calendarSelectorButton}
+                  >
+                    <Text style={styles.calendarMonthTitle}>
+                      {calendarMonth.toLocaleDateString("en-MY", {
+                        month: "short",
+                      })}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select year, ${calendarYear}`}
+                    onPress={() => setCalendarSelector("year")}
+                    style={styles.calendarSelectorButton}
+                  >
+                    <Text style={styles.calendarMonthTitle}>{calendarYear}</Text>
+                  </Pressable>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Next month"
+                  onPress={() =>
+                    setCalendarMonth(
+                      new Date(calendarYear, calendarMonthIndex + 1, 1),
+                    )
+                  }
+                  style={styles.calendarNavButton}
+                >
+                  <Ionicons name="chevron-forward" size={18} color={colors.blue} />
+                </Pressable>
+              </View>
+              {calendarSelector ? (
+                <>
+                  <Text style={styles.calendarSelectorHeading}>
+                    Select {calendarSelector}
+                  </Text>
+                  <ScrollView style={styles.calendarChoicesScroll}>
+                    <View style={styles.calendarChoices}>
+                      {(calendarSelector === "month"
+                        ? Array.from({ length: 12 }, (_, index) => index)
+                        : Array.from(
+                            { length: 31 },
+                            (_, index) => new Date().getFullYear() + index,
+                          )
+                      ).map((choice) => {
+                        const selected =
+                          calendarSelector === "month"
+                            ? choice === calendarMonthIndex
+                            : choice === calendarYear;
+                        const label =
+                          calendarSelector === "month"
+                            ? new Date(2020, choice, 1).toLocaleDateString(
+                                "en-MY",
+                                { month: "long" },
+                              )
+                            : String(choice);
+                        return (
+                          <Pressable
+                            key={choice}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            onPress={() => {
+                              setCalendarMonth(
+                                calendarSelector === "month"
+                                  ? new Date(calendarYear, choice, 1)
+                                  : new Date(choice, calendarMonthIndex, 1),
+                              );
+                              setCalendarSelector(null);
+                            }}
+                            style={[
+                              styles.calendarChoice,
+                              selected && styles.calendarChoiceSelected,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.calendarChoiceText,
+                                selected && styles.calendarChoiceTextSelected,
+                              ]}
+                            >
+                              {label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
+                </>
+              ) : (
+              <View style={styles.calendarGrid}>
+                {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
+                  <Text
+                    key={`${day}-${index}`}
+                    accessibilityLabel={
+                      ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][index]
+                    }
+                    style={styles.calendarWeekday}
+                  >
+                    {day}
+                  </Text>
+                ))}
+                {calendarCells.map((date, index) =>
+                  date ? (
+                    <Pressable
+                      key={date}
+                      accessibilityRole="button"
+                      accessibilityLabel={new Date(`${date}T12:00:00`).toLocaleDateString(
+                        "en-MY",
+                        { dateStyle: "full" },
+                      )}
+                      accessibilityState={{
+                        selected:
+                          date ===
+                          (calendarField === "start" ? inputStart : inputEnd),
+                        disabled: date < earliestCalendarDate,
+                      }}
+                      disabled={date < earliestCalendarDate}
+                      onPress={() => {
+                        if (calendarField === "start") setInputStart(date);
+                        else setInputEnd(date);
+                        setCalendarField(null);
+                      }}
+                      style={[
+                        styles.calendarDay,
+                        date ===
+                          (calendarField === "start" ? inputStart : inputEnd) &&
+                          styles.calendarDaySelected,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.calendarDayText,
+                          date ===
+                            (calendarField === "start" ? inputStart : inputEnd) &&
+                            styles.calendarDayTextSelected,
+                          date < earliestCalendarDate && styles.calendarDayDisabled,
+                        ]}
+                      >
+                        {Number(date.slice(-2))}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <View key={`empty-${index}`} style={styles.calendarDay} />
+                  ),
+                )}
+              </View>
+              )}
+              <Button
+                secondary
+                onPress={() => {
+                  if (calendarSelector) setCalendarSelector(null);
+                  else setCalendarField(null);
+                }}
+              >
+                {calendarSelector ? "Back to calendar" : "Cancel"}
+              </Button>
+            </View>
+          </View>
+        </Modal>
 
         {/* Scheduled Delivery Time Slots (README V3.23 Section 4.3 & 17.8) */}
         <View style={{ marginTop: 14, marginBottom: 14 }}>
@@ -502,12 +877,12 @@ export default function EditListing() {
             </Button>
           )}
           <Button
-            disabled={!canPublish}
-            onPress={() => save("published")}
+            disabled={!canPublish || isSaving}
+            onPress={() => void save("published")}
           >
-            Publish listing
+            Publish Listing
           </Button>
-          <Button secondary onPress={() => save("draft")}>
+          <Button secondary disabled={isSaving} onPress={() => void save("draft")}>
             Save as draft
           </Button>
         </View>
@@ -559,24 +934,13 @@ const styles = StyleSheet.create({
     color: colors.navy,
     lineHeight: 18,
   },
-  privateAddressBox: {
+  addressBox: {
     backgroundColor: colors.paleBlue,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.softBlue,
     padding: 14,
     marginBottom: 14,
-  },
-  privateAddressTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.navy,
-  },
-  privateAddressSub: {
-    fontSize: 12,
-    color: colors.slate,
-    lineHeight: 17,
-    marginBottom: 12,
   },
   periodRow: {
     flexDirection: "row",
@@ -701,5 +1065,140 @@ const styles = StyleSheet.create({
   },
   fixedSlotTextSelected: {
     color: "white",
+  },
+  datePickerTrigger: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    backgroundColor: "white",
+    marginTop: 7,
+    marginBottom: 14,
+  },
+  datePickerTriggerText: {
+    color: colors.navy,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  calendarBackdrop: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "rgba(15, 23, 42, 0.45)",
+  },
+  calendarPanel: {
+    width: "100%",
+    maxWidth: 380,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: "white",
+  },
+  calendarHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  calendarNavButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+    backgroundColor: colors.paleBlue,
+  },
+  calendarMonthTitle: {
+    color: colors.navy,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  calendarSelectors: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  calendarSelectorButton: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: colors.paleBlue,
+  },
+  calendarSelectorHeading: {
+    color: colors.navy,
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  calendarChoicesScroll: {
+    maxHeight: 320,
+    marginBottom: 12,
+  },
+  calendarChoices: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  calendarChoice: {
+    width: "31%",
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    backgroundColor: "white",
+  },
+  calendarChoiceSelected: {
+    borderColor: colors.blue,
+    backgroundColor: colors.blue,
+  },
+  calendarChoiceText: {
+    color: colors.navy,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  calendarChoiceTextSelected: {
+    color: "white",
+  },
+  calendarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 12,
+  },
+  calendarWeekday: {
+    width: "14.2857%",
+    textAlign: "center",
+    color: colors.slate,
+    fontSize: 12,
+    fontWeight: "700",
+    paddingVertical: 8,
+  },
+  calendarDay: {
+    width: "14.2857%",
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+  },
+  calendarDaySelected: {
+    backgroundColor: colors.blue,
+  },
+  calendarDayText: {
+    color: colors.navy,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  calendarDayTextSelected: {
+    color: "white",
+    fontWeight: "800",
+  },
+  calendarDayDisabled: {
+    color: colors.muted,
   },
 });

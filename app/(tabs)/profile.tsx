@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Chips,
   Empty,
   Field,
   Notice,
@@ -23,37 +24,42 @@ import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { signOutAuthenticatedAccount } from "../../services/auth";
 
 export default function ProfileScreen() {
-  const { state, user, act } = useMarketplace();
+  const { state, user, act, closeAuthenticatedWorkspace } = useMarketplace();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [documentType, setDocumentType] = useState("MyKad");
+  const [sampledDocuments, setSampledDocuments] = useState<string[]>([]);
+  const [scanningFace, setScanningFace] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  // Presentation state only: no real document, camera, SMS, or biometric data.
-  const [demoDoc, setDemoDoc] = useState<"MyKad" | "Passport">("MyKad");
-  const [demoFront, setDemoFront] = useState(false);
-  const [demoBack, setDemoBack] = useState(false);
-  const [demoPassport, setDemoPassport] = useState(false);
-  const [demoScanning, setDemoScanning] = useState(false);
-  const [demoFaceDone, setDemoFaceDone] = useState(false);
 
   if (!user) {
     return <Redirect href="/auth" />;
   }
 
   const risk = riskFor(state, user);
-  const reviews = state.reviews.filter((r) => r.recipientId === user.id);
   const completed = state.bookings.filter(
     (b) => b.renterId === user.id && b.status === "completed",
   ).length;
-  const cleanPoints = (user.riskHistory || []).reduce(
-    (acc, item) => acc + (item.effectiveAdjustment === 2 ? 2 : 0),
-    0,
-  );
   const netPoints = (user.riskHistory || []).reduce(
     (acc, item) => acc + item.effectiveAdjustment,
     0,
   );
+
+  function verify(status: "pending" | "verified" | "failed") {
+    try {
+      act({ type: "verify", status });
+      setError("");
+      setSuccess(
+        status === "verified"
+          ? "Demo Verification Successful. Your initial verified score is 80 (Low)."
+          : `Verification updated to ${status}.`,
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   return (
     <Screen
@@ -169,85 +175,103 @@ export default function ProfileScreen() {
 
       <Button onPress={() => router.push("/owner")}>Lender Mode</Button>
 
-
-      {/* Visible fictional eKYC presentation for BOTH completed and new users. */}
       <Section title="Identity Verification (Demo eKYC)" />
       <Card>
-        <Notice text="Classroom demonstration only — no real identity document, camera, biometric processing or government verification." />
         {user.verification === "verified" ? (
           <>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 10 }}>
-              <Ionicons name="checkmark-circle" size={24} color={colors.green} />
-              <Text style={s.bold}>Identity document sample — Completed (Demo)</Text>
+            <Text style={s.caption}>Simulated eKYC — Demo Only</Text>
+            <View style={styles.verificationStage}>
+              <Ionicons name="checkmark-circle" size={20} color="#167A53" />
+              <Text style={styles.verificationStageText}>
+                Identity Document — Completed
+              </Text>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 10 }}>
-              <Ionicons name="scan-outline" size={24} color={colors.green} />
-              <Text style={s.bold}>Facial scan animation — Completed (Demo)</Text>
+            <View style={styles.verificationStage}>
+              <Ionicons name="checkmark-circle" size={20} color="#167A53" />
+              <Text style={styles.verificationStageText}>
+                Face Verification — Completed
+              </Text>
             </View>
-            <Text style={s.caption}>These are fictional completed demo steps, not real identity verification. No re-verification required.</Text>
           </>
         ) : (
           <>
-            <Text style={s.h2}>1. MyKad or Passport (Demo)</Text>
-            <View style={{ flexDirection: "row", gap: 10, marginVertical: 12 }}>
-              {(["MyKad", "Passport"] as const).map((choice) => (
-                <Pressable key={choice} accessibilityRole="button"
-                  accessibilityState={{ selected: demoDoc === choice }}
-                  onPress={() => { setDemoDoc(choice); setDemoFaceDone(false); }}
-                  style={{ flex: 1, borderWidth: 1, borderColor: demoDoc === choice ? colors.blue : colors.border,
-                    borderRadius: 12, padding: 12, alignItems: "center",
-                    backgroundColor: demoDoc === choice ? colors.paleBlue : "white" }}>
-                  <Text style={s.bold}>{choice}</Text>
+            <Text style={s.caption}>
+              Simulated eKYC — Demo Only. No real identity documents or
+              biometric data are collected.
+            </Text>
+            <Chips
+              options={["MyKad", "Passport"]}
+              selected={documentType}
+              onSelect={(value) => {
+                setDocumentType(value);
+                setSampledDocuments([]);
+              }}
+            />
+            {(documentType === "MyKad"
+              ? ["Front", "Back"]
+              : ["Photo Page"]
+            ).map((side) => {
+              const key = `${documentType} ${side}`;
+              const selected = sampledDocuments.includes(key);
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select fictional ${key} sample photo`}
+                  accessibilityState={{ selected }}
+                  onPress={() =>
+                    setSampledDocuments((current) =>
+                      current.includes(key) ? current : [...current, key],
+                    )
+                  }
+                  style={styles.samplePhotoTile}
+                >
+                  <Ionicons
+                    name={selected ? "checkmark-circle" : "camera-outline"}
+                    size={24}
+                    color={selected ? "#167A53" : colors.blue}
+                  />
+                  <Text style={styles.verificationStageText}>
+                    {documentType === "MyKad"
+                      ? `${side} of MyKad`
+                      : "Passport Photo Page"}
+                  </Text>
+                  <Text style={s.caption}>
+                    {selected ? "Sample photo added (Demo)" : "Tap to select sample"}
+                  </Text>
                 </Pressable>
-              ))}
+              );
+            })}
+            <View style={styles.verificationStage}>
+              <Ionicons name="scan-outline" size={22} color={colors.blue} />
+              <Text style={styles.verificationStageText}>
+                Face Verification — Simulated face scan
+              </Text>
             </View>
-            {(demoDoc === "MyKad"
-              ? [
-                { title: "Front of MyKad", selected: demoFront, press: () => setDemoFront(!demoFront) },
-                { title: "Back of MyKad", selected: demoBack, press: () => setDemoBack(!demoBack) },
-              ]
-              : [
-                { title: "Passport Photo Page", selected: demoPassport, press: () => setDemoPassport(!demoPassport) },
-              ]
-            ).map((tile) => (
-              <Pressable accessibilityRole="button" key={tile.title} onPress={tile.press}
-                accessibilityLabel={`Use fictional sample image for ${tile.title}`}
-                style={{ borderWidth: 1, borderStyle: "dashed", borderColor: colors.border,
-                  borderRadius: 12, padding: 18, alignItems: "center", gap: 8, marginVertical: 7 }}>
-                <Ionicons name={tile.selected ? "checkmark-circle" : "camera-outline"}
-                  size={28} color={tile.selected ? colors.green : colors.blue} />
-                <Text style={s.bold}>{tile.title}</Text>
-                <Text style={s.caption}>{tile.selected ? "Sample image selected (Demo)" : "Tap to use a fictional sample photo"}</Text>
-              </Pressable>
-            ))}
-            <View style={{ marginTop: 15, gap: 10 }}>
-              <Text style={s.h2}>2. Face Verification (Demo)</Text>
-              <View style={{ alignItems: "center", gap: 12, paddingVertical: 10 }}>
-                <Ionicons name="scan-outline" size={60} color={colors.blue} />
-                <Text style={s.caption}>Animation only — no real facial recognition.</Text>
-              </View>
-              <Button secondary
-                disabled={demoScanning || demoFaceDone || !(demoDoc === "MyKad" ? demoFront && demoBack : demoPassport)}
-                onPress={() => {
-                  setDemoScanning(true);
-                  setTimeout(() => {
-                    setDemoScanning(false);
-                    setDemoFaceDone(true);
-                  }, 850);
-                }}>
-                {demoScanning ? "Scanning... (Demo)" : demoFaceDone ? "Demo Face Check Complete" : "Start Demo Face Scan"}
-              </Button>
-              <Button disabled={!demoFaceDone} onPress={() => {
-                try {
-                  if (user.verification !== "pending") act({ type: "verify", status: "pending" });
-                  act({ type: "verify", status: "verified" });
-                  setError("");
-                  setSuccess("Demo verification complete. No real identity check was performed.");
-                } catch (e) { setError((e as Error).message); }
-              }}>
-                Complete Demo Verification
-              </Button>
-            </View>
+            {(() => {
+              const requiredSamples =
+                documentType === "MyKad"
+                  ? ["MyKad Front", "MyKad Back"]
+                  : ["Passport Photo Page"];
+              const documentsReady = requiredSamples.every((item) =>
+                sampledDocuments.includes(item),
+              );
+              return (
+                <Button
+                  disabled={!documentsReady || scanningFace}
+                  onPress={async () => {
+                    setScanningFace(true);
+                    await new Promise((resolve) => setTimeout(resolve, 900));
+                    setScanningFace(false);
+                    verify("verified");
+                  }}
+                >
+                  {scanningFace
+                    ? "Scanning…"
+                    : "Start Demo Face Scan"}
+                </Button>
+              );
+            })()}
           </>
         )}
       </Card>
@@ -305,9 +329,7 @@ export default function ProfileScreen() {
             • +2 points: Complete a rental on time with no issues.
           </Text>
           <Text style={styles.rulesBullet}>
-            • Late return: If the item is returned later than the scheduled
-            return delivery time, 5 points will be deducted from your Rental
-            Risk Score.
+            • −5 points: Confirmed late return
           </Text>
           <Text style={styles.rulesBullet}>
             • −10 points: Confirmed minor damage.
@@ -471,6 +493,7 @@ export default function ProfileScreen() {
         accessibilityLabel="Sign out"
         onPress={async () => {
           try {
+            await closeAuthenticatedWorkspace();
             if (isSupabaseConfigured && supabase) {
               await signOutAuthenticatedAccount(supabase.auth);
             }
@@ -522,6 +545,31 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     borderTopWidth: 1,
     borderColor: colors.softBlue,
+  },
+  verificationStage: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  verificationStageText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  samplePhotoTile: {
+    minHeight: 88,
+    marginTop: 10,
+    padding: 12,
+    gap: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.blue,
+    backgroundColor: colors.paleBlue,
+    borderRadius: 12,
   },
   supportNavCard: {
     backgroundColor: "white",

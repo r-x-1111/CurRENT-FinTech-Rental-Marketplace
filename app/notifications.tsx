@@ -1,4 +1,4 @@
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
 import { Badge, Button, Empty, Screen, s } from "../components/ui";
 import { useMarketplace } from "../context/Marketplace";
@@ -17,22 +17,31 @@ export default function Notifications() {
         </Button>
       )}
       {notices.length ? (
-        notices.map((n) => (
-          <Pressable
-            key={n.id}
-            accessibilityRole={n.bookingId ? "button" : undefined}
-            onPress={() => {
-              if (n.bookingId) router.push(`/rental/${n.bookingId}`);
-            }}
-            style={[s.card, { marginTop: 14 }]}
-          >
-            {!n.read && <Badge text="New" />}
-            <Text style={s.body}>{n.title}</Text>
-            <Text style={s.caption}>
-              {new Date(n.createdAt).toLocaleString()}
-            </Text>
-          </Pressable>
-        ))
+        notices.map((n) => {
+          const content = (
+            <>
+              {!n.read && <Badge text="New" />}
+              <Text style={s.body}>{n.title}</Text>
+              <Text style={s.caption}>
+                {new Date(n.createdAt).toLocaleString()}
+              </Text>
+            </>
+          );
+          return n.bookingId ? (
+            <Pressable
+              key={n.id}
+              accessibilityRole="button"
+              onPress={() => router.push(`/rental/${n.bookingId}`)}
+              style={[s.card, { marginTop: 14 }]}
+            >
+              {content}
+            </Pressable>
+          ) : (
+            <View key={n.id} style={[s.card, { marginTop: 14 }]}>
+              {content}
+            </View>
+          );
+        })
       ) : (
         <Empty
           title="All quiet for now"

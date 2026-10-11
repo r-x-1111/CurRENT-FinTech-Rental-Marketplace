@@ -3,7 +3,11 @@ import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import type { Booking } from "../types/marketplace";
 import { useMarketplace } from "../context/Marketplace";
-import { formatMalaysiaDateTime, money } from "../services/booking";
+import {
+  formatMalaysiaDateTime,
+  getEffectiveBookingStatus,
+  money,
+} from "../services/booking";
 import { colors } from "../constants/theme";
 
 export function BookingCard({
@@ -28,12 +32,14 @@ export function BookingCard({
       n.title.includes("sent you a message"),
   ).length;
 
-  const isUpcoming = booking.status === "upcoming";
-  const isActive = booking.status === "active";
-  const isReturnPending = booking.status === "return_pending";
-  const isCompleted = booking.status === "completed";
-  const isCancelled = booking.status === "cancelled" || booking.status === "rejected";
-  const isDisputed = booking.status === "disputed";
+  const status = getEffectiveBookingStatus(booking);
+  const isUpcoming = status === "upcoming";
+  const isActive = status === "active";
+  const isReturnPending = status === "return_pending";
+  const isCompleted = status === "completed";
+  const isCancelled =
+    status === "cancelled" || status === "rejected";
+  const isDisputed = status === "disputed";
 
   let headerSub = "Confirmed reservation";
   if (isActive) headerSub = "Current rental";
@@ -75,10 +81,10 @@ export function BookingCard({
   }
 
   const startFormatted = formatMalaysiaDateTime(
-    booking.scheduledPickup || booking.start,
+    booking.start,
   );
   const endFormatted = formatMalaysiaDateTime(
-    booking.scheduledReturn || booking.end,
+    booking.end,
   );
 
   let dateInfo = `Scheduled rental start: ${startFormatted}`;
@@ -96,38 +102,47 @@ export function BookingCard({
   }
 
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`View rental for ${booking.title}`}
-      onPress={() => router.push(`/rental/${booking.id}`)}
-      style={styles.card}
-    >
-      <View style={styles.topRow}>
-        <Image source={{ uri: booking.image }} style={styles.thumb} />
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text style={styles.subtext}>{headerSub}</Text>
-          <Text style={styles.title} numberOfLines={1}>
-            {booking.title}
-          </Text>
-          <Text style={styles.dateText}>{dateInfo}</Text>
+    <View style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`View rental for ${booking.title}`}
+        onPress={() => router.push(`/rental/${booking.id}`)}
+        style={{ gap: 14 }}
+      >
+        <View style={styles.topRow}>
+          <Image source={{ uri: booking.image }} style={styles.thumb} />
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={styles.subtext}>{headerSub}</Text>
+            <Text style={styles.title} numberOfLines={1}>
+              {booking.title}
+            </Text>
+            <Text style={styles.dateText}>{dateInfo}</Text>
+          </View>
+          <View
+            style={[
+              styles.tag,
+              { backgroundColor: tagBg, borderColor: tagBorder },
+            ]}
+          >
+            <Text style={[styles.tagText, { color: tagColor }]}>
+              {tagLabel}
+            </Text>
+          </View>
         </View>
-        <View
-          style={[
-            styles.tag,
-            { backgroundColor: tagBg, borderColor: tagBorder },
-          ]}
-        >
-          <Text style={[styles.tagText, { color: tagColor }]}>{tagLabel}</Text>
-        </View>
-      </View>
 
-      <View style={styles.divider} />
+        <View style={styles.divider} />
+      </Pressable>
 
       <View style={styles.bottomRow}>
-        <View style={{ flex: 1, gap: 2 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`View rental for ${booking.title}`}
+          onPress={() => router.push(`/rental/${booking.id}`)}
+          style={{ flex: 1, gap: 2 }}
+        >
           <Text style={styles.statLabel}>Deposit status</Text>
           <Text style={styles.statValue}>{depositStatusText}</Text>
-        </View>
+        </Pressable>
 
         <View style={{ flex: 1, gap: 2 }}>
           <View style={styles.messagesLabelRow}>
@@ -135,10 +150,7 @@ export function BookingCard({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Open rental conversation"
-              onPress={(e) => {
-                e.stopPropagation();
-                router.push(`/conversation/${booking.id}`);
-              }}
+              onPress={() => router.push(`/conversation/${booking.id}`)}
               style={styles.msgIconBtn}
             >
               <Ionicons name="chatbubbles" size={16} color={colors.blue} />
@@ -147,10 +159,7 @@ export function BookingCard({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Chat with ${counterpartyName}`}
-            onPress={(e) => {
-              e.stopPropagation();
-              router.push(`/conversation/${booking.id}`);
-            }}
+            onPress={() => router.push(`/conversation/${booking.id}`)}
           >
             <Text style={styles.statValue} numberOfLines={1}>
               {unreadMessages > 0
@@ -160,7 +169,7 @@ export function BookingCard({
           </Pressable>
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 

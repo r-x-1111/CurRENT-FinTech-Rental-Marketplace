@@ -11,7 +11,7 @@ export default function HowItWorksScreen() {
       title="How CurRENT Works"
       subtitle="A simple way to rent. Step-by-step guide for peer-to-peer rentals in Klang Valley."
     >
-      <Notice text="CurRENT is an academic classroom demonstration in Klang Valley. Real identity checks, payments, deposit escrow, BNPL, item insurance and delivery would be supported by external authorised partners. No real money or personal data is collected." />
+      <Notice text="CurRENT is a classroom simulation. Identity checks, payments, deposits, insurance and delivery are not performed by real providers. Do not submit identity documents or bank credentials." />
 
       <Section title="A simple way to rent" />
       <Card>
@@ -59,7 +59,7 @@ export default function HowItWorksScreen() {
               <Text style={styles.stepTitle}>Pay</Text>
             </View>
             <Text style={s.caption}>
-              Complete secure payment through an authorised provider.
+              Select FPX and complete the simulated demo payment. No real money or bank credentials are used.
             </Text>
           </View>
         </View>
@@ -76,7 +76,7 @@ export default function HowItWorksScreen() {
               <Text style={styles.stepTitle}>Return</Text>
             </View>
             <Text style={s.caption}>
-              Upload return photos or videos. Once the lender confirms the item's condition, the rental is completed and the deposit is released. If an issue is reported, the deposit is held for dispute review.
+              At the scheduled end, submit check-out evidence (at least 6 photos and 1 video) and confirm return. The lender reviews the same evidence; a dispute keeps the simulated deposit on hold.
             </Text>
           </View>
         </View>
@@ -119,4 +119,3 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
 });
-

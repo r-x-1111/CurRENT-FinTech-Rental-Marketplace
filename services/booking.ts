@@ -59,6 +59,20 @@ export function parseTimestamp(value: string | number) {
   return parseMalaysiaTimestamp(value);
 }
 
+export function getEffectiveBookingStatus(
+  booking: Booking,
+  now = Date.now(),
+): Booking["status"] {
+  if (
+    booking.status === "upcoming" &&
+    booking.payment === "paid" &&
+    parseMalaysiaTimestamp(booking.start) <= now
+  ) {
+    return "active";
+  }
+  return booking.status;
+}
+
 /**
  * Converts a Malaysian local calendar date (YYYY-MM-DD) and optional time (HH:mm)
  * to a canonical UTC ISO timestamp string (e.g. 2026-10-23T03:00:00.000Z).
@@ -154,12 +168,22 @@ export function quoteFor(
   end: string,
   protectedItem = false,
 ) {
+  const estimatedValue = listing.estimatedValue;
+  if (
+    typeof estimatedValue !== "number" ||
+    !Number.isFinite(estimatedValue) ||
+    estimatedValue <= 0
+  ) {
+    throw new Error(
+      "A protected platform valuation is not available for this listing, so a security deposit and booking total cannot be calculated yet.",
+    );
+  }
   const days = rentalDays(start, end);
   const rentalFee = Math.round(listing.dailyPrice * days * 100) / 100;
   const serviceFee = calculateBorrowerServiceFee(rentalFee);
   const risk = riskFor(state, profile);
   const deposit = calculateSecurityDeposit(
-    listing.estimatedValue,
+    estimatedValue,
     risk.level,
   );
   const protection = 0; // V1.8: No optional protection fee in renter cart
@@ -217,24 +241,46 @@ export type CalendarDay = {
   status: "available" | "reserved" | "unavailable";
 };
 
+function malaysiaDate(epoch: number) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kuala_Lumpur",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(epoch);
+  const part = (type: string) =>
+    parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
 /** A short, visible availability preview. The return date is exclusive. */
 export function availabilityCalendar(
   state: Marketplace,
   listing: Listing,
   count = 21,
+  fromDate = dateAfter(),
 ): CalendarDay[] {
   return Array.from({ length: count }, (_, offset) => {
-    const date = dateAfter(offset);
+    const date = new Date(parseDate(fromDate) + offset * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    const inAvailabilityPeriod =
+      !listing.availabilityPeriods?.length ||
+      listing.availabilityPeriods.some(
+        (period) => date >= period.start && date <= period.end,
+      );
     const outsideWindow =
       listing.status !== "published" ||
+      date < dateAfter() ||
+      !inAvailabilityPeriod ||
       !!(listing.availableFrom && date < listing.availableFrom) ||
       !!(listing.availableTo && date > listing.availableTo);
     const reserved = state.bookings.some(
       (booking) =>
         booking.listingId === listing.id &&
         ["approved", "payment_required", "confirmed", "upcoming", "active", "return_pending", "disputed"].includes(booking.status) &&
-        booking.start <= date &&
-        date < booking.end,
+        date >= malaysiaDate(parseMalaysiaTimestamp(booking.start)) &&
+        date <= malaysiaDate(parseMalaysiaTimestamp(booking.end) - 1),
     );
     return {
       date,
@@ -257,142 +303,4 @@ export function calculateCancellationCutoff(scheduledPickup: string) {
 export function isCancellationEligible(scheduledPickup: string, now = Date.now()) {
   const pickupTime = parseTimestamp(scheduledPickup);
   return now <= pickupTime - 24 * 60 * 60 * 1000;
-}
-
-export function checkHandoverConflict(
-  state: Marketplace,
-  booking: {
-    id: string;
-    listingId: string;
-    durationMinutes?: number;
-    quote: { days: number; rentalFee: number; serviceFee: number; deposit: number };
-  },
-  listing: Listing,
-  activationTimestamp: number,
-) {
-  const durationMinutes = booking.durationMinutes || (booking.quote.days * 1440);
-  const tentativeEnd = activationTimestamp + durationMinutes * 60000;
-
-  const conflictingBookings = state.bookings.filter(
-    (b) =>
-      b.id !== booking.id &&
-      b.listingId === listing.id &&
-      ["confirmed", "upcoming", "active"].includes(b.status) &&
-      parseTimestamp(b.start) < tentativeEnd &&
-      parseTimestamp(b.end) > activationTimestamp,
-  );
-
-  if (conflictingBookings.length === 0) {
-    return { hasConflict: false };
-  }
-
-  const earliestConflictingStart = Math.min(
-    ...conflictingBookings.map((b) => parseTimestamp(b.start)),
-  );
-
-  const availableDurationMinutes = Math.max(0, (earliestConflictingStart - activationTimestamp) / 60000);
-  if (availableDurationMinutes < 60) {
-    return {
-      hasConflict: true,
-      infeasible: true,
-    };
-  }
-
-  const revisedRentalDays = Math.max(1, Math.ceil(availableDurationMinutes / 1440));
-  const originalRentalFee = booking.quote.rentalFee;
-  const originalServiceFee = booking.quote.serviceFee;
-
-  const revisedRentalFee = Math.round(listing.dailyPrice * revisedRentalDays * 100) / 100;
-  const revisedServiceFee = calculateBorrowerServiceFee(revisedRentalFee);
-
-  const refundAmount = Math.max(
-    0,
-    Math.round(((originalRentalFee + originalServiceFee) - (revisedRentalFee + revisedServiceFee)) * 100) / 100,
-  );
-
-  return {
-    hasConflict: true,
-    infeasible: false,
-    conflictOffer: {
-      revisedEnd: new Date(earliestConflictingStart).toISOString(),
-      revisedDurationMinutes: Math.round(availableDurationMinutes),
-      revisedRentalDays,
-      originalRentalFee,
-      revisedRentalFee,
-      originalServiceFee,
-      revisedServiceFee,
-      refundAmount,
-      depositRetained: booking.quote.deposit,
-    },
-  };
-}
-
-/**
- * Canonical Digital Rental Agreement renderer for CurRENT V3.23.
- * Produces identical, complete multiline contract terms for both Renter and Lender views.
- */
-export function formatDigitalRentalAgreement(
-  b: Booking,
-  state: Marketplace,
-  viewRole: "renter" | "owner" = "renter",
-): string {
-  const renter = state.profiles.find((p) => p.id === b.renterId);
-  const lender = state.profiles.find((p) => p.id === b.ownerId);
-  const listing = state.listings.find((l) => l.id === b.listingId);
-
-  const renterName = renter?.name || "Renter";
-  const lenderName = lender?.name || "Lender";
-  const renterVerif = renter?.verification ? renter.verification.replace("_", " ") : "verified";
-  const lenderVerif = lender?.verification ? lender.verification.replace("_", " ") : "verified";
-
-  const startFormatted = formatMalaysiaDateTime(b.scheduledPickup || b.start);
-  const endFormatted = formatMalaysiaDateTime(b.effectiveReturnDeadline || b.scheduledReturn || b.end);
-
-  const rentalFee = b.quote?.rentalFee ?? 0;
-  const serviceFee = b.quote?.serviceFee ?? 0;
-  const deposit = b.quote?.deposit ?? 0;
-  const total = b.quote?.total ?? (rentalFee + serviceFee + deposit);
-  const commission = Math.round(rentalFee * 0.12 * 100) / 100;
-  const netPayout = Math.round(rentalFee * 0.88 * 100) / 100;
-
-  const address = b.deliveryAddress || "Authorised Private Delivery Address (Kuala Lumpur)";
-  const signedDate = formatMalaysiaDateTime(b.createdAt);
-
-  return [
-    `DIGITAL RENTAL AGREEMENT V3.23`,
-    `Reference: ${b.id}`,
-    ``,
-    `1. PARTIES`,
-    `• Renter: ${renterName} (${renterVerif})`,
-    `• Lender: ${lenderName} (${lenderVerif})`,
-    ``,
-    `2. RENTAL ITEM & FULFILMENT`,
-    `• Item: ${listing?.title || b.title}`,
-    `• Fulfilment: Delivery Only`,
-    `• Authorised Delivery Address: ${address}`,
-    ``,
-    `3. SCHEDULE & DURATION`,
-    `• Scheduled Rental Start: ${startFormatted} (Asia/Kuala_Lumpur)`,
-    `• Scheduled Return: ${endFormatted} (Asia/Kuala_Lumpur)`,
-    `• Booked Duration: ${b.quote?.days ?? 1} billable day(s)`,
-    ``,
-    `4. FINANCIAL TERMS & CHARGES`,
-    `• Rental Fee: RM${rentalFee.toFixed(2)}`,
-    `• CurRENT Service Fee (5%, min RM5): RM${serviceFee.toFixed(2)}`,
-    `• Refundable Security Deposit: RM${deposit.toFixed(2)} (${(b.deposit || "held").replace("_", " ")})`,
-    `• Total Paid: RM${total.toFixed(2)} via ${b.paymentMethod || "Demo FPX"}`,
-    `• Platform Commission (12%): RM${commission.toFixed(2)}`,
-    `• Net Lender Payout (88%): RM${netPayout.toFixed(2)}`,
-    ``,
-    `5. CONDITIONS & POLICIES`,
-    `• Cancellation: Free cancellation up to 24 hours prior to scheduled rental start (Asia/Kuala_Lumpur).`,
-    `• Condition Evidence: Renter records ≥6 photos and ≥1 video at delivery check-in and return check-out. Lender reviews shared evidence.`,
-    `• Return & Deposit: Mutual clean return confirmation releases the refundable deposit in full. Disputed items hold deposit pending platform review.`,
-    `• Academic Simulation: Simulated transaction executed under CurRENT Educational Platform V3.23.`,
-    ``,
-    `6. DIGITAL SIGNATURES & ACKNOWLEDGEMENT`,
-    `• Signed by Renter: ${renterName} (${signedDate} MYT)`,
-    `• Acknowledged by Lender: ${lenderName} (${signedDate} MYT)`,
-    `• Status: Confirmed & Digitally Executed`,
-  ].join("\n");
 }

@@ -36,6 +36,7 @@ export interface Profile {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   avatar?: string;
   verification: VerificationStatus;
   favourites: string[];
@@ -46,6 +47,20 @@ export interface Profile {
   isBanned?: boolean;
   hasOverdueObligation?: boolean;
   riskHistory?: RiskIncidentRecord[];
+  savedDeliveryAddress?: SavedDeliveryAddress;
+  savedDeliveryAddresses?: SavedDeliveryAddress[];
+  defaultDeliveryAddressIndex?: number;
+}
+
+export interface SavedDeliveryAddress {
+  recipientName: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2: string;
+  postcode: string;
+  city: string;
+  state: string;
+  instructions: string;
 }
 
 export interface Quote {
@@ -105,6 +120,8 @@ export interface Booking {
   paymentMethod?: string;
   agreement?: string;
   deliveryAddress?: string;
+  cancelledAt?: string;
+  cancelledById?: string;
   createdAt: string;
   scheduledPickup?: string;
   scheduledReturn?: string;
@@ -117,8 +134,6 @@ export interface Booking {
   renterReturnConfirmedAt?: string | null;
   lenderReturnConfirmedAt?: string | null;
   actualReturnTimestamp?: string | null;
-  consecutiveParentId?: string | null;
-  chainBookings?: string[];
   conflictOffer?: {
     revisedEnd: string;
     revisedDurationMinutes: number;
@@ -148,7 +163,6 @@ export interface Evidence {
 export interface ConditionIssueReport {
   id: string;
   bookingId: string;
-  chainId: string;
   authorId: string;
   stage: "check_in" | "check_out";
   text: string;
