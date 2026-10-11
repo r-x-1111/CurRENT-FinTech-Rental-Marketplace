@@ -3,17 +3,12 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import * as Crypto from "expo-crypto";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  Button,
-  Card,
-  Field,
-  Notice,
-  Screen,
-  s,
-} from "../components/ui";
+import { Button, Card, Field, Notice, Screen, s } from "../components/ui";
 import { useMarketplace } from "../context/Marketplace";
 import { colors } from "../constants/theme";
 import { newId } from "../services/marketplace";
+import { authenticateWithPassword, DEMO_ACCOUNT_EMAIL } from "../services/auth";
+import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 export default function Auth() {
   const { state, act } = useMarketplace();
@@ -77,20 +72,59 @@ export default function Auth() {
           throw new Error("Enter your password.");
         }
 
-        // Check ordinary hashed accounts
-        const profile = state.profiles.find(
-          (p) => p.email.toLowerCase() === address && p.passwordHash,
-        );
-        if (
-          !profile ||
-          (await Crypto.digestStringAsync(
-            Crypto.CryptoDigestAlgorithm.SHA256,
-            `${profile.salt}:${password}`,
-          )) !== profile.passwordHash
-        ) {
-          throw new Error("Email or password is incorrect.");
+        if (isSupabaseConfigured && supabase) {
+          const accountKind = await authenticateWithPassword(
+            supabase.auth,
+            address,
+            password,
+          );
+          if (accountKind.accountKind === "demo") {
+            act({ type: "setMode", mode: "admin_demo" });
+          } else {
+            const profile = state.profiles.find(
+              (candidate) =>
+                candidate.id === accountKind.id ||
+                candidate.email.toLowerCase() === address,
+            );
+            if (profile) {
+              act({ type: "login", userId: profile.id });
+            } else {
+              act({
+                type: "signup",
+                profile: {
+                  id: accountKind.id,
+                  name: accountKind.name,
+                  email: accountKind.email,
+                  verification: accountKind.verified
+                    ? "verified"
+                    : "not_verified",
+                  favourites: [],
+                  riskScore: accountKind.verified ? 80 : null,
+                  riskLevel: accountKind.verified ? "low" : "unverified",
+                },
+              });
+            }
+          }
+        } else {
+          if (address === DEMO_ACCOUNT_EMAIL) {
+            throw new Error(
+              "Demo Account sign-in is unavailable until the Auth service is configured.",
+            );
+          }
+          const profile = state.profiles.find(
+            (p) => p.email.toLowerCase() === address && p.passwordHash,
+          );
+          if (
+            !profile ||
+            (await Crypto.digestStringAsync(
+              Crypto.CryptoDigestAlgorithm.SHA256,
+              `${profile.salt}:${password}`,
+            )) !== profile.passwordHash
+          ) {
+            throw new Error("Email or password is incorrect.");
+          }
+          act({ type: "login", userId: profile.id });
         }
-        act({ type: "login", userId: profile.id });
       }
       router.replace("/(tabs)/profile");
     } catch (e) {
@@ -115,7 +149,9 @@ export default function Auth() {
             <Text style={styles.heading}>
               {mode === "Sign in" ? "Welcome back" : "Create your account"}
             </Text>
-            <Text style={styles.tagline}>Rent Smarter. Own Less. Live More.</Text>
+            <Text style={styles.tagline}>
+              Rent Smarter. Own Less. Live More.
+            </Text>
           </View>
 
           {mode === "Create account" && (
@@ -145,7 +181,9 @@ export default function Auth() {
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
-              autoComplete={mode === "Sign in" ? "current-password" : "new-password"}
+              autoComplete={
+                mode === "Sign in" ? "current-password" : "new-password"
+              }
               placeholder="Enter your password"
             />
             <TouchableOpacity
@@ -175,7 +213,11 @@ export default function Auth() {
 
           <View style={{ marginTop: 8 }}>
             <Button disabled={busy} onPress={submit}>
-              {busy ? "Please wait…" : mode === "Sign in" ? "Sign In" : "Create Account"}
+              {busy
+                ? "Please wait…"
+                : mode === "Sign in"
+                  ? "Sign In"
+                  : "Create Account"}
             </Button>
           </View>
 

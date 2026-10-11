@@ -12,7 +12,8 @@
     "test": "tsx --test tests/marketplace.test.ts",
     "test:e2e": "playwright test",
     "build:web": "expo export --platform web",
-    "preview": "node scripts/serve-web.cjs"
+    "preview": "node scripts/serve-web.cjs",
+    "provision:demo": "node scripts/provision-demo-account.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

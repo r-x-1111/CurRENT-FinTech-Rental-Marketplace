@@ -18,37 +18,41 @@ import type { SupportMessage } from "../../types/marketplace";
 
 const QUICK_TOPICS = [
   "How to rent",
-  "Fees & deposits",
+  "Fees",
+  "Security deposits",
   "Delivery & return",
   "Rental extensions",
   "Risk score",
   "Disputes",
+  "How is my risk score calculated?",
+  "When will the lender receive rental money?",
 ];
 
 export default function CustomerServiceScreen() {
-  const { state, user, act } = useMarketplace();
+  const { state, user, act, storageError } = useMarketplace();
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);
 
-  if (!user) {
-    return <Redirect href="/auth" />;
-  }
-
   const messages: SupportMessage[] = (state.supportMessages || []).filter(
-    (m) => m.userId === user.id,
-  );
-
-  const activeWaitingCase = (state.supportCases || []).find(
-    (c) => c.userId === user.id && c.status === "waiting",
+    (m) =>
+      m.userId === user?.id &&
+      m.sender !== "human" &&
+      m.text !==
+        "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
   );
 
   useEffect(() => {
     if (messages.length > 0) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
+      return () => clearTimeout(timer);
     }
   }, [messages.length]);
+
+  if (!user) {
+    return <Redirect href="/auth" />;
+  }
 
   function handleSend(text?: string) {
     const query = (text || inputText).trim();
@@ -60,7 +64,7 @@ export default function CustomerServiceScreen() {
   function handleHandoff() {
     act({
       type: "supportHandoff",
-      query: "Customer requested human support takeover via 'Talk to a Human'.",
+      query: "Talk to a Human",
     });
   }
 
@@ -86,7 +90,9 @@ export default function CustomerServiceScreen() {
               ]}
             >
               <Ionicons
-                name={isHuman ? "person-circle-outline" : "hardware-chip-outline"}
+                name={
+                  isHuman ? "person-circle-outline" : "hardware-chip-outline"
+                }
                 size={16}
                 color={isHuman ? "#059669" : colors.blue}
               />
@@ -110,8 +116,8 @@ export default function CustomerServiceScreen() {
             isUser
               ? styles.bubbleUser
               : isHuman
-              ? styles.bubbleHuman
-              : styles.bubbleBot,
+                ? styles.bubbleHuman
+                : styles.bubbleBot,
           ]}
         >
           <Text
@@ -139,11 +145,7 @@ export default function CustomerServiceScreen() {
   }
 
   return (
-    <Screen
-      back
-      title="Customer Service"
-      subtitle="Automated support and human escalation"
-    >
+    <Screen back title="Customer Service" subtitle="Automated support">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.chatContainer}
@@ -158,9 +160,21 @@ export default function CustomerServiceScreen() {
               CurRENT Assistant · Automated Support
             </Text>
             <Text style={styles.bannerSubtitle}>
-              Rules-based answers backed by genuine human escalation
+              Answers to approved CurRENT topics
             </Text>
           </View>
+        </View>
+
+        <View style={styles.waitingNotice}>
+          <Ionicons
+            name="information-circle-outline"
+            size={16}
+            color="#B45309"
+          />
+          <Text style={styles.waitingNoticeText}>
+            The human support queue is not available here yet. Unanswered
+            questions and human requests cannot be sent right now.
+          </Text>
         </View>
 
         {/* Quick Topic Chips */}
@@ -190,15 +204,12 @@ export default function CustomerServiceScreen() {
           </Pressable>
         </View>
 
-        {/* Active Waiting Notice */}
-        {activeWaitingCase && (
+        {storageError ? (
           <View style={styles.waitingNotice}>
-            <Ionicons name="time-outline" size={16} color="#B45309" />
-            <Text style={styles.waitingNoticeText}>
-              Waiting for support team response · We aim to respond here within one working hour.
-            </Text>
+            <Ionicons name="warning-outline" size={16} color="#B45309" />
+            <Text style={styles.waitingNoticeText}>{storageError}</Text>
           </View>
-        )}
+        ) : null}
 
         {/* Message Thread */}
         <FlatList
@@ -223,7 +234,8 @@ export default function CustomerServiceScreen() {
               </View>
               <View style={[styles.bubble, styles.bubbleBot]}>
                 <Text style={[styles.bubbleText, styles.bubbleTextBot]}>
-                  Hi! I'm CurRENT's automated assistant. What can I help you with today?
+                  Hi! I'm CurRENT's automated assistant. What can I help you
+                  with today?
                 </Text>
               </View>
             </View>

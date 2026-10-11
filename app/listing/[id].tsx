@@ -858,53 +858,34 @@ export default function ListingDetailScreen() {
 
             {/* Simulated Checkout Panel */}
             {showCheckout && (quote || isConsecutiveExtension) && (
-              <View style={styles.checkoutPanel}>
-                <Text style={styles.checkoutTitle}>Secure Checkout</Text>
-                <Text style={styles.checkoutSubtitle}>
-                  Payment via FPX (simulated — no real bank details collected).
-                </Text>
-                <View style={styles.fpxBadgeRow}>
-                  <Ionicons name="card-outline" size={16} color="#0369A1" />
-                  <Text style={styles.fpxBadgeText}>FPX</Text>
-                </View>
-                <View style={{ marginVertical: 12, padding: 12, backgroundColor: colors.paleBlue, borderRadius: 10, gap: 6 }}>
-                  <Row
-                    label={isConsecutiveExtension ? "Additional Rental Fee" : "Rental Fee"}
-                    value={money(isConsecutiveExtension ? extRentalFee : quote?.rentalFee ?? 0)}
-                  />
-                  <Row
-                    label="CurRENT Service Fee"
-                    value={money(isConsecutiveExtension ? extServiceFee : quote?.serviceFee ?? 0)}
-                  />
-                  <View style={s.row}>
-                    <Text style={s.body}>Risk-based security deposit</Text>
-                    {isConsecutiveExtension ? (
-                      <View style={{ alignItems: "flex-end" }}>
-                        <Text style={{ textDecorationLine: "line-through", color: colors.muted, fontSize: 13 }}>
-                          {money(existingActiveBooking?.quote?.deposit ?? 400)}
-                        </Text>
-                        <Text style={[s.bold, { color: colors.blue, fontSize: 12 }]}>
-                          RM0.00 (Held)
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={s.body}>{money(quote?.deposit ?? 0)}</Text>
+              <>
+                <Notice text="Demo payment only. No real funds or banking credentials are collected." />
+                <View style={styles.checkoutPanel}>
+                  <Text style={styles.checkoutTitle}>Payment</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Select FPX payment method"
+                    accessibilityState={{ selected: selectedPaymentMethod === "Demo FPX" }}
+                    onPress={() => setSelectedPaymentMethod("Demo FPX")}
+                    style={[
+                      styles.fpxBadgeRow,
+                      selectedPaymentMethod === "Demo FPX" && styles.fpxBadgeSelected,
+                    ]}
+                  >
+                    <Ionicons name="card-outline" size={16} color="#0369A1" />
+                    <Text style={styles.fpxBadgeText}>FPX</Text>
+                    {selectedPaymentMethod === "Demo FPX" && (
+                      <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
                     )}
-                  </View>
-                  <View style={s.divider} />
-                  <Row
-                    label="Total to Pay"
-                    value={money(isConsecutiveExtension ? extTotal : quote?.total ?? 0)}
-                    strong
-                  />
+                  </Pressable>
+                  <Button onPress={handleConfirmInstantBook}>
+                    Pay
+                  </Button>
+                  <Button secondary onPress={() => setShowCheckout(false)}>
+                    Back
+                  </Button>
                 </View>
-                <Button onPress={handleConfirmInstantBook}>
-                  Pay
-                </Button>
-                <Button secondary onPress={() => setShowCheckout(false)}>
-                  Back
-                </Button>
-              </View>
+              </>
             )}
 
             {/* Main Action Buttons */}
@@ -1355,14 +1336,10 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.navy,
   },
-  checkoutSubtitle: {
-    fontSize: 12,
-    color: colors.slate,
-    lineHeight: 16,
-  },
   fpxBadgeRow: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
     backgroundColor: "white",
     borderWidth: 1,
@@ -1370,6 +1347,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  fpxBadgeSelected: {
+    borderColor: colors.blue,
+    backgroundColor: "#F0F7FF",
   },
   fpxBadgeText: {
     fontSize: 13,

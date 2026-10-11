@@ -1,5 +1,7 @@
 import { Redirect } from "expo-router";
+import { useMarketplace } from "../context/Marketplace";
 
 export default function Index() {
-  return <Redirect href="/(tabs)" />;
+  const { user } = useMarketplace();
+  return <Redirect href={user ? "/(tabs)" : "/auth"} />;
 }

@@ -19,6 +19,8 @@ import { useMarketplace } from "../../context/Marketplace";
 import { riskFor } from "../../services/booking";
 import { colors } from "../../constants/theme";
 import { RiskGauge } from "../../components/RiskGauge";
+import { isSupabaseConfigured, supabase } from "../../lib/supabase";
+import { signOutAuthenticatedAccount } from "../../services/auth";
 
 export default function ProfileScreen() {
   const { state, user, act } = useMarketplace();
@@ -100,7 +102,11 @@ export default function ProfileScreen() {
             <Text style={s.h2}>{user.name}</Text>
             <Text style={s.caption}>{user.email}</Text>
             <Badge
-              text={user.verification === "verified" ? "Verified" : user.verification}
+              text={
+                user.verification === "verified"
+                  ? "Verified"
+                  : user.verification
+              }
               green={user.verification === "verified"}
             />
           </View>
@@ -147,12 +153,16 @@ export default function ProfileScreen() {
             ⚠️ Confirmed Damage Obligation (Overdue 7+ Days)
           </Text>
           <Text style={[s.caption, { color: "#9B2C2C", marginTop: 4 }]}>
-            In accordance with Section 15, renters with an outstanding confirmed damage liability unpaid after 7 days are restricted from creating new rentals, regardless of risk score.
+            In accordance with Section 15, renters with an outstanding confirmed
+            damage liability unpaid after 7 days are restricted from creating
+            new rentals, regardless of risk score.
           </Text>
           <Button
             onPress={() => {
               act({ type: "settleOverdueObligation", userId: user.id });
-              setSuccess("Simulated damage obligation settled in full! Booking privileges restored.");
+              setSuccess(
+                "Simulated damage obligation settled in full! Booking privileges restored.",
+              );
             }}
           >
             Simulate Full Settlement (Clear Obligation & Lift Restriction)
@@ -160,22 +170,19 @@ export default function ProfileScreen() {
         </Card>
       )}
 
-      <Button onPress={() => router.push("/owner")}>
-        Lender Mode
-      </Button>
+      <Button onPress={() => router.push("/owner")}>Lender Mode</Button>
 
       {/* Identity Verification (Demo eKYC) - Hidden when already verified */}
       {user.verification !== "verified" && (
         <>
           <Section title="Identity Verification (Demo eKYC)" />
           <Card>
-            <Badge
-              text={user.verification}
-              green={false}
-            />
+            <Badge text={user.verification} green={false} />
             <Text style={s.caption}>
-              Simulate an external eKYC identity provider. In this classroom demo, no real identity documents or biometrics are collected.
-              Upon successful verification, every newly verified renter begins at strictly 80/100 (Low Risk).
+              Simulate an external eKYC identity provider. In this classroom
+              demo, no real identity documents or biometrics are collected. Upon
+              successful verification, every newly verified renter begins at
+              strictly 80/100 (Low Risk).
             </Text>
             {["not_verified", "failed"].includes(user.verification) && (
               <Button onPress={() => verify("pending")}>
@@ -206,8 +213,9 @@ export default function ProfileScreen() {
           <RiskGauge score={risk.score} label={risk.label} />
         </View>
         <Text style={s.caption}>
-          CurRENT Rental Risk Score is a platform reliability metric, NOT a consumer credit score.
-          It transparently determines your refundable security deposit tier and booking permissions.
+          CurRENT Rental Risk Score is a platform reliability metric, NOT a
+          consumer credit score. It transparently determines your refundable
+          security deposit tier and booking permissions.
         </Text>
         <Row label="Initial verified score" value="80 (Low Risk)" />
         <Row
@@ -216,12 +224,12 @@ export default function ProfileScreen() {
             risk.score === null
               ? "N/A"
               : risk.score >= 80
-              ? "5% (capped at RM500)"
-              : risk.score >= 40
-              ? "10% (capped at RM1,000)"
-              : risk.score >= 30
-              ? "15% (capped at RM1,500)"
-              : "Platform assessment required"
+                ? "5% (capped at RM500)"
+                : risk.score >= 40
+                  ? "10% (capped at RM1,000)"
+                  : risk.score >= 30
+                    ? "15% (capped at RM1,500)"
+                    : "Platform assessment required"
           }
         />
         <Row
@@ -231,18 +239,44 @@ export default function ProfileScreen() {
         <View style={styles.rulesContainer}>
           <Text style={styles.rulesHeading}>What You Should Know</Text>
           <Text style={styles.rulesSubheading}>Deposit & Booking Rules</Text>
-          <Text style={styles.rulesBullet}>• Low Risk (80–100): 5% deposit, capped at RM500 (Direct checkout)</Text>
-          <Text style={styles.rulesBullet}>• Medium Risk (40–79): 10% deposit, capped at RM1,000 (Direct checkout)</Text>
-          <Text style={styles.rulesBullet}>• High Risk (30–39): 15% deposit, capped at RM1,500 (Direct checkout)</Text>
-          <Text style={styles.rulesBullet}>• Very High Risk (0–29): CurRENT Platform Review request (Pending only, no checkout)</Text>
+          <Text style={styles.rulesBullet}>
+            • Low Risk (80–100): 5% deposit, capped at RM500 (Direct checkout)
+          </Text>
+          <Text style={styles.rulesBullet}>
+            • Medium Risk (40–79): 10% deposit, capped at RM1,000 (Direct
+            checkout)
+          </Text>
+          <Text style={styles.rulesBullet}>
+            • High Risk (30–39): 15% deposit, capped at RM1,500 (Direct
+            checkout)
+          </Text>
+          <Text style={styles.rulesBullet}>
+            • Very High Risk (0–29): CurRENT Platform Review request (Pending
+            only, no checkout)
+          </Text>
           <Text style={styles.rulesSubheading}>How Your Score Changes</Text>
-          <Text style={styles.rulesBullet}>• +2 points: Complete a rental on time with no issues.</Text>
-          <Text style={styles.rulesBullet}>• Late return: If the item is returned later than the scheduled return delivery time, 5 points will be deducted from your Rental Risk Score.</Text>
-          <Text style={styles.rulesBullet}>• −10 points: Confirmed minor damage.</Text>
-          <Text style={styles.rulesBullet}>• −30 points: Confirmed serious damage or accidental loss.</Text>
-          <Text style={styles.rulesBullet}>• Confirmed intentional theft or fraud: Permanent ban, not an additional numerical penalty.</Text>
+          <Text style={styles.rulesBullet}>
+            • +2 points: Complete a rental on time with no issues.
+          </Text>
+          <Text style={styles.rulesBullet}>
+            • Late return: If the item is returned later than the scheduled
+            return delivery time, 5 points will be deducted from your Rental
+            Risk Score.
+          </Text>
+          <Text style={styles.rulesBullet}>
+            • −10 points: Confirmed minor damage.
+          </Text>
+          <Text style={styles.rulesBullet}>
+            • −30 points: Confirmed serious damage or accidental loss.
+          </Text>
+          <Text style={styles.rulesBullet}>
+            • Confirmed intentional theft or fraud: Permanent ban, not an
+            additional numerical penalty.
+          </Text>
           <Text style={styles.rulesNote}>
-            Only one final outcome applies per rental. If multiple issues occur, the most serious confirmed outcome applies; pending reports do not change your score. Successful appeals correct the original outcome.
+            Only one final outcome applies per rental. If multiple issues occur,
+            the most serious confirmed outcome applies; pending reports do not
+            change your score. Successful appeals correct the original outcome.
           </Text>
         </View>
       </Card>
@@ -251,8 +285,10 @@ export default function ProfileScreen() {
       <Section title="Risk Score History" />
       <Card>
         <Text style={s.caption}>
-          Single Winning Incident Rule: When multiple violations occur on the same physical rental chain, only the single most serious
-          penalty is applied. Secondary incidents are recorded in audit history but not stacked.
+          Single Winning Incident Rule: When multiple violations occur on the
+          same physical rental chain, only the single most serious penalty is
+          applied. Secondary incidents are recorded in audit history but not
+          stacked.
         </Text>
         {user.riskHistory && user.riskHistory.length > 0 ? (
           user.riskHistory.map((item) => (
@@ -274,9 +310,15 @@ export default function ProfileScreen() {
               </View>
               {item.incidents.map((inc, i) => (
                 <View key={i} style={s.row}>
-                  <Text style={[s.caption, { color: colors.navy }]}>• {inc.description}</Text>
+                  <Text style={[s.caption, { color: colors.navy }]}>
+                    • {inc.description}
+                  </Text>
                   <Badge
-                    text={inc.isWinning ? `${inc.penalty >= 0 ? "+" : ""}${inc.penalty} (Applied)` : "Recorded"}
+                    text={
+                      inc.isWinning
+                        ? `${inc.penalty >= 0 ? "+" : ""}${inc.penalty} (Applied)`
+                        : "Recorded"
+                    }
                     green={inc.isWinning && inc.penalty > 0}
                   />
                 </View>
@@ -290,7 +332,8 @@ export default function ProfileScreen() {
           ))
         ) : (
           <Text style={[s.caption, { marginVertical: 8 }]}>
-            No incident records. Clean rental history established with initial verified score of 80.
+            No incident records. Clean rental history established with initial
+            verified score of 80.
           </Text>
         )}
       </Card>
@@ -308,7 +351,9 @@ export default function ProfileScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.supportNavTitle}>How CurRENT Works</Text>
-            <Text style={styles.supportNavDesc}>A simple 4-step way to rent peer-to-peer</Text>
+            <Text style={styles.supportNavDesc}>
+              A simple 4-step way to rent peer-to-peer
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.muted} />
         </Pressable>
@@ -319,11 +364,17 @@ export default function ProfileScreen() {
           style={styles.supportNavCard}
         >
           <View style={styles.supportNavIconWrap}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={colors.blue} />
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={20}
+              color={colors.blue}
+            />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.supportNavTitle}>Trust</Text>
-            <Text style={styles.supportNavDesc}>Confidence and protection built into the journey</Text>
+            <Text style={styles.supportNavDesc}>
+              Confidence and protection built into the journey
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.muted} />
         </Pressable>
@@ -334,11 +385,17 @@ export default function ProfileScreen() {
           style={styles.supportNavCard}
         >
           <View style={styles.supportNavIconWrap}>
-            <Ionicons name="help-circle-outline" size={20} color={colors.blue} />
+            <Ionicons
+              name="help-circle-outline"
+              size={20}
+              color={colors.blue}
+            />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.supportNavTitle}>FAQ</Text>
-            <Text style={styles.supportNavDesc}>Frequently asked questions and answers</Text>
+            <Text style={styles.supportNavDesc}>
+              Frequently asked questions and answers
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.muted} />
         </Pressable>
@@ -353,7 +410,9 @@ export default function ProfileScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.supportNavTitle}>Customer Service</Text>
-            <Text style={styles.supportNavDesc}>CurRENT Assistant · Automated Support & Human Handoff</Text>
+            <Text style={styles.supportNavDesc}>
+              CurRENT Assistant · Automated Support & Human Handoff
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.muted} />
         </Pressable>
@@ -364,9 +423,16 @@ export default function ProfileScreen() {
         secondary
         danger
         accessibilityLabel="Sign out"
-        onPress={() => {
-          act({ type: "login", userId: null });
-          router.replace("/auth");
+        onPress={async () => {
+          try {
+            if (isSupabaseConfigured && supabase) {
+              await signOutAuthenticatedAccount(supabase.auth);
+            }
+            act({ type: "login", userId: null });
+            router.replace("/auth");
+          } catch (e) {
+            setError((e as Error).message);
+          }
         }}
       >
         Sign Out

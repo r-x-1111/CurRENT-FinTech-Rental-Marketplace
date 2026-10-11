@@ -35,7 +35,12 @@ export function createNormalSeed(): Marketplace {
         verification: "verified",
         riskScore: 80,
         riskLevel: "low",
-        favourites: ["sony-a7iii", "portable-projector", "dji-ronin", "ps5-console"],
+        favourites: [
+          "sony-a7iii",
+          "portable-projector",
+          "dji-ronin",
+          "ps5-console",
+        ],
         riskHistory: [],
       },
       {
@@ -105,15 +110,15 @@ export function createNormalSeed(): Marketplace {
               "/products/sony-thumb-3.jpg",
             ]
           : l.images && l.images.length >= 6
-          ? l.images
-          : [
-              l.imageUrl,
-              "/products/sony-thumb-1.jpg",
-              "/products/sony-thumb-2.jpg",
-              "/products/sony-thumb-3.jpg",
-              "/products/portable-projector.jpg",
-              "/products/ps5-console.jpg",
-            ],
+            ? l.images
+            : [
+                l.imageUrl,
+                "/products/sony-thumb-1.jpg",
+                "/products/sony-thumb-2.jpg",
+                "/products/sony-thumb-3.jpg",
+                "/products/portable-projector.jpg",
+                "/products/ps5-console.jpg",
+              ],
       videos:
         l.videos && l.videos.length >= 1
           ? l.videos
@@ -129,21 +134,24 @@ export function createNormalSeed(): Marketplace {
       {
         id: "welcome",
         userId: "demo-renter",
-        title: "Welcome to CurRENT. Rent what you need. Earn from what you own.",
+        title:
+          "Welcome to CurRENT. Rent what you need. Earn from what you own.",
         read: false,
         createdAt: new Date().toISOString(),
       },
       {
         id: "notif-delivery-only",
         userId: "demo-renter",
-        title: "CurRENT Fulfilment: All items are securely delivered to your private address.",
+        title:
+          "CurRENT Fulfilment: All items are securely delivered to your private address.",
         read: false,
         createdAt: new Date().toISOString(),
       },
       {
         id: "notif-verified-status",
         userId: "demo-renter",
-        title: "Your account is verified with initial Rental Risk Score of 80 (Low Risk).",
+        title:
+          "Your account is verified with initial Rental Risk Score of 80 (Low Risk).",
         read: true,
         createdAt: new Date().toISOString(),
       },
@@ -367,7 +375,7 @@ export function createAdminDemoSeed(): Marketplace {
     {
       id: "demo-booking-return-due-1",
       listingId: "monitor-27",
-      title: "27\" Computer Monitor",
+      title: '27" Computer Monitor',
       image: "/products/monitor-27.jpg",
       ownerId: "owner-daniel",
       renterId: "demo-renter",
@@ -809,7 +817,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
 
     // ------------------------------------------------------------------------
-    // 6B. LENDER ACTIVE & UPCOMING RENTALS (V3.30: 2 Upcoming + 1 Active for KPI = 3)
+    // 6B. LENDER UPCOMING RENTAL (the single active/upcoming lender booking)
     // ------------------------------------------------------------------------
     {
       id: "demo-lender-upcoming-1",
@@ -1018,6 +1026,14 @@ export function createAdminDemoSeed(): Marketplace {
     },
   ];
 
+  const demoWorkspaceBookings = demoBookings.filter(
+    (booking) =>
+      booking.ownerId !== "demo-renter" ||
+      ["demo-lender-upcoming-1", "demo-lender-completed-1"].includes(
+        booking.id,
+      ),
+  );
+
   // --------------------------------------------------------------------------
   // RENTAL-LINKED CONVERSATION THREADS (At least 3 threads, >= 2 messages each)
   // --------------------------------------------------------------------------
@@ -1169,7 +1185,8 @@ export function createAdminDemoSeed(): Marketplace {
       photo: "/products/portable-projector.jpg",
       photos: sampleConditionImages,
       videos: sampleVideos,
-      notes: "Projector, remote, and power cord received in excellent working order.",
+      notes:
+        "Projector, remote, and power cord received in excellent working order.",
       createdAt: "2026-10-09T14:30:00Z",
     },
     {
@@ -1202,7 +1219,8 @@ export function createAdminDemoSeed(): Marketplace {
       photo: "/products/ps5-console.jpg",
       photos: sampleConditionImages,
       videos: sampleVideos,
-      notes: "Console, 2 controllers, HDMI 2.1 cable and power lead packed cleanly with 0 damage.",
+      notes:
+        "Console, 2 controllers, HDMI 2.1 cable and power lead packed cleanly with 0 damage.",
       createdAt: "2026-09-03T09:45:00Z",
     },
     {
@@ -1213,7 +1231,8 @@ export function createAdminDemoSeed(): Marketplace {
       photo: "/products/ps5-console.jpg",
       photos: sampleConditionImages,
       videos: sampleVideos,
-      notes: "Inspection complete. DualSense controllers tested, console clean, full deposit released.",
+      notes:
+        "Inspection complete. DualSense controllers tested, console clean, full deposit released.",
       createdAt: "2026-09-03T09:50:00Z",
     },
     {
@@ -1224,7 +1243,8 @@ export function createAdminDemoSeed(): Marketplace {
       photo: "/products/monitor-27.jpg",
       photos: sampleConditionImages,
       videos: sampleVideos,
-      notes: "Monitor screen flawless, power brick, USB-C and HDMI cables all enclosed in original foam.",
+      notes:
+        "Monitor screen flawless, power brick, USB-C and HDMI cables all enclosed in original foam.",
       createdAt: "2026-10-10T09:30:00Z",
     },
     {
@@ -1296,7 +1316,8 @@ export function createAdminDemoSeed(): Marketplace {
       status: "pending_review",
       statusLabel: "Pending CurRENT Review (Demo)",
       createdAt: "2026-10-08T15:00:00Z",
-      notes: "Pending CurRENT Review (Demo). Application submitted for CurRENT platform assessment.",
+      notes:
+        "Pending CurRENT Review (Demo). Application submitted for CurRENT platform assessment.",
       contextMode: "admin_demo",
     },
   ];
@@ -1316,7 +1337,8 @@ export function createAdminDemoSeed(): Marketplace {
       incidents: [
         {
           type: "return_timing_unassessed" as const,
-          description: "Clean condition return, return timing unassessed (0 points)",
+          description:
+            "Clean condition return, return timing unassessed (0 points)",
           penalty: 0,
           isWinning: false,
         },
@@ -1335,7 +1357,8 @@ export function createAdminDemoSeed(): Marketplace {
       incidents: [
         {
           type: "return_timing_unassessed" as const,
-          description: "Clean condition return, return timing unassessed (0 points)",
+          description:
+            "Clean condition return, return timing unassessed (0 points)",
           penalty: 0,
           isWinning: false,
         },
@@ -1396,7 +1419,8 @@ export function createAdminDemoSeed(): Marketplace {
     {
       id: "notif-2",
       userId: "demo-renter",
-      title: "Booking confirmed for Sony A7 III Mirrorless Camera. Scheduled delivery start: 02 Nov 2026.",
+      title:
+        "Booking confirmed for Sony A7 III Mirrorless Camera. Scheduled delivery start: 02 Nov 2026.",
       bookingId: "demo-booking-upcoming-1",
       read: false,
       createdAt: "2026-10-08T09:05:00Z",
@@ -1404,7 +1428,8 @@ export function createAdminDemoSeed(): Marketplace {
     {
       id: "notif-3",
       userId: "demo-renter",
-      title: "Aiman Rahman sent you a message regarding Sony A7 III Mirrorless Camera.",
+      title:
+        "Aiman Rahman sent you a message regarding Sony A7 III Mirrorless Camera.",
       bookingId: "demo-booking-upcoming-1",
       read: false,
       createdAt: "2026-10-09T11:00:00Z",
@@ -1412,7 +1437,8 @@ export function createAdminDemoSeed(): Marketplace {
     {
       id: "notif-4",
       userId: "demo-renter",
-      title: "Lender dispatched item for Portable Projector. Please acknowledge receipt upon delivery.",
+      title:
+        "Lender dispatched item for Portable Projector. Please acknowledge receipt upon delivery.",
       bookingId: "demo-booking-active-1",
       read: true,
       createdAt: "2026-10-09T14:05:00Z",
@@ -1420,7 +1446,8 @@ export function createAdminDemoSeed(): Marketplace {
     {
       id: "notif-5",
       userId: "demo-renter",
-      title: "Return inspection pending: Condition evidence submitted for 27\" Computer Monitor.",
+      title:
+        'Return inspection pending: Condition evidence submitted for 27" Computer Monitor.',
       bookingId: "demo-booking-return-due-1",
       read: false,
       createdAt: "2026-10-10T09:35:00Z",
@@ -1446,14 +1473,16 @@ export function createAdminDemoSeed(): Marketplace {
           }
         : p,
     ),
-    bookings: demoBookings.map((b) => ({
+    bookings: demoWorkspaceBookings.map((b) => ({
       ...b,
       agreement: formatDigitalRentalAgreement(b, {
         ...normal,
-        bookings: demoBookings,
+        bookings: demoWorkspaceBookings,
       }),
     })),
-    messages: demoMessages,
+    messages: demoMessages.filter((message) =>
+      demoWorkspaceBookings.some((booking) => booking.id === message.bookingId),
+    ),
     evidence: demoEvidence,
     disputes: demoDisputes,
     notifications: demoNotifications,

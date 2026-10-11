@@ -1,12 +1,17 @@
 import { Tabs } from "expo-router";
+import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../constants/theme";
+import { useMarketplace } from "../../context/Marketplace";
 const icons = {
   index: "home-outline",
   rentals: "bag-handle-outline",
   profile: "person-circle-outline",
 } as const;
 export default function TabsLayout() {
+  const { user } = useMarketplace();
+  if (!user) return <Redirect href="/auth" />;
+
   return (
     <Tabs
       screenOptions={({ route }) => ({

@@ -36,7 +36,12 @@ export type Action =
       itemTitle: string;
       bookingId?: string;
       rawIncidents: {
-        type: "on_time_success" | "late_return" | "minor_damage" | "serious_damage" | "theft_fraud";
+        type:
+          | "on_time_success"
+          | "late_return"
+          | "minor_damage"
+          | "serious_damage"
+          | "theft_fraud";
         hoursLate?: number;
         confirmed?: boolean;
         description?: string;
@@ -112,7 +117,8 @@ export type Action =
   | {
       type: "resolveDispute";
       disputeId: string;
-      scenario: "minor_damage" | "serious_damage" | "rejected" | "overdue_restriction";
+      scenario:
+        "minor_damage" | "serious_damage" | "rejected" | "overdue_restriction";
     }
   | {
       type: "settleOverdueObligation";
@@ -176,28 +182,20 @@ export function resolveAutomatedSupportQuery(query: string): {
   response?: string;
   responses?: string[];
 } {
-  const q = query.trim().toLowerCase();
-
-  // If question involves external banking, overdrafts, personal loans, or non-CurRENT topics, escalate to human support
-  if (
-    q.includes("bank") ||
-    q.includes("overdraft") ||
-    q.includes("credit card") ||
-    q.includes("personal loan") ||
-    q.includes("lawyer") ||
-    q.includes("police")
-  ) {
-    return { answered: false };
-  }
+  const q = query
+    .trim()
+    .toLowerCase()
+    .replace(/[?!.,]+$/g, "");
 
   // 1. How to rent / booking flow
   if (
-    q.includes("how to rent") ||
-    q.includes("how do i rent") ||
-    q.includes("rent an item") ||
-    q.includes("booking process") ||
-    q.includes("how it works") ||
-    q === "how to rent"
+    [
+      "how to rent",
+      "how do i rent",
+      "how do i rent an item",
+      "how to book a rental",
+      "booking process",
+    ].includes(q)
   ) {
     return {
       answered: true,
@@ -208,10 +206,11 @@ export function resolveAutomatedSupportQuery(query: string): {
 
   // 7. How is my risk score calculated? (Must match before general score / fees)
   if (
-    q === "how is my risk score calculated?" ||
-    q.includes("how is my risk score calculated") ||
-    q.includes("how is the risk score calculated") ||
-    (q.includes("calculate") && q.includes("score"))
+    [
+      "how is my risk score calculated",
+      "how is the risk score calculated",
+      "how is my score calculated",
+    ].includes(q)
   ) {
     return {
       answered: true,
@@ -222,11 +221,12 @@ export function resolveAutomatedSupportQuery(query: string): {
 
   // 8. When will the lender receive rental money?
   if (
-    q === "when will the lender receive rental money?" ||
-    q.includes("receive rental money") ||
-    q.includes("when will the lender receive") ||
-    q.includes("lender receive money") ||
-    (q.includes("lender") && (q.includes("receive") || q.includes("payout timing")))
+    [
+      "when will the lender receive rental money",
+      "when will the lender receive payment",
+      "when does the lender get paid",
+      "when will the lender get paid",
+    ].includes(q)
   ) {
     return {
       answered: true,
@@ -235,30 +235,48 @@ export function resolveAutomatedSupportQuery(query: string): {
     };
   }
 
-  // 2. Fees & deposits (produces two distinct consecutive assistant messages)
+  // 2. Fees & deposits
   if (
-    q.includes("fees & deposits") ||
-    q.includes("fees and deposits") ||
-    q === "fees & deposits" ||
-    q === "fees" ||
-    (q.includes("fee") && (q.includes("deposit") || q.includes("service") || q.includes("commission")))
+    [
+      "fees & deposits",
+      "fees and deposits",
+      "how much does current charge in fees & deposits",
+      "how much does current charge in fees and deposits",
+    ].includes(q)
   ) {
     return {
       answered: true,
       responses: [
-        "Here are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 12% of the rental fee, deducted when the rental is completed.\n- Lender payout: The lender receives the remaining 88% of the rental fee.",
-        "Your refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through FPX.",
+        "Fees\n\nHere are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 12% of the rental fee, deducted when the rental is completed.\n- Lender payout: The lender receives the remaining 88% of the rental fee.",
+        "Security deposits\n\nYour refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.",
       ],
+    };
+  }
+
+  if (q === "fees" || q === "rental fees") {
+    return {
+      answered: true,
+      response:
+        "Here are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 12% of the rental fee, deducted when the rental is completed.\n- Lender payout: The lender receives the remaining 88% of the rental fee.",
+    };
+  }
+
+  if (q === "security deposits" || q === "security deposit") {
+    return {
+      answered: true,
+      response:
+        "Your refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.",
     };
   }
 
   // 3. Delivery & return
   if (
-    q.includes("delivery & return") ||
-    q.includes("delivery and return") ||
-    q === "delivery & return" ||
-    (q.includes("delivery") && (q.includes("return") || q.includes("work") || q.includes("receive") || q.includes("receipt") || q.includes("courier"))) ||
-    (q.includes("return") && (q.includes("item") || q.includes("evidence") || q.includes("process") || q.includes("confirm")))
+    [
+      "delivery & return",
+      "delivery and return",
+      "how does delivery and return work",
+      "how does delivery & return work",
+    ].includes(q)
   ) {
     return {
       answered: true,
@@ -269,13 +287,12 @@ export function resolveAutomatedSupportQuery(query: string): {
 
   // 4. Rental extensions
   if (
-    q === "rental extensions" ||
-    q.includes("rental extension") ||
-    q.includes("extend rental") ||
-    q.includes("extend my rental") ||
-    q.includes("extend booking") ||
-    q.includes("consecutive") ||
-    ((q.includes("extend") || q.includes("extension")) && (q.includes("rental") || q.includes("item") || q.includes("booking") || q.includes("days")))
+    [
+      "rental extensions",
+      "how do rental extensions work",
+      "how can i extend my rental",
+      "how do i extend my rental",
+    ].includes(q)
   ) {
     return {
       answered: true,
@@ -286,11 +303,11 @@ export function resolveAutomatedSupportQuery(query: string): {
 
   // 5. Risk score
   if (
-    q.includes("risk score") ||
-    q.includes("score") ||
-    q.includes("points") ||
-    q.includes("reliability") ||
-    q === "risk score"
+    [
+      "risk score",
+      "what are the risk score levels",
+      "what are the risk bands",
+    ].includes(q)
   ) {
     return {
       answered: true,
@@ -301,47 +318,16 @@ export function resolveAutomatedSupportQuery(query: string): {
 
   // 6. Disputes
   if (
-    q.includes("dispute") ||
-    q.includes("damage") ||
-    q.includes("problem") ||
-    q.includes("claim") ||
-    q.includes("issue") ||
-    q === "disputes"
+    [
+      "disputes",
+      "how do disputes work",
+      "how does the dispute process work",
+    ].includes(q)
   ) {
     return {
       answered: true,
       response:
         "If an item arrives damaged, is not returned, or its condition is disputed, either party can report an issue through the relevant Condition Evidence section. The lender can also select Apply Dispute.\n\n- Filing a dispute places the rental under review and keeps the security deposit on hold.\n- CurRENT reviews the submitted condition photos, videos and other relevant information to determine liability.",
-    };
-  }
-
-  // Additional covered topics
-  if (q.includes("cancel") || q.includes("cancellation")) {
-    return {
-      answered: true,
-      response:
-        "Cancellation Policy:\n\n• Free cancellation with 100% refund of rental and service fees and full release of deposit is available until at least 24 hours before the scheduled rental start time in Malaysia local time (UTC+8).\n• Regular self-service cancellation is closed within 24 hours of start.",
-    };
-  }
-
-  if (
-    q.includes("time slot") ||
-    q.includes("slots") ||
-    q.includes("hours") ||
-    q.includes("scheduled time")
-  ) {
-    return {
-      answered: true,
-      response:
-        "Delivery Time Slots:\n\n• Lenders select at least 2 delivery slots from 8 fixed hours: 10:00 AM, 11:00 AM, 12:00 PM, 1:00 PM, 2:00 PM, 3:00 PM, 4:00 PM, 5:00 PM (Malaysia local time).\n• Renters choose one available Scheduled Delivery Time slot for the rental start.",
-    };
-  }
-
-  if (q.includes("bnpl") || q.includes("buy now pay later")) {
-    return {
-      answered: true,
-      response:
-        "Buy Now Pay Later (BNPL):\n\n• BNPL is a future concept for eligible high-value rentals through an external provider.\n• BNPL is not available in this academic demonstration; all checkout is simulated FPX.",
     };
   }
 
@@ -439,7 +425,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Verification cannot make that transition.",
       );
       user.verification = action.status;
-      if (action.status === "verified" && (user.riskScore === undefined || user.riskScore === null)) {
+      if (
+        action.status === "verified" &&
+        (user.riskScore === undefined || user.riskScore === null)
+      ) {
         user.riskScore = 80;
         user.riskLevel = "low";
       }
@@ -488,8 +477,14 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       requireThat(
         l.status !== "published" ||
           (l.id === "sony-a7iii"
-            ? l.images && l.images.length >= 4 && l.videos && l.videos.length >= 1
-            : l.images && l.images.length >= 6 && l.videos && l.videos.length >= 1),
+            ? l.images &&
+              l.images.length >= 4 &&
+              l.videos &&
+              l.videos.length >= 1
+            : l.images &&
+              l.images.length >= 6 &&
+              l.videos &&
+              l.videos.length >= 1),
         "Add at least 6 photos and 1 video before publishing.",
       );
       requireThat(
@@ -835,7 +830,9 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
               b.id,
             );
           } else {
-            throw new Error("Only unpaid requests or eligible upcoming bookings can be cancelled.");
+            throw new Error(
+              "Only unpaid requests or eligible upcoming bookings can be cancelled.",
+            );
           }
           break;
         }
@@ -883,7 +880,9 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             if (!b.scheduledReturn) b.scheduledReturn = b.end;
             if (!b.durationMinutes) b.durationMinutes = b.quote.days * 1440;
             if (!b.cancellationCutoff) {
-              b.cancellationCutoff = calculateCancellationCutoff(b.scheduledPickup);
+              b.cancellationCutoff = calculateCancellationCutoff(
+                b.scheduledPickup,
+              );
             }
             b.agreement = formatDigitalRentalAgreement(b, state);
             notify(
@@ -921,8 +920,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             b.renterReceivedAt = now;
             b.activationTimestamp = now;
             if (!b.effectiveReturnDeadline) {
-              const durMs = (b.durationMinutes || (b.quote.days * 1440)) * 60000;
-              b.effectiveReturnDeadline = new Date(Date.now() + durMs).toISOString();
+              const durMs = (b.durationMinutes || b.quote.days * 1440) * 60000;
+              b.effectiveReturnDeadline = new Date(
+                Date.now() + durMs,
+              ).toISOString();
             }
           } else {
             b.renterReturnConfirmedAt = now;
@@ -950,7 +951,9 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           const renterProfile = state.profiles.find((p) => p.id === b.renterId);
           if (
             renterProfile &&
-            !renterProfile.riskHistory?.some((event) => event.bookingId === b.id)
+            !renterProfile.riskHistory?.some(
+              (event) => event.bookingId === b.id,
+            )
           ) {
             const returnInstant = b.actualReturnTimestamp
               ? parseMalaysiaTimestamp(b.actualReturnTimestamp)
@@ -958,15 +961,23 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             const deadlineInstant = b.effectiveReturnDeadline
               ? parseMalaysiaTimestamp(b.effectiveReturnDeadline)
               : parseTimestamp(b.end);
-            const outcome = returnInstant === null
-              ? [{ type: "return_timing_unassessed" as const, confirmed: true }]
-              : returnInstant > deadlineInstant
-                ? [{
-                    type: "late_return" as const,
-                    hoursLate: (returnInstant - deadlineInstant) / 3600000,
-                    confirmed: true,
-                  }]
-                : [{ type: "on_time_success" as const, confirmed: true }];
+            const outcome =
+              returnInstant === null
+                ? [
+                    {
+                      type: "return_timing_unassessed" as const,
+                      confirmed: true,
+                    },
+                  ]
+                : returnInstant > deadlineInstant
+                  ? [
+                      {
+                        type: "late_return" as const,
+                        hoursLate: (returnInstant - deadlineInstant) / 3600000,
+                        confirmed: true,
+                      },
+                    ]
+                  : [{ type: "on_time_success" as const, confirmed: true }];
             const evaluation = evaluateRentalOutcome(outcome);
             const scoreBefore = riskFor(state, renterProfile).score ?? 80;
             const scoreAfter = Math.max(
@@ -1016,8 +1027,14 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           b.id,
         );
       } else {
-        requireThat(!owner, "Only the renter can confirm item delivery receipt.");
-        requireThat(!b.renterReceivedAt, "Delivery receipt has already been confirmed.");
+        requireThat(
+          !owner,
+          "Only the renter can confirm item delivery receipt.",
+        );
+        requireThat(
+          !b.renterReceivedAt,
+          "Delivery receipt has already been confirmed.",
+        );
         const startMs = parseMalaysiaTimestamp(b.scheduledPickup || b.start);
         const currentMs =
           action.serverTime !== undefined
@@ -1047,7 +1064,12 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         const listing = state.listings.find((l) => l.id === b.listingId);
         requireThat(listing, "Listing not found.");
 
-        const conflictRes = checkHandoverConflict(state, b, listing, activationTs);
+        const conflictRes = checkHandoverConflict(
+          state,
+          b,
+          listing,
+          activationTs,
+        );
 
         if (conflictRes.hasConflict && conflictRes.conflictOffer) {
           b.conflictOffer = conflictRes.conflictOffer;
@@ -1063,8 +1085,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           );
         } else {
           b.activationTimestamp = new Date(activationTs).toISOString();
-          const durMinutes = b.durationMinutes || (b.quote.days * 1440);
-          b.effectiveReturnDeadline = new Date(activationTs + durMinutes * 60000).toISOString();
+          const durMinutes = b.durationMinutes || b.quote.days * 1440;
+          b.effectiveReturnDeadline = new Date(
+            activationTs + durMinutes * 60000,
+          ).toISOString();
           b.status = "active";
           b.deposit = "held";
           notify(
@@ -1085,7 +1109,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
     case "acceptRevisedRental": {
       const b = bookingFor(action.bookingId);
       const owner = user.id === b.ownerId;
-      requireThat(!owner, "Only the renter can accept the revised rental offer.");
+      requireThat(
+        !owner,
+        "Only the renter can accept the revised rental offer.",
+      );
       requireThat(b.conflictOffer, "No revised rental offer is pending.");
 
       const offer = b.conflictOffer;
@@ -1094,11 +1121,19 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       b.quote.days = offer.revisedRentalDays;
       b.quote.rentalFee = offer.revisedRentalFee;
       b.quote.serviceFee = offer.revisedServiceFee;
-      b.quote.total = Math.round((offer.revisedRentalFee + offer.revisedServiceFee + b.quote.deposit) * 100) / 100;
+      b.quote.total =
+        Math.round(
+          (offer.revisedRentalFee + offer.revisedServiceFee + b.quote.deposit) *
+            100,
+        ) / 100;
 
       const actTs = Math.max(
-        b.lenderHandoverAt ? new Date(b.lenderHandoverAt).getTime() : Date.now(),
-        b.renterReceivedAt ? new Date(b.renterReceivedAt).getTime() : Date.now(),
+        b.lenderHandoverAt
+          ? new Date(b.lenderHandoverAt).getTime()
+          : Date.now(),
+        b.renterReceivedAt
+          ? new Date(b.renterReceivedAt).getTime()
+          : Date.now(),
       );
       b.activationTimestamp = new Date(actTs).toISOString();
       b.status = "active";
@@ -1148,18 +1183,28 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           bookingId: b.id,
           authorId: user.id,
           kind: "check_out",
-          photo: photos[0] || (videos[0] ? "/videos/condition-evidence-sample-1.mp4" : ""),
+          photo:
+            photos[0] ||
+            (videos[0] ? "/videos/condition-evidence-sample-1.mp4" : ""),
           photos,
           videos,
-          notes: action.notes?.trim() || `${owner ? "Lender" : "Renter"} return condition evidence`,
+          notes:
+            action.notes?.trim() ||
+            `${owner ? "Lender" : "Renter"} return condition evidence`,
           createdAt: now,
         });
       }
 
       if (action.role === "renter") {
-        requireThat(!owner, "Only the renter can confirm physical return handback.");
+        requireThat(
+          !owner,
+          "Only the renter can confirm physical return handback.",
+        );
         const renterEvidence = state.evidence.filter(
-          (e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "check_out",
+          (e) =>
+            e.bookingId === b.id &&
+            e.authorId === user.id &&
+            e.kind === "check_out",
         );
         const totalPhotos = renterEvidence.reduce(
           (sum, e) => sum + (e.photos?.length || (e.photo ? 1 : 0)),
@@ -1215,16 +1260,22 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           : parseTimestamp(b.end);
 
         const renter = state.profiles.find((p) => p.id === b.renterId);
-        if (renter && !renter.riskHistory?.some((event) => event.bookingId === b.id)) {
-          const outcome = returnInstant === null
-            ? [{ type: "return_timing_unassessed" as const, confirmed: true }]
-            : returnInstant > deadlineInstant
-              ? [{
-                  type: "late_return" as const,
-                  hoursLate: (returnInstant - deadlineInstant) / 3600000,
-                  confirmed: true,
-                }]
-              : [{ type: "on_time_success" as const, confirmed: true }];
+        if (
+          renter &&
+          !renter.riskHistory?.some((event) => event.bookingId === b.id)
+        ) {
+          const outcome =
+            returnInstant === null
+              ? [{ type: "return_timing_unassessed" as const, confirmed: true }]
+              : returnInstant > deadlineInstant
+                ? [
+                    {
+                      type: "late_return" as const,
+                      hoursLate: (returnInstant - deadlineInstant) / 3600000,
+                      confirmed: true,
+                    },
+                  ]
+                : [{ type: "on_time_success" as const, confirmed: true }];
           const evaluation = evaluateRentalOutcome(outcome);
           const scoreBefore = riskFor(state, renter).score ?? 80;
           const scoreAfter = Math.max(
@@ -1245,11 +1296,12 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             scoreAfter,
             appealStatus: "none",
           });
-          const resultText = returnInstant === null
-            ? "Return timing could not be assessed."
-            : returnInstant > deadlineInstant
-              ? "Return was confirmed late (−5 points)."
-              : "Return was confirmed on time (+2 points).";
+          const resultText =
+            returnInstant === null
+              ? "Return timing could not be assessed."
+              : returnInstant > deadlineInstant
+                ? "Return was confirmed late (−5 points)."
+                : "Return was confirmed on time (+2 points).";
           notify(
             b.renterId,
             `Rental complete. The simulated deposit was released. ${resultText} New score: ${scoreAfter}.`,
@@ -1292,7 +1344,9 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         photo: action.photos[0] || "",
         photos: action.photos,
         videos: action.videos,
-        notes: action.notes?.trim() || `${action.kind === "check_in" ? "Check-in" : "Check-out"} condition evidence recorded.`,
+        notes:
+          action.notes?.trim() ||
+          `${action.kind === "check_in" ? "Check-in" : "Check-out"} condition evidence recorded.`,
         createdAt: now,
       });
 
@@ -1306,9 +1360,15 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
 
     case "reportIssue": {
       const b = bookingFor(action.bookingId);
-      requireThat(user.id === b.renterId, "Only the renter can submit a condition issue report.");
+      requireThat(
+        user.id === b.renterId,
+        "Only the renter can submit a condition issue report.",
+      );
       const text = action.text.trim();
-      requireThat(text.length > 0, "Describe the issue before submitting the report.");
+      requireThat(
+        text.length > 0,
+        "Describe the issue before submitting the report.",
+      );
 
       if (!state.issueReports) state.issueReports = [];
       const existing = state.issueReports.find(
@@ -1323,8 +1383,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       }
 
       requireThat(
-        ["active", "return_pending", "disputed"].includes(b.status),
-        "Issue reports can only be submitted during an active rental stage.",
+        action.stage === "check_in"
+          ? b.status === "active"
+          : ["active", "return_pending", "disputed"].includes(b.status),
+        "Issue reports can only be submitted during the relevant active rental stage.",
       );
       state.issueReports.unshift({
         id: newId(),
@@ -1370,11 +1432,16 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         (other) =>
           other.id !== b.id &&
           other.listingId === b.listingId &&
-          ["confirmed", "upcoming", "active", "approved"].includes(other.status) &&
+          ["confirmed", "upcoming", "active", "approved"].includes(
+            other.status,
+          ) &&
           parseTimestamp(other.start) < newDeadline &&
           parseTimestamp(other.end) > currentDeadline,
       );
-      requireThat(!hasConflict, "Item is already reserved by another renter for the requested extension period.");
+      requireThat(
+        !hasConflict,
+        "Item is already reserved by another renter for the requested extension period.",
+      );
 
       const additionalRentalFee = listing.dailyPrice * action.additionalDays;
       const quoteExtension = calculateConsecutiveQuote(additionalRentalFee);
@@ -1385,7 +1452,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       b.quote.days += action.additionalDays;
       b.quote.rentalFee += quoteExtension.additionalRentalFee;
       b.quote.serviceFee += quoteExtension.serviceFee;
-      b.quote.total = Math.round((b.quote.total + quoteExtension.total) * 100) / 100;
+      b.quote.total =
+        Math.round((b.quote.total + quoteExtension.total) * 100) / 100;
 
       if (!b.chainBookings) b.chainBookings = [];
       b.chainBookings.push(
@@ -1419,17 +1487,21 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         const deduction = Math.min(b.quote.deposit, 150);
         const remainder = Math.max(0, b.quote.deposit - deduction);
         b.status = "completed";
-        b.deposit = (remainder > 0 ? "released" : "held");
+        b.deposit = remainder > 0 ? "released" : "held";
 
         const evaluation = evaluateRentalOutcome([
           {
             type: "minor_damage",
             confirmed: true,
-            description: "Fictional damage claim approved (Demo): RM150 assessed repair cost.",
+            description:
+              "Fictional damage claim approved (Demo): RM150 assessed repair cost.",
           },
         ]);
         const scoreBefore = renter.riskScore ?? 80;
-        const scoreAfter = Math.max(0, Math.min(100, scoreBefore + evaluation.effectiveAdjustment));
+        const scoreAfter = Math.max(
+          0,
+          Math.min(100, scoreBefore + evaluation.effectiveAdjustment),
+        );
         renter.riskScore = scoreAfter;
         renter.riskLevel = tierForScore(scoreAfter).level;
         if (!renter.riskHistory) renter.riskHistory = [];
@@ -1463,11 +1535,15 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           {
             type: "serious_damage",
             confirmed: true,
-            description: "Fictional major damage claim approved (Demo): Full deposit applied to replacement liability.",
+            description:
+              "Fictional major damage claim approved (Demo): Full deposit applied to replacement liability.",
           },
         ]);
         const scoreBefore = renter.riskScore ?? 80;
-        const scoreAfter = Math.max(0, Math.min(100, scoreBefore + evaluation.effectiveAdjustment));
+        const scoreAfter = Math.max(
+          0,
+          Math.min(100, scoreBefore + evaluation.effectiveAdjustment),
+        );
         renter.riskScore = scoreAfter;
         renter.riskLevel = tierForScore(scoreAfter).level;
         if (!renter.riskHistory) renter.riskHistory = [];
@@ -1657,7 +1733,6 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
 
     case "supportQuery": {
       if (!state.supportMessages) state.supportMessages = [];
-      if (!state.supportCases) state.supportCases = [];
 
       state.supportMessages.push({
         id: newId(),
@@ -1669,7 +1744,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
 
       const result = resolveAutomatedSupportQuery(action.text);
       if (result.answered) {
-        const msgs = result.responses || (result.response ? [result.response] : []);
+        const msgs =
+          result.responses || (result.response ? [result.response] : []);
         for (const msgText of msgs) {
           state.supportMessages.push({
             id: newId(),
@@ -1680,28 +1756,11 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           });
         }
       } else {
-        let activeCase = state.supportCases.find(
-          (c) => c.userId === user.id && c.status === "waiting",
-        );
-        if (!activeCase) {
-          activeCase = {
-            id: `CASE-${newId().slice(0, 8).toUpperCase()}`,
-            userId: user.id,
-            status: "waiting",
-            query: action.text,
-            createdAt: now,
-          };
-          state.supportCases.push(activeCase);
-        } else {
-          activeCase.query = `${activeCase.query}\n${action.text}`;
-        }
-
         state.supportMessages.push({
           id: newId(),
           userId: user.id,
           sender: "bot",
-          caseId: activeCase.id,
-          text: "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+          text: "I couldn't send your message to our support team right now. Please try again.",
           createdAt: now,
         });
       }
@@ -1710,56 +1769,27 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
 
     case "supportHandoff": {
       if (!state.supportMessages) state.supportMessages = [];
-      if (!state.supportCases) state.supportCases = [];
-
-      let activeCase = state.supportCases.find(
-        (c) => c.userId === user.id && c.status === "waiting",
-      );
-      if (!activeCase) {
-        activeCase = {
-          id: `CASE-${newId().slice(0, 8).toUpperCase()}`,
-          userId: user.id,
-          status: "waiting",
-          query: action.query || "Customer requested human support handoff.",
-          createdAt: now,
-        };
-        state.supportCases.push(activeCase);
-      }
-
+      state.supportMessages.push({
+        id: newId(),
+        userId: user.id,
+        sender: "user",
+        text: action.query || "Talk to a Human",
+        createdAt: now,
+      });
       state.supportMessages.push({
         id: newId(),
         userId: user.id,
         sender: "bot",
-        caseId: activeCase.id,
-        text: "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+        text: "I couldn't send your message to our support team right now. Please try again.",
         createdAt: now,
       });
       break;
     }
 
     case "supportStaffReply": {
-      if (!state.supportMessages) state.supportMessages = [];
-      if (!state.supportCases) state.supportCases = [];
-
-      const sc = state.supportCases.find((c) => c.id === action.caseId);
-      requireThat(sc, "Support case not found.");
-      sc.status = "replied";
-      sc.respondedAt = now;
-
-      state.supportMessages.push({
-        id: newId(),
-        userId: sc.userId,
-        sender: "human",
-        caseId: sc.id,
-        text: action.text,
-        createdAt: now,
-      });
-
-      notify(
-        sc.userId,
-        "CurRENT Support · Human has replied to your customer service enquiry.",
+      throw new Error(
+        "Authenticated support staff replies require a configured support backend.",
       );
-      break;
     }
   }
 

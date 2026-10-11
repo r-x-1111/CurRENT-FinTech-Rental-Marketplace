@@ -3,7 +3,11 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 import { createSeed } from "../data/seed";
-import { transition, type Action } from "../services/marketplace";
+import {
+  resolveAutomatedSupportQuery,
+  transition,
+  type Action,
+} from "../services/marketplace";
 import {
   availability,
   availabilityCalendar,
@@ -20,6 +24,10 @@ import {
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
 import { evaluateRentalOutcome } from "../services/riskScore";
+import {
+  authenticateWithPassword,
+  signOutAuthenticatedAccount,
+} from "../services/auth";
 
 function journey() {
   let state = createSeed();
@@ -50,6 +58,128 @@ function journey() {
     operation,
   };
 }
+
+test("Demo password authentication rejects wrong credentials and supports logout plus fresh login", async () => {
+  let authenticated = false;
+  const fakeAuth = {
+    async signInWithPassword({
+      email,
+      password,
+    }: {
+      email: string;
+      password: string;
+    }) {
+      const valid =
+        email.toLowerCase() === "democurrent@gmail.com" &&
+        password === "test-only-demo-password";
+      authenticated = valid;
+      return {
+        data: {
+          user: valid
+            ? {
+                id: "auth-demo-user",
+                email: "DemoCurRENT@gmail.com",
+                app_metadata: {
+                  account_kind: "demo",
+                  verified_demo: true,
+                },
+              }
+            : null,
+        },
+        error: valid ? null : new Error("Invalid credentials"),
+      };
+    },
+    async signOut() {
+      authenticated = false;
+      return { error: null };
+    },
+  };
+
+  await assert.rejects(
+    authenticateWithPassword(
+      fakeAuth,
+      "DemoCurRENT@gmail.com",
+      "incorrect-password",
+    ),
+    /Email or password is incorrect/,
+  );
+  assert.equal(authenticated, false);
+
+  const unauthorizedDemoAuth = {
+    ...fakeAuth,
+    async signInWithPassword() {
+      return {
+        data: {
+          user: {
+            email: "DemoCurRENT@gmail.com",
+            id: "auth-demo-user",
+            app_metadata: {
+              account_kind: "demo",
+              verified_demo: false,
+            },
+          },
+        },
+        error: null,
+      };
+    },
+  };
+  await assert.rejects(
+    authenticateWithPassword(
+      unauthorizedDemoAuth,
+      "DemoCurRENT@gmail.com",
+      "test-only-demo-password",
+    ),
+    /Email or password is incorrect/,
+  );
+  assert.equal(authenticated, false);
+
+  assert.deepEqual(
+    await authenticateWithPassword(
+      fakeAuth,
+      "DemoCurRENT@gmail.com",
+      "test-only-demo-password",
+    ),
+    {
+      accountKind: "demo",
+      id: "auth-demo-user",
+      email: "DemoCurRENT@gmail.com",
+      name: "Alex Tan",
+      verified: true,
+    },
+  );
+  assert.equal(authenticated, true);
+  let workspace = transition(createSeed(), {
+    type: "setMode",
+    mode: "admin_demo",
+  });
+  const baselineBookingIds = workspace.bookings.map((booking) => booking.id);
+  workspace.notifications = [];
+
+  await signOutAuthenticatedAccount(fakeAuth);
+  assert.equal(authenticated, false);
+
+  assert.deepEqual(
+    await authenticateWithPassword(
+      fakeAuth,
+      "DemoCurRENT@gmail.com",
+      "test-only-demo-password",
+    ),
+    {
+      accountKind: "demo",
+      id: "auth-demo-user",
+      email: "DemoCurRENT@gmail.com",
+      name: "Alex Tan",
+      verified: true,
+    },
+  );
+  workspace = transition(workspace, { type: "setMode", mode: "admin_demo" });
+  assert.equal(authenticated, true);
+  assert.deepEqual(
+    workspace.bookings.map((booking) => booking.id),
+    baselineBookingIds,
+  );
+  assert.ok(workspace.notifications.length > 0);
+});
 test("quotes use exclusive return day, service minimum, risk deposit and optional protection", () => {
   const state = createSeed();
   const quote = quoteFor(
@@ -187,7 +317,10 @@ test("the final available date can be rented with an exclusive next-day return",
     { type: "saveListing", listing },
   );
   assert.equal(availabilityCalendar(saved, listing, 4)[2].status, "available");
-  assert.equal(availabilityCalendar(saved, listing, 4)[3].status, "unavailable");
+  assert.equal(
+    availabilityCalendar(saved, listing, 4)[3].status,
+    "unavailable",
+  );
   availability(saved, listing, finalDay, dateAfter(3));
   assert.throws(
     () => availability(saved, listing, finalDay, dateAfter(4)),
@@ -327,10 +460,7 @@ test("Delivery Only is enforced and recorded in the agreement", () => {
     id: "collection-booking",
     operation: "payment_result",
   });
-  assert.match(
-    state.bookings[0].agreement || "",
-    /Fulfilment: Delivery Only/,
-  );
+  assert.match(state.bookings[0].agreement || "", /Fulfilment: Delivery Only/);
 });
 test("state snapshots can reload mid-payment without losing fees or agreement progress", () => {
   const j = journey();
@@ -396,21 +526,57 @@ test("simulated eKYC verification initializes risk score to 80 and unverified is
 test("V3.15 risk score tier boundaries and direct checkout permissions (29, 30, 39, 40, 70, 79, 80, 100)", () => {
   const { tierForScore } = require("../services/riskScore");
   // 0-29: Very High Risk, platform review, canDirectBook: false
-  assert.deepEqual(tierForScore(0), { level: "very_high", label: "Very High Risk", canDirectBook: false });
-  assert.deepEqual(tierForScore(29), { level: "very_high", label: "Very High Risk", canDirectBook: false });
+  assert.deepEqual(tierForScore(0), {
+    level: "very_high",
+    label: "Very High Risk",
+    canDirectBook: false,
+  });
+  assert.deepEqual(tierForScore(29), {
+    level: "very_high",
+    label: "Very High Risk",
+    canDirectBook: false,
+  });
 
   // 30-39: High Risk, canDirectBook: true
-  assert.deepEqual(tierForScore(30), { level: "high", label: "High Risk", canDirectBook: true });
-  assert.deepEqual(tierForScore(39), { level: "high", label: "High Risk", canDirectBook: true });
+  assert.deepEqual(tierForScore(30), {
+    level: "high",
+    label: "High Risk",
+    canDirectBook: true,
+  });
+  assert.deepEqual(tierForScore(39), {
+    level: "high",
+    label: "High Risk",
+    canDirectBook: true,
+  });
 
   // 40-79: Medium Risk, canDirectBook: true
-  assert.deepEqual(tierForScore(40), { level: "medium", label: "Medium Risk", canDirectBook: true });
-  assert.deepEqual(tierForScore(70), { level: "medium", label: "Medium Risk", canDirectBook: true });
-  assert.deepEqual(tierForScore(79), { level: "medium", label: "Medium Risk", canDirectBook: true });
+  assert.deepEqual(tierForScore(40), {
+    level: "medium",
+    label: "Medium Risk",
+    canDirectBook: true,
+  });
+  assert.deepEqual(tierForScore(70), {
+    level: "medium",
+    label: "Medium Risk",
+    canDirectBook: true,
+  });
+  assert.deepEqual(tierForScore(79), {
+    level: "medium",
+    label: "Medium Risk",
+    canDirectBook: true,
+  });
 
   // 80-100: Low Risk, canDirectBook: true
-  assert.deepEqual(tierForScore(80), { level: "low", label: "Low Risk", canDirectBook: true });
-  assert.deepEqual(tierForScore(100), { level: "low", label: "Low Risk", canDirectBook: true });
+  assert.deepEqual(tierForScore(80), {
+    level: "low",
+    label: "Low Risk",
+    canDirectBook: true,
+  });
+  assert.deepEqual(tierForScore(100), {
+    level: "low",
+    label: "Low Risk",
+    canDirectBook: true,
+  });
 });
 
 test("single winning incident rule applies only the most severe penalty and marks others Recorded", () => {
@@ -487,7 +653,9 @@ test("renter issue reports remain stage-specific, visible to lenders, and retry-
       { stage: "check_in", text: checkInReport.text },
     ],
   );
-  assert.ok(state.notifications.some((notice) => notice.userId === booking.ownerId));
+  assert.ok(
+    state.notifications.some((notice) => notice.userId === booking.ownerId),
+  );
 
   const duplicateRetry = transition(state, checkOutReport);
   const existingDisputeCount = state.disputes.length;
@@ -499,7 +667,64 @@ test("renter issue reports remain stage-specific, visible to lenders, and retry-
   );
 
   state = transition(state, { type: "login", userId: booking.ownerId });
+  assert.deepEqual(
+    state.issueReports?.map(({ stage, text }) => ({ stage, text })),
+    [
+      { stage: "check_out", text: checkOutReport.text },
+      { stage: "check_in", text: checkInReport.text },
+    ],
+  );
   assert.throws(() => transition(state, checkInReport), /Only the renter/);
+});
+
+test("issue report drafts can be prepared while pending but submitted only in their active stage", () => {
+  for (const mode of ["normal", "admin_demo"] as const) {
+    let state = createSeed(mode);
+    let booking = state.bookings.find(
+      (item) => item.status === "upcoming" && item.renterId === "demo-renter",
+    );
+    if (!booking) {
+      const upcomingDemoRental = createSeed("admin_demo").bookings.find(
+        (item) => item.status === "upcoming" && item.renterId === "demo-renter",
+      )!;
+      booking = { ...upcomingDemoRental, contextMode: mode };
+      state.bookings.push(booking);
+    }
+    state = transition(state, { type: "login", userId: booking.renterId });
+    const pendingCheckInReport = {
+      type: "reportIssue" as const,
+      bookingId: booking.id,
+      stage: "check_in" as const,
+      text: "Drafted before delivery.",
+    };
+    const pendingCheckOutReport = {
+      ...pendingCheckInReport,
+      stage: "check_out" as const,
+    };
+    assert.throws(
+      () => transition(state, pendingCheckInReport),
+      /relevant active rental stage/,
+    );
+    assert.throws(
+      () => transition(state, pendingCheckOutReport),
+      /relevant active rental stage/,
+    );
+    assert.equal(state.issueReports?.length ?? 0, 0);
+
+    state = {
+      ...state,
+      bookings: state.bookings.map((item) =>
+        item.id === booking.id ? { ...item, status: "return_pending" } : item,
+      ),
+    };
+    assert.throws(
+      () => transition(state, pendingCheckInReport),
+      /relevant active rental stage/,
+    );
+    assert.equal(state.issueReports?.length ?? 0, 0);
+    state = transition(state, pendingCheckOutReport);
+    assert.equal(state.issueReports?.[0].stage, "check_out");
+  }
 });
 
 test("RM10 lender boost features listing for 7 days", () => {
@@ -513,7 +738,8 @@ test("RM10 lender boost features listing for 7 days", () => {
   const afterListing = state.listings.find((l) => l.id === listingId)!;
   assert.ok(afterListing.featuredUntil);
   const diffDays =
-    (new Date(afterListing.featuredUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    (new Date(afterListing.featuredUntil).getTime() - Date.now()) /
+    (1000 * 60 * 60 * 24);
   assert.ok(diffDays >= 6.9 && diffDays <= 7.1);
 });
 
@@ -575,11 +801,24 @@ test("Phase 3: two-sided handover requires both lender and renter confirmations 
   });
 
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "booking", id: "booking-handover", operation: "approve" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-handover",
+    operation: "approve",
+  });
 
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "booking", id: "booking-handover", operation: "pay", method: "Demo card" });
-  state = transition(state, { type: "booking", id: "booking-handover", operation: "payment_result" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-handover",
+    operation: "pay",
+    method: "Demo card",
+  });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-handover",
+    operation: "payment_result",
+  });
 
   const bUpcoming = state.bookings.find((b) => b.id === "booking-handover")!;
   assert.equal(bUpcoming.status, "upcoming");
@@ -587,7 +826,11 @@ test("Phase 3: two-sided handover requires both lender and renter confirmations 
 
   // Lender confirms handover first
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "handoverConfirm", bookingId: "booking-handover", role: "owner" });
+  state = transition(state, {
+    type: "handoverConfirm",
+    bookingId: "booking-handover",
+    role: "owner",
+  });
 
   const bAfterOwner = state.bookings.find((b) => b.id === "booking-handover")!;
   assert.ok(bAfterOwner.lenderHandoverAt);
@@ -595,7 +838,11 @@ test("Phase 3: two-sided handover requires both lender and renter confirmations 
 
   // Renter confirms receipt
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "handoverConfirm", bookingId: "booking-handover", role: "renter" });
+  state = transition(state, {
+    type: "handoverConfirm",
+    bookingId: "booking-handover",
+    role: "renter",
+  });
 
   const bActive = state.bookings.find((b) => b.id === "booking-handover")!;
   assert.ok(bActive.renterReceivedAt);
@@ -619,14 +866,31 @@ test("Phase 3: cancellation requires >= 24h before scheduled pickup with 100% re
   });
 
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "booking", id: "booking-cancel-ok", operation: "approve" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-cancel-ok",
+    operation: "approve",
+  });
 
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "booking", id: "booking-cancel-ok", operation: "pay", method: "Demo card" });
-  state = transition(state, { type: "booking", id: "booking-cancel-ok", operation: "payment_result" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-cancel-ok",
+    operation: "pay",
+    method: "Demo card",
+  });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-cancel-ok",
+    operation: "payment_result",
+  });
 
   // Cancel eligible booking
-  state = transition(state, { type: "booking", id: "booking-cancel-ok", operation: "cancel" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-cancel-ok",
+    operation: "cancel",
+  });
   const bCancelled = state.bookings.find((b) => b.id === "booking-cancel-ok")!;
   assert.equal(bCancelled.status, "cancelled");
   assert.equal(bCancelled.payment, "refunded");
@@ -642,13 +906,31 @@ test("Phase 3: cancellation requires >= 24h before scheduled pickup with 100% re
     protection: false,
   });
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "booking", id: "booking-cancel-late", operation: "approve" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-cancel-late",
+    operation: "approve",
+  });
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "booking", id: "booking-cancel-late", operation: "pay", method: "Demo card" });
-  state = transition(state, { type: "booking", id: "booking-cancel-late", operation: "payment_result" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-cancel-late",
+    operation: "pay",
+    method: "Demo card",
+  });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-cancel-late",
+    operation: "payment_result",
+  });
 
   assert.throws(
-    () => transition(state, { type: "booking", id: "booking-cancel-late", operation: "cancel" }),
+    () =>
+      transition(state, {
+        type: "booking",
+        id: "booking-cancel-late",
+        operation: "cancel",
+      }),
     /at least 24 hours/,
   );
 });
@@ -665,15 +947,36 @@ test("Phase 4: active rental consecutive extension updates deadline with RM0 ext
     protection: false,
   });
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "booking", id: "booking-extend", operation: "approve" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-extend",
+    operation: "approve",
+  });
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "booking", id: "booking-extend", operation: "pay", method: "Demo card" });
-  state = transition(state, { type: "booking", id: "booking-extend", operation: "payment_result" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-extend",
+    operation: "pay",
+    method: "Demo card",
+  });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-extend",
+    operation: "payment_result",
+  });
 
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "handoverConfirm", bookingId: "booking-extend", role: "owner" });
+  state = transition(state, {
+    type: "handoverConfirm",
+    bookingId: "booking-extend",
+    role: "owner",
+  });
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "handoverConfirm", bookingId: "booking-extend", role: "renter" });
+  state = transition(state, {
+    type: "handoverConfirm",
+    bookingId: "booking-extend",
+    role: "renter",
+  });
 
   const bBefore = state.bookings.find((b) => b.id === "booking-extend")!;
   const origDays = bBefore.quote.days;
@@ -705,20 +1008,48 @@ test("Phase 4 & 5: clean return releases deposit with unassessed timing, while d
     protection: false,
   });
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "booking", id: "booking-return", operation: "approve" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-return",
+    operation: "approve",
+  });
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "booking", id: "booking-return", operation: "pay", method: "Demo card" });
-  state = transition(state, { type: "booking", id: "booking-return", operation: "payment_result" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-return",
+    operation: "pay",
+    method: "Demo card",
+  });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-return",
+    operation: "payment_result",
+  });
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "handoverConfirm", bookingId: "booking-return", role: "owner" });
+  state = transition(state, {
+    type: "handoverConfirm",
+    bookingId: "booking-return",
+    role: "owner",
+  });
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "handoverConfirm", bookingId: "booking-return", role: "renter" });
+  state = transition(state, {
+    type: "handoverConfirm",
+    bookingId: "booking-return",
+    role: "renter",
+  });
 
-  const scoreBefore = state.profiles.find((p) => p.id === "demo-renter")!.riskScore;
+  const scoreBefore = state.profiles.find(
+    (p) => p.id === "demo-renter",
+  )!.riskScore;
   assert.equal(scoreBefore, 80);
 
   const samplePhotos = [
-    "photo-1", "photo-2", "photo-3", "photo-4", "photo-5", "photo-6"
+    "photo-1",
+    "photo-2",
+    "photo-3",
+    "photo-4",
+    "photo-5",
+    "photo-6",
   ];
   const sampleVideos = ["video-1"];
 
@@ -759,7 +1090,9 @@ test("Phase 4 & 5: clean return releases deposit with unassessed timing, while d
   assert.equal(bCompleted.status, "completed");
   assert.equal(bCompleted.deposit, "released");
 
-  const scoreAfter = state.profiles.find((p) => p.id === "demo-renter")!.riskScore;
+  const scoreAfter = state.profiles.find(
+    (p) => p.id === "demo-renter",
+  )!.riskScore;
   assert.equal(scoreAfter, 80);
   const finalOutcome = state.profiles
     .find((p) => p.id === "demo-renter")!
@@ -780,14 +1113,35 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
     protection: false,
   });
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "booking", id: "booking-dispute", operation: "approve" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-dispute",
+    operation: "approve",
+  });
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "booking", id: "booking-dispute", operation: "pay", method: "Demo card" });
-  state = transition(state, { type: "booking", id: "booking-dispute", operation: "payment_result" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-dispute",
+    operation: "pay",
+    method: "Demo card",
+  });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-dispute",
+    operation: "payment_result",
+  });
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "handoverConfirm", bookingId: "booking-dispute", role: "owner" });
+  state = transition(state, {
+    type: "handoverConfirm",
+    bookingId: "booking-dispute",
+    role: "owner",
+  });
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "handoverConfirm", bookingId: "booking-dispute", role: "renter" });
+  state = transition(state, {
+    type: "handoverConfirm",
+    bookingId: "booking-dispute",
+    role: "renter",
+  });
 
   // Owner raises a dispute for scratched lens
   state = transition(state, { type: "login", userId: "owner-aiman" });
@@ -803,7 +1157,9 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
   assert.equal(bDisputed.status, "disputed");
   assert.equal(bDisputed.deposit, "disputed");
 
-  const dispute = state.disputes.find((d) => d.bookingId === "booking-dispute")!;
+  const dispute = state.disputes.find(
+    (d) => d.bookingId === "booking-dispute",
+  )!;
   assert.equal(dispute.status, "under_review");
 
   // Resolve with minor damage fixture: deducts RM150, applies -10 penalty
@@ -832,10 +1188,23 @@ test("Phase 3: Option A delayed handover collision generates conflict offer that
     protection: false,
   });
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "booking", id: "booking-r1", operation: "approve" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-r1",
+    operation: "approve",
+  });
   state = transition(state, { type: "login", userId: "demo-renter" });
-  state = transition(state, { type: "booking", id: "booking-r1", operation: "pay", method: "Demo card" });
-  state = transition(state, { type: "booking", id: "booking-r1", operation: "payment_result" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-r1",
+    operation: "pay",
+    method: "Demo card",
+  });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-r1",
+    operation: "payment_result",
+  });
 
   // Renter 2 books Nov 5 to Nov 7
   state = transition(state, { type: "login", userId: "owner-sarah" });
@@ -848,14 +1217,29 @@ test("Phase 3: Option A delayed handover collision generates conflict offer that
     protection: false,
   });
   state = transition(state, { type: "login", userId: "owner-aiman" });
-  state = transition(state, { type: "booking", id: "booking-r2", operation: "approve" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-r2",
+    operation: "approve",
+  });
   state = transition(state, { type: "login", userId: "owner-sarah" });
-  state = transition(state, { type: "booking", id: "booking-r2", operation: "pay", method: "Demo card" });
-  state = transition(state, { type: "booking", id: "booking-r2", operation: "payment_result" });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-r2",
+    operation: "pay",
+    method: "Demo card",
+  });
+  state = transition(state, {
+    type: "booking",
+    id: "booking-r2",
+    operation: "payment_result",
+  });
 
   // Simulate late handover for Renter 1 (shifts 12 hours later, overlapping Renter 2)
   const b1 = state.bookings.find((b) => b.id === "booking-r1")!;
-  const latePickupTs = new Date(Date.now() + 2 * 86400000 + 12 * 3600000).toISOString();
+  const latePickupTs = new Date(
+    Date.now() + 2 * 86400000 + 12 * 3600000,
+  ).toISOString();
   b1.lenderHandoverAt = latePickupTs;
 
   state = transition(state, { type: "login", userId: "demo-renter" });
@@ -902,13 +1286,22 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
 
   // 2. High risk user (score 25, Very High Risk) submits Request to Rent
   state = transition(state, { type: "login", userId: "high-risk-renter" });
-  state.profiles.find((profile) => profile.id === "high-risk-renter")!.riskHistory = [
+  state.profiles.find(
+    (profile) => profile.id === "high-risk-renter",
+  )!.riskHistory = [
     {
       id: "qa-risk-serious-damage",
       bookingId: "qa-booking-serious-damage",
       itemTitle: "QA fixture: serious damage",
       date: "2026-01-01",
-      incidents: [{ type: "serious_damage", description: "Confirmed", penalty: -30, isWinning: true }],
+      incidents: [
+        {
+          type: "serious_damage",
+          description: "Confirmed",
+          penalty: -30,
+          isWinning: true,
+        },
+      ],
       effectiveAdjustment: -30,
       scoreBefore: 80,
       scoreAfter: 50,
@@ -919,7 +1312,14 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
       bookingId: "qa-booking-minor-damage-1",
       itemTitle: "QA fixture: minor damage",
       date: "2026-01-02",
-      incidents: [{ type: "minor_damage", description: "Confirmed", penalty: -10, isWinning: true }],
+      incidents: [
+        {
+          type: "minor_damage",
+          description: "Confirmed",
+          penalty: -10,
+          isWinning: true,
+        },
+      ],
       effectiveAdjustment: -10,
       scoreBefore: 50,
       scoreAfter: 40,
@@ -930,7 +1330,14 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
       bookingId: "qa-booking-minor-damage-2",
       itemTitle: "QA fixture: minor damage",
       date: "2026-01-03",
-      incidents: [{ type: "minor_damage", description: "Confirmed", penalty: -10, isWinning: true }],
+      incidents: [
+        {
+          type: "minor_damage",
+          description: "Confirmed",
+          penalty: -10,
+          isWinning: true,
+        },
+      ],
       effectiveAdjustment: -10,
       scoreBefore: 40,
       scoreAfter: 30,
@@ -941,7 +1348,14 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
       bookingId: "qa-booking-late-return",
       itemTitle: "QA fixture: late return",
       date: "2026-01-04",
-      incidents: [{ type: "late_return", description: "Confirmed", penalty: -5, isWinning: true }],
+      incidents: [
+        {
+          type: "late_return",
+          description: "Confirmed",
+          penalty: -5,
+          isWinning: true,
+        },
+      ],
       effectiveAdjustment: -5,
       scoreBefore: 30,
       scoreAfter: 25,
@@ -958,16 +1372,20 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
     returnTime: "11:00 AM (Automatically matched)",
     durationDays: 5,
     collectionMethod: "Delivery",
-    deliveryAddress: "Kenji Sato, +60 12 999 8888, 12 Jalan Universiti, 46200 Petaling Jaya, Selangor",
+    deliveryAddress:
+      "Kenji Sato, +60 12 999 8888, 12 Jalan Universiti, 46200 Petaling Jaya, Selangor",
     location: "Petaling Jaya",
     lenderName: "Aiman Rahman",
     dailyPrice: 45,
     estimatedRentalFee: 225,
-    notes: "Pending CurRENT Review (Demo). Submitted for platform safety assessment.",
+    notes:
+      "Pending CurRENT Review (Demo). Submitted for platform safety assessment.",
   });
 
   // Verify application in platformReviewRequests
-  const app = state.platformReviewRequests.find((r) => r.id === "REQ-TEST-1234");
+  const app = state.platformReviewRequests.find(
+    (r) => r.id === "REQ-TEST-1234",
+  );
   assert.ok(app, "Application should be saved in state.platformReviewRequests");
   assert.equal(app.status, "pending_review");
   assert.equal(app.renterId, "high-risk-renter");
@@ -976,7 +1394,10 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
   assert.equal(app.returnTime, "11:00 AM (Automatically matched)");
   assert.equal(app.durationDays, 5);
   assert.equal(app.estimatedRentalFee, 225);
-  assert.equal(app.deliveryAddress, "Kenji Sato, +60 12 999 8888, 12 Jalan Universiti, 46200 Petaling Jaya, Selangor");
+  assert.equal(
+    app.deliveryAddress,
+    "Kenji Sato, +60 12 999 8888, 12 Jalan Universiti, 46200 Petaling Jaya, Selangor",
+  );
 
   // Verify idempotency: duplicate submission does not duplicate requests
   const initialCount = state.platformReviewRequests.length;
@@ -987,7 +1408,11 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
     start: "2026-11-20",
     end: "2026-11-25",
   });
-  assert.equal(state.platformReviewRequests.length, initialCount, "Duplicate submission with same ID must be idempotent");
+  assert.equal(
+    state.platformReviewRequests.length,
+    initialCount,
+    "Duplicate submission with same ID must be idempotent",
+  );
 
   // Crucial rule: No booking created, no payment charged, no deposit held, inventory NOT reserved
   assert.ok(!state.bookings.some((b) => b.renterId === "high-risk-renter"));
@@ -1003,8 +1428,13 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
     collectionMethod: "Delivery Only",
     paymentMethod: "Demo FPX",
   });
-  const booked = state.bookings.find((b) => b.id === "booking-eligible-after-req");
-  assert.ok(booked, "Eligible renter should be able to book because application did not reserve inventory");
+  const booked = state.bookings.find(
+    (b) => b.id === "booking-eligible-after-req",
+  );
+  assert.ok(
+    booked,
+    "Eligible renter should be able to book because application did not reserve inventory",
+  );
   assert.equal(booked.status, "upcoming");
   assert.equal(booked.payment, "paid");
 });
@@ -1018,63 +1448,146 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
   const demoProfile = seed.profiles.find((p) => p.id === demoUserId)!;
 
   // 1. At least 3 demo-owned listings
-  assert.ok(demoListings.length >= 3, `Expected >= 3 demo listings, got ${demoListings.length}`);
-  assert.ok(demoListings.some((l) => l.featuredUntil && new Date(l.featuredUntil) > new Date()), "Expected at least 1 boosted listing");
+  assert.ok(
+    demoListings.length >= 3,
+    `Expected >= 3 demo listings, got ${demoListings.length}`,
+  );
+  assert.ok(
+    demoListings.some(
+      (l) => l.featuredUntil && new Date(l.featuredUntil) > new Date(),
+    ),
+    "Expected at least 1 boosted listing",
+  );
 
   // 2. At least 3 Upcoming rentals
   const upcoming = userBookings.filter((b) => b.status === "upcoming");
-  assert.ok(upcoming.length >= 3, `Expected >= 3 upcoming rentals, got ${upcoming.length}`);
+  assert.ok(
+    upcoming.length >= 3,
+    `Expected >= 3 upcoming rentals, got ${upcoming.length}`,
+  );
 
   // 3. At least 3 Active rentals
   const active = userBookings.filter((b) => b.status === "active");
-  assert.ok(active.length >= 3, `Expected >= 3 active rentals, got ${active.length}`);
+  assert.ok(
+    active.length >= 3,
+    `Expected >= 3 active rentals, got ${active.length}`,
+  );
 
   // 4. At least 3 Return Due rentals
-  const returnDue = userBookings.filter((b) => b.status === "return_pending" || (b.status === "active" && b.end <= dateAfter(1)));
-  assert.ok(returnDue.length >= 3, `Expected >= 3 return due rentals, got ${returnDue.length}`);
+  const returnDue = userBookings.filter(
+    (b) =>
+      b.status === "return_pending" ||
+      (b.status === "active" && b.end <= dateAfter(1)),
+  );
+  assert.ok(
+    returnDue.length >= 3,
+    `Expected >= 3 return due rentals, got ${returnDue.length}`,
+  );
 
   // 5. At least 3 Cancelled rentals
   const cancelled = userBookings.filter((b) => b.status === "cancelled");
-  assert.ok(cancelled.length >= 3, `Expected >= 3 cancelled rentals, got ${cancelled.length}`);
+  assert.ok(
+    cancelled.length >= 3,
+    `Expected >= 3 cancelled rentals, got ${cancelled.length}`,
+  );
 
   // 6. At least 3 Disputed rentals
   const disputed = userBookings.filter((b) => b.status === "disputed");
-  assert.ok(disputed.length >= 3, `Expected >= 3 disputed rentals, got ${disputed.length}`);
+  assert.ok(
+    disputed.length >= 3,
+    `Expected >= 3 disputed rentals, got ${disputed.length}`,
+  );
 
   // 7. Exactly 4 Completed rentals matching 4 linked risk adjustments (+2, +2, 0, 0)
   const completed = userBookings.filter((b) => b.status === "completed");
-  assert.equal(completed.length, 4, `Expected exactly 4 completed rentals, got ${completed.length}`);
+  assert.equal(
+    completed.length,
+    4,
+    `Expected exactly 4 completed rentals, got ${completed.length}`,
+  );
   assert.equal(demoProfile.riskScore, 84, "Expected risk score 84");
   assert.equal(demoProfile.riskLevel, "low", "Expected low risk tier");
   assert.ok(demoProfile.riskHistory, "Risk history must be present");
-  assert.equal(demoProfile.riskHistory.length, 4, "Expected 4 risk incident records");
+  assert.equal(
+    demoProfile.riskHistory.length,
+    4,
+    "Expected 4 risk incident records",
+  );
   const adjustments = demoProfile.riskHistory.map((h) => h.effectiveAdjustment);
-  assert.deepEqual(adjustments.slice().sort(), [0, 0, 2, 2], "Expected adjustments to be +2, +2, 0, 0");
+  assert.deepEqual(
+    adjustments.slice().sort(),
+    [0, 0, 2, 2],
+    "Expected adjustments to be +2, +2, 0, 0",
+  );
   const sumAdj = adjustments.reduce((a, b) => a + b, 0);
-  assert.equal(sumAdj, 4, "Adjustments must net to +4 from the 80-point starting score");
+  assert.equal(
+    sumAdj,
+    4,
+    "Adjustments must net to +4 from the 80-point starting score",
+  );
   assert.equal(riskFor(seed, demoProfile).score, 84);
 
   // 8. At least 3 saved items (favourites)
-  assert.ok(demoProfile.favourites.length >= 3, `Expected >= 3 favourites, got ${demoProfile.favourites.length}`);
+  assert.ok(
+    demoProfile.favourites.length >= 3,
+    `Expected >= 3 favourites, got ${demoProfile.favourites.length}`,
+  );
 
   // 9. At least 3 lender completed payouts
   const lenderPayouts = lenderBookings.filter((b) => b.status === "completed");
-  assert.ok(lenderPayouts.length >= 3, `Expected >= 3 lender payouts, got ${lenderPayouts.length}`);
+  assert.equal(
+    lenderPayouts.length,
+    1,
+    `Expected exactly 1 lender payout, got ${lenderPayouts.length}`,
+  );
+  assert.equal(lenderBookings.filter((b) => b.status === "upcoming").length, 1);
+  assert.equal(
+    lenderBookings.filter((b) =>
+      ["active", "upcoming", "return_pending"].includes(b.status),
+    ).length,
+    1,
+    "The lender Active / Upcoming Rentals counter should match its single upcoming booking.",
+  );
+  assert.equal(lenderPayouts[0].id, "demo-lender-completed-1");
+  assert.equal(
+    calculateOwnerPayout(lenderPayouts[0].quote.rentalFee).payout,
+    39.6,
+  );
+  assert.equal(
+    seed.messages.filter((message) =>
+      lenderBookings.some((booking) => booking.id === message.bookingId),
+    ).length,
+    4,
+    "The retained lender bookings should keep their message threads.",
+  );
 
   // 10. At least 3 notifications
   const userNotifs = seed.notifications.filter((n) => n.userId === demoUserId);
-  assert.ok(userNotifs.length >= 3, `Expected >= 3 notifications, got ${userNotifs.length}`);
+  assert.ok(
+    userNotifs.length >= 3,
+    `Expected >= 3 notifications, got ${userNotifs.length}`,
+  );
 
   // 11. At least 3 rental-linked conversation threads with >= 2 messages each
   const threads = new Set(seed.messages.map((m) => m.bookingId));
-  assert.ok(threads.size >= 3, `Expected >= 3 conversation threads, got ${threads.size}`);
+  assert.ok(
+    threads.size >= 3,
+    `Expected >= 3 conversation threads, got ${threads.size}`,
+  );
   for (const tid of threads) {
     const threadMsgs = seed.messages.filter((m) => m.bookingId === tid);
-    assert.ok(threadMsgs.length >= 2, `Expected thread ${tid} to have >= 2 messages, got ${threadMsgs.length}`);
+    assert.ok(
+      threadMsgs.length >= 2,
+      `Expected thread ${tid} to have >= 2 messages, got ${threadMsgs.length}`,
+    );
   }
 
   // 12. Exactly ONE approved Sony sample review in entire app
-  assert.equal(seed.reviews.length, 0, "No fabricated marketplace reviews in seed");
+  assert.equal(
+    seed.reviews.length,
+    0,
+    "No fabricated marketplace reviews in seed",
+  );
 });
 
 test("V3.23 listing publish requires >= 6 photos and >= 1 video", () => {
@@ -1163,7 +1676,12 @@ test("V3.23 listing publish requires >= 6 photos and >= 1 video", () => {
 
 test("V3.23 fresh demo sign-in restores baseline while refresh preserves session", () => {
   let state = createSeed("admin_demo");
-  assert.equal(state.bookings.filter((b) => b.renterId === "demo-renter" && b.status === "upcoming").length, 3);
+  assert.equal(
+    state.bookings.filter(
+      (b) => b.renterId === "demo-renter" && b.status === "upcoming",
+    ).length,
+    3,
+  );
 
   // User alters data during session (e.g. cancels one booking)
   state = transition(state, { type: "login", userId: "demo-renter" });
@@ -1172,14 +1690,23 @@ test("V3.23 fresh demo sign-in restores baseline while refresh preserves session
     id: "demo-booking-upcoming-1",
     operation: "cancel",
   });
-  assert.equal(state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!.status, "cancelled");
+  assert.equal(
+    state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!.status,
+    "cancelled",
+  );
 
   // A refresh of an active session retains state in memory/AsyncStorage:
-  assert.equal(state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!.status, "cancelled");
+  assert.equal(
+    state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!.status,
+    "cancelled",
+  );
 
   // A fresh explicit demo login restores the complete baseline:
   state = transition(state, { type: "resetDemoState" });
-  assert.equal(state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!.status, "upcoming");
+  assert.equal(
+    state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!.status,
+    "upcoming",
+  );
 });
 
 test("V3.23 Section 7.4: free-cancellation deadline calculation, notice format, and boundary eligibility in Malaysia timezone", () => {
@@ -1197,13 +1724,28 @@ test("V3.23 Section 7.4: free-cancellation deadline calculation, notice format, 
   // 2. Cancellation notice displays exactly "Free cancellation until 22 Oct 2026, 11:00 AM" (NOT 19:00, NO (Demo))
   const notice = `Free cancellation until ${formatMalaysiaDateTime(cutoffEpoch)}`;
   assert.equal(notice, "Free cancellation until 22 Oct 2026, 11:00 AM");
-  assert.ok(!notice.includes("19:00"), "Must NOT display 19:00 due to UTC offset bug");
+  assert.ok(
+    !notice.includes("19:00"),
+    "Must NOT display 19:00 due to UTC offset bug",
+  );
   assert.ok(!notice.includes("(Demo)"), "Must NOT contain (Demo) suffix");
 
   // 3. Permitted at exactly 24 hours before rental start (now <= cutoff) and blocked 1 second after cutoff
-  assert.equal(isCancellationEligible(startUtc, cutoffEpoch), true, "Permitted exactly at cutoff instant");
-  assert.equal(isCancellationEligible(startUtc, cutoffEpoch - 1000), true, "Permitted 1 second before cutoff");
-  assert.equal(isCancellationEligible(startUtc, cutoffEpoch + 1000), false, "Blocked 1 second after cutoff");
+  assert.equal(
+    isCancellationEligible(startUtc, cutoffEpoch),
+    true,
+    "Permitted exactly at cutoff instant",
+  );
+  assert.equal(
+    isCancellationEligible(startUtc, cutoffEpoch - 1000),
+    true,
+    "Permitted 1 second before cutoff",
+  );
+  assert.equal(
+    isCancellationEligible(startUtc, cutoffEpoch + 1000),
+    false,
+    "Blocked 1 second after cutoff",
+  );
 
   // 4. Backend cancellation eligibility matches cutoff timestamp
   let state = createSeed("admin_demo");
@@ -1236,7 +1778,10 @@ test("V3.23 Section 7.4: free-cancellation deadline calculation, notice format, 
   const nov2Start = toMalaysiaUtcTimestamp("2026-11-02", "10:00");
   assert.equal(nov2Start, "2026-11-02T02:00:00.000Z");
   const nov2Cutoff = parseMalaysiaTimestamp(nov2Start) - 24 * 60 * 60 * 1000;
-  assert.equal(`Free cancellation until ${formatMalaysiaDateTime(nov2Cutoff)}`, "Free cancellation until 1 Nov 2026, 10:00 AM");
+  assert.equal(
+    `Free cancellation until ${formatMalaysiaDateTime(nov2Cutoff)}`,
+    "Free cancellation until 1 Nov 2026, 10:00 AM",
+  );
 });
 
 test("Sony A7 III image gallery has 4 distinct original reference images in exact PDF order", () => {
@@ -1246,7 +1791,11 @@ test("Sony A7 III image gallery has 4 distinct original reference images in exac
   assert.ok(sony.images);
 
   // 1. Must contain 4 images total
-  assert.equal(sony.images.length, 4, "Sony A7 III gallery must have exactly 4 images");
+  assert.equal(
+    sony.images.length,
+    4,
+    "Sony A7 III gallery must have exactly 4 images",
+  );
 
   // 2. Exact order:
   // [0] Yellow-background main image
@@ -1264,9 +1813,15 @@ test("Sony A7 III image gallery has 4 distinct original reference images in exac
   // 3. Verify all 4 image assets exist on disk and are valid non-empty files
   for (const imgPath of sony.images) {
     const fullPath = path.join(process.cwd(), "public", imgPath);
-    assert.ok(fs.existsSync(fullPath), `Asset file must exist on disk: ${imgPath}`);
+    assert.ok(
+      fs.existsSync(fullPath),
+      `Asset file must exist on disk: ${imgPath}`,
+    );
     const stats = fs.statSync(fullPath);
-    assert.ok(stats.size > 10000, `Asset file must be high quality (>10KB): ${imgPath}`);
+    assert.ok(
+      stats.size > 10000,
+      `Asset file must be high quality (>10KB): ${imgPath}`,
+    );
   }
 });
 
@@ -1349,7 +1904,10 @@ test("Section 4.4 & 16: Renter condition evidence requires >= 6 photos and >= 1 
   });
 
   const checkInRecord = state.evidence.find(
-    (e) => e.bookingId === "demo-booking-active-1" && e.kind === "check_in" && e.authorId === "demo-renter",
+    (e) =>
+      e.bookingId === "demo-booking-active-1" &&
+      e.kind === "check_in" &&
+      e.authorId === "demo-renter",
   );
   assert.ok(checkInRecord);
   assert.equal(checkInRecord.photos?.length, 6);
@@ -1378,7 +1936,9 @@ test("Section 4.4 & 16: Renter condition evidence requires >= 6 photos and >= 1 
     notes: "Returned clean and complete",
   });
 
-  const bReturnPending = state.bookings.find((b) => b.id === "demo-booking-active-1")!;
+  const bReturnPending = state.bookings.find(
+    (b) => b.id === "demo-booking-active-1",
+  )!;
   assert.equal(bReturnPending.status, "return_pending");
   assert.ok(bReturnPending.renterReturnConfirmedAt);
 
@@ -1391,7 +1951,9 @@ test("Section 4.4 & 16: Renter condition evidence requires >= 6 photos and >= 1 
     notes: "No Issue - End Rental",
   });
 
-  const bCompleted = state.bookings.find((b) => b.id === "demo-booking-active-1")!;
+  const bCompleted = state.bookings.find(
+    (b) => b.id === "demo-booking-active-1",
+  )!;
   assert.equal(bCompleted.status, "completed");
   assert.equal(bCompleted.deposit, "released");
 });
@@ -1430,10 +1992,16 @@ test("Section 4.3: Owner listing supports 8 fixed delivery time slots", () => {
 
 test("Section 8 & 30: Canonical Digital Rental Agreement parity between renter and lender views with complete terms", () => {
   const state = createSeed("admin_demo");
-  const booking = state.bookings.find((b) => b.id === "demo-booking-upcoming-1");
+  const booking = state.bookings.find(
+    (b) => b.id === "demo-booking-upcoming-1",
+  );
   assert.ok(booking);
 
-  const renterAgreement = formatDigitalRentalAgreement(booking, state, "renter");
+  const renterAgreement = formatDigitalRentalAgreement(
+    booking,
+    state,
+    "renter",
+  );
   const lenderAgreement = formatDigitalRentalAgreement(booking, state, "owner");
 
   // Parity: identical full agreement content
@@ -1459,7 +2027,10 @@ test("Section 8 & 30: Canonical Digital Rental Agreement parity between renter a
   assert.match(renterAgreement, /Platform Commission \(12%\): RM10\.80/);
   assert.match(renterAgreement, /Net Lender Payout \(88%\): RM79\.20/);
   assert.match(renterAgreement, /5\. CONDITIONS & POLICIES/);
-  assert.match(renterAgreement, /Free cancellation up to 24 hours prior to scheduled rental start/);
+  assert.match(
+    renterAgreement,
+    /Free cancellation up to 24 hours prior to scheduled rental start/,
+  );
   assert.match(renterAgreement, /Renter records ≥6 photos and ≥1 video/);
   assert.match(renterAgreement, /6\. DIGITAL SIGNATURES & ACKNOWLEDGEMENT/);
   assert.match(renterAgreement, /Signed by Renter: Alex Tan/);
@@ -1476,7 +2047,9 @@ test("Section 8 & 30: Canonical Digital Rental Agreement parity between renter a
 
 test("Section 30: Post-rental 'How did it go?' rating and review submission for both Renter and Lender with duplicate prevention", () => {
   let state = createSeed("admin_demo");
-  const completedBooking = state.bookings.find((b) => b.status === "completed" && b.renterId === "demo-renter");
+  const completedBooking = state.bookings.find(
+    (b) => b.status === "completed" && b.renterId === "demo-renter",
+  );
   assert.ok(completedBooking);
 
   // 1. Renter submits review
@@ -1494,7 +2067,10 @@ test("Section 30: Post-rental 'How did it go?' rating and review submission for 
   assert.ok(renterReview);
   assert.equal(renterReview.rating, 5);
   assert.equal(renterReview.recipientId, completedBooking.ownerId);
-  assert.equal(renterReview.text, "Seamless delivery and camera was in immaculate condition!");
+  assert.equal(
+    renterReview.text,
+    "Seamless delivery and camera was in immaculate condition!",
+  );
 
   // 2. Duplicate submission blocked
   assert.throws(
@@ -1509,7 +2085,10 @@ test("Section 30: Post-rental 'How did it go?' rating and review submission for 
   );
 
   // 3. Counterparty (Lender) can also submit their own review
-  state = transition(state, { type: "login", userId: completedBooking.ownerId });
+  state = transition(state, {
+    type: "login",
+    userId: completedBooking.ownerId,
+  });
   state = transition(state, {
     type: "review",
     bookingId: completedBooking.id,
@@ -1518,7 +2097,9 @@ test("Section 30: Post-rental 'How did it go?' rating and review submission for 
   });
 
   const lenderReview = state.reviews.find(
-    (r) => r.bookingId === completedBooking.id && r.authorId === completedBooking.ownerId,
+    (r) =>
+      r.bookingId === completedBooking.id &&
+      r.authorId === completedBooking.ownerId,
   );
   assert.ok(lenderReview);
   assert.equal(lenderReview.rating, 5);
@@ -1584,7 +2165,9 @@ test("Section 4.4 & 30: Lender Check-out and Check-in condition evidence preserv
     notes: "Owner inspection confirmed clean — No Issue",
   });
 
-  const completedBooking = state.bookings.find((b) => b.id === activeBooking.id);
+  const completedBooking = state.bookings.find(
+    (b) => b.id === activeBooking.id,
+  );
   assert.equal(completedBooking?.status, "completed");
 
   // Evidence is preserved in completed status (never hidden or destroyed)
@@ -1595,116 +2178,110 @@ test("Section 4.4 & 30: Lender Check-out and Check-in condition evidence preserv
   assert.equal(preservedEvidence.photos?.length, 6);
 });
 
-test("Section 14.4: Customer Service chatbot answers known platform rules without escalation", () => {
-  let state = createSeed();
-  state = transition(state, { type: "login", userId: "demo-renter" });
-  const initialMessageCount = state.supportMessages.filter(
-    (m) => m.userId === "demo-renter",
-  ).length;
+test("Section 14.4: Customer Service separates fee chips and answers approved topics", () => {
+  const topics = [
+    "How to rent",
+    "Fees",
+    "Security deposits",
+    "Delivery & return",
+    "Rental extensions",
+    "Risk score",
+    "Disputes",
+    "How is my risk score calculated?",
+    "When will the lender receive rental money?",
+  ];
+  for (const topic of topics) {
+    const result = resolveAutomatedSupportQuery(topic);
+    assert.equal(result.answered, true, topic);
+    assert.ok(result.response, topic);
+    assert.equal(result.responses, undefined);
+  }
 
-  // 1. Ask about fees
-  state = transition(state, {
-    type: "supportQuery",
-    text: "How much does CurRENT charge in fees & deposits?",
-  });
+  assert.ok(
+    resolveAutomatedSupportQuery("Fees").response?.includes(
+      "Renter service fee",
+    ),
+  );
+  assert.ok(
+    resolveAutomatedSupportQuery("Security deposits").response?.includes(
+      "Low Risk (80–100)",
+    ),
+  );
+  assert.equal(resolveAutomatedSupportQuery("Fees").responses, undefined);
+  assert.equal(
+    resolveAutomatedSupportQuery("Security deposits").responses,
+    undefined,
+  );
+  const combinedFees = resolveAutomatedSupportQuery("Fees & deposits");
+  assert.deepEqual(
+    combinedFees.responses?.map((message) => message.split("\n")[0]),
+    ["Fees", "Security deposits"],
+  );
 
-  const msgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
-  assert.equal(msgs.length, initialMessageCount + 3);
-  assert.equal(msgs[initialMessageCount].sender, "user");
-  assert.equal(msgs[initialMessageCount + 1].sender, "bot");
-  assert.equal(msgs[initialMessageCount + 2].sender, "bot");
-  assert.ok(msgs[initialMessageCount + 1].text.includes("5% of the rental fee, with a minimum of RM5"));
-  assert.ok(msgs[initialMessageCount + 1].text.includes("12% of the rental fee"));
-  assert.ok(msgs[initialMessageCount + 2].text.includes("Low Risk (80–100): 5% of the item value, capped at RM500"));
-
-  // No human support case created for known question
-  assert.equal(state.supportCases.length, 0);
-
-  // 2. Ask about delivery & return
-  state = transition(state, {
-    type: "supportQuery",
-    text: "How does delivery & return work?",
-  });
-  const updatedMsgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
-  assert.equal(updatedMsgs.length, initialMessageCount + 5);
-  assert.ok(updatedMsgs.at(-1)?.text.includes("Delivery Only"));
-  assert.ok(updatedMsgs.at(-1)?.text.includes("Confirm Received"));
-  assert.ok(updatedMsgs.at(-1)?.text.includes("at least 6 photos and 1 video"));
-  assert.equal(state.supportCases.length, 0);
+  assert.ok(
+    resolveAutomatedSupportQuery(
+      "How is my risk score calculated?",
+    ).response?.includes("+2 points"),
+  );
+  assert.ok(
+    resolveAutomatedSupportQuery(
+      "When will the lender receive rental money?",
+    ).response?.includes("successfully settled"),
+  );
+  for (const unsupported of [
+    "How do I cancel this rental?",
+    "What is my current risk score?",
+    "When will my specific deposit be released?",
+    "Can I get BNPL?",
+  ]) {
+    assert.equal(
+      resolveAutomatedSupportQuery(unsupported).answered,
+      false,
+      unsupported,
+    );
+  }
 });
 
-test("Section 14.4: Human support handoff creates internal case and shows exact notice with NO ticket ID", () => {
+test("Section 14.4: Unmatched questions and human requests never claim a local case was queued", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
 
-  // Ask unknown / low-confidence question
   state = transition(state, {
     type: "supportQuery",
-    text: "Can I get an extension on my personal bank overdraft limit?",
+    text: "Can I cancel this booking and get my money back?",
   });
 
   const msgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
   assert.equal(msgs.length, 2);
-  const botReply = msgs[1];
-
-  // Exact visible customer message
   assert.equal(
-    botReply.text,
-    "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+    msgs[1].text,
+    "I couldn't send your message to our support team right now. Please try again.",
   );
+  assert.equal(state.supportCases.length, 0);
 
-  // MUST NOT show ticket/case ID in customer-facing message
-  assert.ok(!botReply.text.includes("CASE-"));
-  assert.ok(!botReply.text.includes("ticket"));
-  assert.ok(!botReply.text.includes("reference"));
-
-  // Real durable backend support case created with internal case ID
-  assert.equal(state.supportCases.length, 1);
-  const sc = state.supportCases[0];
-  assert.ok(sc.id.startsWith("CASE-"));
-  assert.equal(sc.userId, "demo-renter");
-  assert.equal(sc.status, "waiting");
-  assert.ok(sc.query.includes("personal bank overdraft"));
-
-  // Test explicit "Talk to a Human" action
   state = transition(state, {
     type: "supportHandoff",
-    query: "User clicked Talk to a Human button",
+    query: "Talk to a Human",
   });
 
-  const allMsgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
-  const handoffReply = allMsgs[allMsgs.length - 1];
+  const allMsgs = state.supportMessages.filter(
+    (m) => m.userId === "demo-renter",
+  );
   assert.equal(
-    handoffReply.text,
-    "Your enquiry has been forwarded to our support team. We aim to respond here within one working hour. Thank you for your patience.",
+    allMsgs.at(-1)?.text,
+    "I couldn't send your message to our support team right now. Please try again.",
   );
-  assert.ok(!handoffReply.text.includes("CASE-"));
-
-  // Staff genuinely replies to the pending case
-  state = transition(state, {
-    type: "supportStaffReply",
-    caseId: sc.id,
-    text: "Hello Alex, CurRENT does not offer banking overdraft services. All bookings use simulated FPX.",
-  });
-
-  const finalMsgs = state.supportMessages.filter((m) => m.userId === "demo-renter");
-  const staffMsg = finalMsgs[finalMsgs.length - 1];
-  assert.equal(staffMsg.sender, "human");
-  assert.equal(
-    staffMsg.text,
-    "Hello Alex, CurRENT does not offer banking overdraft services. All bookings use simulated FPX.",
+  assert.equal(allMsgs.at(-2)?.text, "Talk to a Human");
+  assert.equal(state.supportCases.length, 0);
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "supportStaffReply",
+        caseId: "any-client-supplied-case-id",
+        text: "This must not be presented as an authenticated staff response.",
+      }),
+    /configured support backend/,
   );
-
-  // Case status transitioned to replied
-  const updatedCase = state.supportCases.find((c) => c.id === sc.id)!;
-  assert.equal(updatedCase.status, "replied");
-  assert.ok(updatedCase.respondedAt);
-
-  // User notified of reply
-  const notif = state.notifications.find((n) =>
-    n.userId === "demo-renter" && n.title.includes("CurRENT Support · Human has replied"),
-  );
-  assert.ok(notif);
 });
 
 test("Section 14.3: Exactly six updated FAQs match founder screenshot copy and deposit rates", async () => {
@@ -1720,29 +2297,66 @@ test("Section 14.3: Exactly six updated FAQs match founder screenshot copy and d
 
   // Check Q2
   assert.equal(sampleFaqs[1].question, "How is the security deposit handled?");
-  assert.ok(sampleFaqs[1].answer.includes("The refundable security deposit is risk-based."));
+  assert.ok(
+    sampleFaqs[1].answer.includes(
+      "The refundable security deposit is risk-based.",
+    ),
+  );
 
   // Check Q3 (Updated deposit rates)
-  assert.equal(sampleFaqs[2].question, "How is the security deposit calculated?");
-  assert.ok(sampleFaqs[2].answer.includes("Low-risk rentals (score 80–100) require 5% of the item value, capped at RM500"));
-  assert.ok(sampleFaqs[2].answer.includes("moderate-risk rentals (40–79) require 10%, capped at RM1,000"));
-  assert.ok(sampleFaqs[2].answer.includes("high-risk rentals (30–39) require 15%, capped at RM1,500"));
-  assert.ok(sampleFaqs[2].answer.includes("Very high-risk renters (0–29) must submit a request to CurRENT for review"));
+  assert.equal(
+    sampleFaqs[2].question,
+    "How is the security deposit calculated?",
+  );
+  assert.ok(
+    sampleFaqs[2].answer.includes(
+      "Low-risk rentals (score 80–100) require 5% of the item value, capped at RM500",
+    ),
+  );
+  assert.ok(
+    sampleFaqs[2].answer.includes(
+      "moderate-risk rentals (40–79) require 10%, capped at RM1,000",
+    ),
+  );
+  assert.ok(
+    sampleFaqs[2].answer.includes(
+      "high-risk rentals (30–39) require 15%, capped at RM1,500",
+    ),
+  );
+  assert.ok(
+    sampleFaqs[2].answer.includes(
+      "Very high-risk renters (0–29) must submit a request to CurRENT for review",
+    ),
+  );
 
   // Check Q4
   assert.equal(sampleFaqs[3].question, "Can I rent out my own items?");
-  assert.ok(sampleFaqs[3].answer.includes("Yes. CurRENT is designed to help individuals and businesses monetise underused items"));
+  assert.ok(
+    sampleFaqs[3].answer.includes(
+      "Yes. CurRENT is designed to help individuals and businesses monetise underused items",
+    ),
+  );
 
   // Check Q5
-  assert.equal(sampleFaqs[4].question, "How much does CurRENT charge borrowers and lenders?");
+  assert.equal(
+    sampleFaqs[4].question,
+    "How much does CurRENT charge borrowers and lenders?",
+  );
   assert.equal(
     sampleFaqs[4].answer,
     "Borrowers are charged 5% of the rental value or a minimum of RM5, whichever is higher. Lenders are charged a 12% commission when a rental is successfully completed.",
   );
 
   // Check Q6
-  assert.equal(sampleFaqs[5].question, "Is Buy Now Pay Later (BNPL) available?");
-  assert.ok(sampleFaqs[5].answer.includes("BNPL may be available for eligible high-value rental fees"));
+  assert.equal(
+    sampleFaqs[5].question,
+    "Is Buy Now Pay Later (BNPL) available?",
+  );
+  assert.ok(
+    sampleFaqs[5].answer.includes(
+      "BNPL may be available for eligible high-value rental fees",
+    ),
+  );
 });
 
 test("Section 8 & 9: Time-controlled confirmation buttons enforce scheduled start time lock", () => {
@@ -1766,17 +2380,14 @@ test("Section 8 & 9: Time-controlled confirmation buttons enforce scheduled star
 
   // Attempting Confirm Received BEFORE start time (e.g. 2026-10-15 09:00 AM MYT) is rejected
   const prematureServerTime = "2026-10-15T01:00:00.000Z";
-  assert.throws(
-    () => {
-      transition(state, {
-        type: "handoverConfirm",
-        bookingId: "booking-time-gated",
-        role: "renter",
-        serverTime: prematureServerTime,
-      });
-    },
-    /Confirm Received is available from scheduled rental start/,
-  );
+  assert.throws(() => {
+    transition(state, {
+      type: "handoverConfirm",
+      bookingId: "booking-time-gated",
+      role: "renter",
+      serverTime: prematureServerTime,
+    });
+  }, /Confirm Received is available from scheduled rental start/);
 
   // Attempting Confirm Received AT or AFTER start time (2026-10-15 10:00 AM MYT) succeeds
   const validServerTime = "2026-10-15T02:00:00.000Z";
@@ -1787,21 +2398,20 @@ test("Section 8 & 9: Time-controlled confirmation buttons enforce scheduled star
     serverTime: validServerTime,
   });
 
-  const updatedBooking = state.bookings.find((x) => x.id === "booking-time-gated")!;
+  const updatedBooking = state.bookings.find(
+    (x) => x.id === "booking-time-gated",
+  )!;
   assert.ok(updatedBooking.renterReceivedAt);
 
   // Duplicate submission rejected
-  assert.throws(
-    () => {
-      transition(state, {
-        type: "handoverConfirm",
-        bookingId: "booking-time-gated",
-        role: "renter",
-        serverTime: validServerTime,
-      });
-    },
-    /Delivery receipt has already been confirmed/,
-  );
+  assert.throws(() => {
+    transition(state, {
+      type: "handoverConfirm",
+      bookingId: "booking-time-gated",
+      role: "renter",
+      serverTime: validServerTime,
+    });
+  }, /Delivery receipt has already been confirmed/);
 });
 
 test("Section 31: Profile post-verification cleanup — generic Verified badge and verified account state", () => {
@@ -1811,15 +2421,24 @@ test("Section 31: Profile post-verification cleanup — generic Verified badge a
   assert.equal(demoRenter.verification, "verified");
 
   // Verified label logic check: exactly 'Verified', never 'Verified · Demo' or 'Verified Renter'
-  const badgeLabel = demoRenter.verification === "verified" ? "Verified" : demoRenter.verification;
+  const badgeLabel =
+    demoRenter.verification === "verified"
+      ? "Verified"
+      : demoRenter.verification;
   assert.equal(badgeLabel, "Verified");
 
   // Unverified profile retains not_verified status
   const unverifiedStatus = "not_verified";
-  const unverifiedBadgeLabel = (unverifiedStatus as string) === "verified" ? "Verified" : unverifiedStatus;
+  const unverifiedBadgeLabel =
+    (unverifiedStatus as string) === "verified" ? "Verified" : unverifiedStatus;
   assert.equal(unverifiedBadgeLabel, "not_verified");
 
   // Profile trust and support items count
-  const trustAndSupportItems = ["How CurRENT Works", "Trust", "FAQ", "Customer Service"];
+  const trustAndSupportItems = [
+    "How CurRENT Works",
+    "Trust",
+    "FAQ",
+    "Customer Service",
+  ];
   assert.equal(trustAndSupportItems.length, 4);
 });
