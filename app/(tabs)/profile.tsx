@@ -55,16 +55,6 @@ export default function ProfileScreen() {
     0,
   );
 
-  function verify(status: "pending" | "verified" | "failed") {
-    try {
-      act({ type: "verify", status });
-      setError("");
-      setSuccess(`Verification updated to ${status}.`);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
   return (
     <Screen
       title="Renter Dashboard"
