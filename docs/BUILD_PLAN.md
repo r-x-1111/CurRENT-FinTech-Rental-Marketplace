@@ -51,6 +51,8 @@ This is a transparent **rules-based platform reliability score, not a consumer c
 | 0–29 | Very High | **No**; platform-review request only | No direct checkout/deposit |
 | Not verified | N/A | No | Verification required |
 
+**Source-code scoring caution (not a change request):** `services/riskScore.ts` assigns a nominal `+2` incident for `on_time_success`, and the current test expects `effectiveAdjustment === 2`. However, `evaluateRentalOutcome` initialises `minPenalty = 0` and its positive-only path appears to leave `effectiveAdjustment` at **0**. Thus the two seeded +2 history records are present, but an actual newly settled clean return's +2 award has a **source/test discrepancy requiring execution to confirm**. This documentation update neither repairs nor tests that behavior.
+
 The **renter service fee is 5% of rent, minimum RM5**, and the **lender commission is 12% of rent**. Rental fees and deposits are distinct. The present quote sets optional protection to **RM0**; do not describe an active RM5/day insurance/protection product. BNPL is **not an active checkout option**.
 
 ## Seeded university Demo
