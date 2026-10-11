@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   normalizeMalaysianMobile,
   validateDemoCode,
+  checkExampleOtp,
+  DEMO_OTP,
 } from "../services/signup";
 
 test("Malaysian mobile numbers normalize to +60 E.164", () => {
@@ -22,4 +24,10 @@ test("The OTP input must have precisely six digits", () => {
   for (const value of ["", "12345", "1234567", "abcdef", "12 456"]) {
     assert.throws(() => validateDemoCode(value), /six-digit Demo OTP/);
   }
+});
+
+test("Demo OTP is a deliberate fixed visual example, not SMS or backend verification", () => {
+  assert.equal(DEMO_OTP, "123456");
+  assert.doesNotThrow(() => checkExampleOtp("123456"));
+  assert.throws(() => checkExampleOtp("654321"), /example six-digit code/);
 });
