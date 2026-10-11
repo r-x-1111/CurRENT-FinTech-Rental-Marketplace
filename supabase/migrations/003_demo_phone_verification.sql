@@ -6,7 +6,7 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.demo_phone_challenges (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  phone_e164 text not null check (phone_e164 ~ '^\\+601[0-9]{8,9}$'),
+  phone_e164 text not null check (phone_e164 ~ '^\+601[0-9]{8,9}$'),
   code_hash text not null,
   expires_at timestamptz not null,
   resend_after timestamptz not null,
@@ -52,7 +52,7 @@ begin
   if auth.jwt() -> 'app_metadata' ->> 'account_kind' = 'demo' then
     raise exception 'This account is already provisioned for the demo.';
   end if;
-  if p_phone !~ '^\\+601[0-9]{8,9}$' then
+  if p_phone !~ '^\+601[0-9]{8,9}$' then
     raise exception 'Enter a valid Malaysian mobile number.';
   end if;
 
