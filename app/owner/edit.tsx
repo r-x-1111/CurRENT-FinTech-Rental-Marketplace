@@ -169,10 +169,6 @@ export default function EditListing() {
         : [];
   const [selectedSlots, setSelectedSlots] = useState<string[]>(initialSlots);
 
-  // Listing Boost (RM10 for 7 days)
-  const [boostListing, setBoostListing] = useState(
-    Boolean(existing?.featuredUntil && new Date(existing.featuredUntil).getTime() > Date.now()),
-  );
 
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -223,8 +219,8 @@ export default function EditListing() {
       setError("Please specify both Start Date and End Date.");
       return;
     }
-    if (inputEnd < inputStart) {
-      setError("End Date must be on or after Start Date.");
+    if (inputEnd < inputStart || inputEnd > "2026-12-31" || inputStart > "2026-12-31") {
+      setError("Availability must end by 31 December 2026 and follow its start date.");
       return;
     }
     setError("");
@@ -307,6 +303,10 @@ export default function EditListing() {
     if (isSaving) return;
     setIsSaving(true);
     try {
+      if (periods.some((period) => period.start > "2026-12-31" || period.end > "2026-12-31" || period.end < period.start)) {
+        setError("Availability must end by 31 December 2026.");
+        return;
+      }
       if (selectedSlots.length < 2 && status === "published") {
         setError("Select at least 2 delivery time slots.");
         return;
@@ -349,9 +349,7 @@ export default function EditListing() {
         rating: existing?.rating || 0,
         verifiedOwner: user!.verification === "verified",
         status,
-        featuredUntil: boostListing
-          ? new Date(Date.now() + 7 * 86400000).toISOString()
-          : existing?.featuredUntil,
+        featuredUntil: existing?.featuredUntil,
         deliveryTimeSlots: selectedSlots,
         pickupTimeWindows: selectedSlots.map((s) => ({ start: s, end: s })),
       };
@@ -654,6 +652,7 @@ export default function EditListing() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Next month"
+                  disabled={calendarYear >= 2026 && calendarMonthIndex >= 11}
                   onPress={() =>
                     setCalendarMonth(
                       new Date(calendarYear, calendarMonthIndex + 1, 1),
@@ -693,7 +692,8 @@ export default function EditListing() {
                           <Pressable
                             key={choice}
                             accessibilityRole="button"
-                            accessibilityState={{ selected }}
+                            accessibilityState={{ selected, disabled: calendarSelector === "year" && choice > 2026 }}
+                            disabled={calendarSelector === "year" && choice > 2026}
                             onPress={() => {
                               setCalendarMonth(
                                 calendarSelector === "month"
@@ -711,6 +711,7 @@ export default function EditListing() {
                               style={[
                                 styles.calendarChoiceText,
                                 selected && styles.calendarChoiceTextSelected,
+                                calendarSelector === "year" && choice > 2026 && { color: colors.muted, opacity: 0.45 },
                               ]}
                             >
                               {label}
@@ -747,9 +748,9 @@ export default function EditListing() {
                         selected:
                           date ===
                           (calendarField === "start" ? inputStart : inputEnd),
-                        disabled: date < earliestCalendarDate,
+                        disabled: date < earliestCalendarDate || date > "2026-12-31",
                       }}
-                      disabled={date < earliestCalendarDate}
+                      disabled={date < earliestCalendarDate || date > "2026-12-31"}
                       onPress={() => {
                         if (calendarField === "start") setInputStart(date);
                         else setInputEnd(date);
@@ -768,7 +769,7 @@ export default function EditListing() {
                           date ===
                             (calendarField === "start" ? inputStart : inputEnd) &&
                             styles.calendarDayTextSelected,
-                          date < earliestCalendarDate && styles.calendarDayDisabled,
+                          (date < earliestCalendarDate || date > "2026-12-31") && styles.calendarDayDisabled,
                         ]}
                       >
                         {Number(date.slice(-2))}
@@ -804,6 +805,9 @@ export default function EditListing() {
           <Text style={[s.caption, { marginTop: -4, marginBottom: 10 }]}>
             Select at least 2 of the 8 fixed delivery-start hours. Renters can only book during your chosen slots.
           </Text>
+          <Text style={[s.caption, { color: colors.navy, marginBottom: 10 }]}>
+            For each delivery time selected below, the delivery driver will arrive 40 minutes earlier to collect the item from you.
+          </Text>
           <View style={styles.fixedSlotsGrid}>
             {FIXED_DELIVERY_SLOTS.map((slot) => {
               const isSelected = selectedSlots.includes(slot.value);
@@ -832,26 +836,6 @@ export default function EditListing() {
             })}
           </View>
         </View>
-
-        {/* Optional Listing Boost (Section 4.2) */}
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: boostListing }}
-          onPress={() => setBoostListing(!boostListing)}
-          style={[styles.boostBox, boostListing && styles.boostBoxActive]}
-        >
-          <Ionicons
-            name={boostListing ? "checkbox" : "square-outline"}
-            size={20}
-            color={boostListing ? colors.blue : colors.muted}
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.boostTitle}>Listing Boost — RM10 for 7 days (Optional)</Text>
-            <Text style={styles.boostSub}>
-              Give your item featured placement prominence at the top of the searchable Home catalogue.
-            </Text>
-          </View>
-        </Pressable>
 
         {/* Fixed Fulfilment Label: Delivery Only per V3.23 */}
         <View style={{ marginTop: 14, marginBottom: 14 }}>

@@ -232,6 +232,15 @@ export interface Marketplace {
   profiles: Profile[];
   listings: Listing[];
   bookings: Booking[];
+  boostTransactions?: {
+    id: string;
+    ownerId: string;
+    listingId: string;
+    listingName: string;
+    paidAt: string;
+    activatedAt: string;
+    expiresAt: string;
+  }[];
   messages: Message[];
   evidence: Evidence[];
   issueReports?: ConditionIssueReport[];

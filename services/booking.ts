@@ -1,5 +1,6 @@
 import type { Listing } from "../types";
 import type { Booking, Marketplace, Profile } from "../types/marketplace";
+import { listings as seededListings } from "../data/mock";
 import {
   calculateBorrowerServiceFee,
   calculateSecurityDeposit,
@@ -7,10 +8,37 @@ import {
 import { calculateRiskScore, tierForScore } from "./riskScore";
 
 export const money = (value: number) => `RM${value.toFixed(2)}`;
+export const LAST_BOOKABLE_DATE = "2026-12-31";
+const DEMO_FIRST_DATE = "2026-10-01";
+const DEMO_SLOTS = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
+const DEMO_SEEDED_IDS = new Set(seededListings.map((listing) => listing.id));
+export const isDemoSeededListing = (listingId: string) => DEMO_SEEDED_IDS.has(listingId);
+
+/** Stable illustrative gaps, scoped to the Demo renter calendar. */
+export function demoSlotAvailable(listingId: string, date: string, slot: string): boolean {
+  if (date < DEMO_FIRST_DATE || date > LAST_BOOKABLE_DATE) return false;
+  // Preserve the two paid seeded lender reservations as genuine inventory conflicts.
+  if (listingId === "office-chair" && slot === "10:00" && date >= "2026-11-05" && date < "2026-11-08") return true;
+  if (listingId === "party-speaker" && slot === "14:00" && date >= "2026-11-12" && date < "2026-11-14") return true;
+  const slotIndex = DEMO_SLOTS.indexOf(slot);
+  if (slotIndex < 0) return false;
+  let hash = 2166136261;
+  for (const char of `${listingId}:${date}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+  if ((hash >>> 0) % 11 === 0 || (day === 0 && (hash >>> 0) % 4 === 0)) return false;
+  return ((hash >>> 0) + slotIndex * 13) % 9 !== 0;
+}
+
+export function malaysiaDateKey(timestamp: string | number): string {
+  const epoch = typeof timestamp === "number" ? timestamp : parseMalaysiaTimestamp(timestamp);
+  return new Date(epoch + 8 * 3600000).toISOString().slice(0, 10);
+}
+export function malaysiaTimeKey(timestamp: string | number): string {
+  const epoch = typeof timestamp === "number" ? timestamp : parseMalaysiaTimestamp(timestamp);
+  return new Date(epoch + 8 * 3600000).toISOString().slice(11, 16);
+}
 export function dateAfter(days = 0) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return new Date(Date.now() + 8 * 3600000 + days * 86400000).toISOString().slice(0, 10);
 }
 export function parseDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
@@ -205,10 +233,28 @@ export function availability(
   exceptId?: string,
 ) {
   rentalDays(start, end);
+  if (malaysiaDateKey(start) > LAST_BOOKABLE_DATE || malaysiaDateKey(end) > LAST_BOOKABLE_DATE)
+    throw new Error("Bookings must end by 31 December 2026.");
   if (start < dateAfter())
     throw new Error("Select today or a future collection date.");
   if (listing.status !== "published")
     throw new Error("This listing is not currently available.");
+  const startDate = malaysiaDateKey(start);
+  const endDate = malaysiaDateKey(end);
+  if (listing.availabilityPeriods?.length && !listing.availabilityPeriods.some(
+    (period) => startDate >= period.start && endDate <= period.end,
+  )) throw new Error("These dates are outside the owner’s availability.");
+  const slot = malaysiaTimeKey(start);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) && (slot !== malaysiaTimeKey(end) || !DEMO_SLOTS.includes(slot) ||
+      (listing.deliveryTimeSlots?.length && !listing.deliveryTimeSlots.includes(slot)) ||
+      (!listing.deliveryTimeSlots?.length && listing.pickupTimeWindows?.length && !listing.pickupTimeWindows.some((window) => window.start <= slot && slot <= window.end)))
+    ) throw new Error("Choose an available 10 AM–5 PM delivery time.");
+  if (state.mode === "admin_demo" && DEMO_SEEDED_IDS.has(listing.id) && !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    for (let date = startDate; date < endDate; date = nextDate(date)) {
+      if (!demoSlotAvailable(listing.id, date, slot))
+        throw new Error("That Demo delivery time is unavailable for part of the rental.");
+    }
+  }
   if (
     (listing.availableFrom && start < listing.availableFrom) ||
     (listing.availableTo && end > nextDate(listing.availableTo))
@@ -272,6 +318,11 @@ export function availabilityCalendar(
     const outsideWindow =
       listing.status !== "published" ||
       date < dateAfter() ||
+      date > LAST_BOOKABLE_DATE ||
+      (state.mode === "admin_demo" && DEMO_SEEDED_IDS.has(listing.id) && !DEMO_SLOTS.some((slot) =>
+        (listing.deliveryTimeSlots?.length ? listing.deliveryTimeSlots.includes(slot) :
+          !listing.pickupTimeWindows?.length || listing.pickupTimeWindows.some((window) => window.start <= slot && slot <= window.end)) &&
+        demoSlotAvailable(listing.id, date, slot))) ||
       !inAvailabilityPeriod ||
       !!(listing.availableFrom && date < listing.availableFrom) ||
       !!(listing.availableTo && date > listing.availableTo);

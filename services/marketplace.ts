@@ -33,7 +33,7 @@ export type Action =
   | { type: "favourite"; listingId: string }
   | { type: "saveListing"; listing: Listing }
   | { type: "deleteListing"; id: string }
-  | { type: "boostListing"; listingId: string }
+  | { type: "boostListing"; listingId: string; transactionId: string }
   | {
       type: "recordRentalOutcome";
       renterId: string;
@@ -540,6 +540,11 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       if (l.availableFrom) parseDate(l.availableFrom);
       if (l.availableTo) parseDate(l.availableTo);
       requireThat(
+        [l.availableFrom, l.availableTo, ...(l.availabilityPeriods || []).flatMap((p) => [p.start, p.end])]
+          .every((date) => !date || (parseDate(date), date <= "2026-12-31")),
+        "Availability must end by 31 December 2026.",
+      );
+      requireThat(
         !l.availableFrom || !l.availableTo || l.availableTo >= l.availableFrom,
         "Availability end must be on or after the start.",
       );
@@ -579,7 +584,20 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         listing.status === "published",
         "Only published listings can be boosted.",
       );
-      listing.featuredUntil = new Date(Date.now() + 7 * 86400000).toISOString();
+      requireThat(!listing.featuredUntil || Date.parse(listing.featuredUntil) <= Date.now(), "This listing is already boosted.");
+      requireThat(!state.boostTransactions?.some((record) => record.id === action.transactionId), "Payment already recorded.");
+      const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+      listing.featuredUntil = expiresAt;
+      state.boostTransactions ||= [];
+      state.boostTransactions.unshift({
+        id: action.transactionId,
+        ownerId: user.id,
+        listingId: listing.id,
+        listingName: listing.title,
+        paidAt: now,
+        activatedAt: now,
+        expiresAt,
+      });
       notify(
         user.id,
         `Listing boosted! "${listing.title}" is now featured for 7 days (RM10 demo fee).`,
@@ -703,6 +721,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       requireThat(
         (risk.score ?? 0) < 30,
         "Platform review request is exclusively for Very High Risk scores (0–29).",
+      );
+      requireThat(
+        action.start <= "2026-12-31" && action.end <= "2026-12-31",
+        "Rental requests must end by 31 December 2026.",
       );
       if (!state.platformReviewRequests) state.platformReviewRequests = [];
       const reqId = action.id || `REQ-${newId().slice(0, 8).toUpperCase()}`;

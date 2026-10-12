@@ -28,6 +28,8 @@ import { useMarketplace } from "../../context/Marketplace";
 import {
   availability,
   availabilityCalendar,
+  demoSlotAvailable,
+  isDemoSeededListing,
   dateAfter,
   formatMalaysiaDateTime,
   money,
@@ -100,6 +102,14 @@ export default function ListingDetailScreen() {
 
   const [start, setStart] = useState(dateAfter(1));
   const [end, setEnd] = useState(dateAfter(3));
+  const slotUnavailable = (slot: string) => {
+    if (state.mode !== "admin_demo" || !listing || !isDemoSeededListing(listing.id) || !start) return false;
+    const lastDate = end && end > start ? end : new Date(Date.parse(`${start}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+    for (let date = start; date < lastDate; date = new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)) {
+      if (!demoSlotAvailable(listing.id, date, slot)) return true;
+    }
+    return false;
+  };
   const [calendarMonth, setCalendarMonth] = useState(
     () => new Date(`${dateAfter(1).slice(0, 7)}-01T00:00:00Z`),
   );
@@ -108,9 +118,9 @@ export default function ListingDetailScreen() {
   );
   const [pickupTime, setPickupTime] = useState("");
   const effectivePickupTime =
-    pickupTime && availableSlots.some((s) => s.value === pickupTime)
+    pickupTime && availableSlots.some((s) => s.value === pickupTime) && !slotUnavailable(pickupTime)
       ? pickupTime
-      : availableSlots[0]?.value || "11:00";
+      : availableSlots.find((slot) => !slotUnavailable(slot.value))?.value || availableSlots[0]?.value || "11:00";
   // Return time is strictly auto-matched and locked to pickup time per 24-hour rental rules
   const returnTime = effectivePickupTime;
   const [collectionMethod, setCollectionMethod] =
@@ -664,6 +674,7 @@ export default function ListingDetailScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Next month"
+                  disabled={calendarYear >= 2026 && calendarMonthIndex >= 11}
                   onPress={() => changeDisplayedMonth(1)}
                   style={styles.calendarNavButton}
                 >
@@ -779,7 +790,8 @@ export default function ListingDetailScreen() {
                           <Pressable
                             key={`${calendarPicker}-${option.value}`}
                             accessibilityRole="button"
-                            accessibilityState={{ selected }}
+                            accessibilityState={{ selected, disabled: calendarPicker === "year" && option.value > 2026 }}
+                            disabled={calendarPicker === "year" && option.value > 2026}
                             onPress={() => {
                               setCalendarMonth((current) =>
                                 new Date(
@@ -806,6 +818,7 @@ export default function ListingDetailScreen() {
                                 styles.calendarModalOptionText,
                                 selected &&
                                   styles.calendarModalOptionTextSelected,
+                                calendarPicker === "year" && option.value > 2026 && { color: colors.muted, opacity: 0.45 },
                               ]}
                             >
                               {option.label}
@@ -849,17 +862,21 @@ export default function ListingDetailScreen() {
                   <Text style={styles.fieldSubtext}>Available delivery time slots</Text>
                 </View>
                 <View style={styles.timeSlotsRow}>
-                  {availableSlots.map((opt) => {
+                  {FIXED_DELIVERY_SLOTS.map((opt) => {
                     const isSelected = effectivePickupTime === opt.value;
+                    const unavailable = !availableSlots.some((available) => available.value === opt.value) || slotUnavailable(opt.value);
                     return (
                       <Pressable
                         key={opt.value}
                         accessibilityRole="button"
                         accessibilityLabel={`Delivery at ${opt.label}`}
+                        accessibilityState={{ disabled: unavailable }}
+                        disabled={unavailable}
                         onPress={() => setPickupTime(opt.value)}
                         style={[
                           styles.timeSlotBtn,
                           isSelected && styles.timeSlotBtnSelected,
+                          unavailable && { opacity: 0.4 },
                         ]}
                       >
                         <Text

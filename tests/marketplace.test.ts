@@ -15,6 +15,7 @@ import {
   availabilityCalendar,
   calculateCancellationCutoff,
   dateAfter,
+  demoSlotAvailable,
   formatMalaysiaDateTime,
   getEffectiveBookingStatus,
   isCancellationEligible,
@@ -449,7 +450,7 @@ test("the final available date can be rented with an exclusive next-day return",
     /outside the owner/,
   );
 });
-test("monthly availability calendar handles leap months and reservations across month boundaries", () => {
+test("monthly availability calendar keeps later years visible but unavailable", () => {
   const state = createSeed();
   const listing = {
     ...state.listings[0],
@@ -473,11 +474,11 @@ test("monthly availability calendar handles leap months and reservations across 
 
   assert.equal(february.length, 29);
   assert.equal(february[27].date, "2028-02-28");
-  assert.equal(february[27].status, "reserved");
-  assert.equal(february[28].status, "reserved");
-  assert.equal(march[0].status, "reserved");
-  assert.equal(march[1].status, "reserved");
-  assert.equal(march[2].status, "available");
+  assert.equal(february[27].status, "unavailable");
+  assert.equal(february[28].status, "unavailable");
+  assert.equal(march[0].status, "unavailable");
+  assert.equal(march[1].status, "unavailable");
+  assert.equal(march[2].status, "unavailable");
 });
 test("listing publication, dates, ownership, verification and deletion are enforced", () => {
   const j = journey();
@@ -650,7 +651,7 @@ test("unverified accounts cannot use any lender listing mutation", () => {
     /Complete Identity Verification to create or publish a listing/,
   );
   assert.throws(
-    () => transition(state, { type: "boostListing", listingId: "sony-a7iii" }),
+    () => transition(state, { type: "boostListing", listingId: "sony-a7iii", transactionId: "boost-unverified" }),
     /Complete Identity Verification to create or publish a listing/,
   );
 });
@@ -1133,13 +1134,62 @@ test("RM10 lender boost features listing for 7 days", () => {
   const beforeListing = state.listings.find((l) => l.id === listingId)!;
   assert.equal(beforeListing.featuredUntil, undefined);
 
-  state = transition(state, { type: "boostListing", listingId });
+  state = transition(state, { type: "boostListing", listingId, transactionId: "boost-test-1" });
   const afterListing = state.listings.find((l) => l.id === listingId)!;
   assert.ok(afterListing.featuredUntil);
   const diffDays =
     (new Date(afterListing.featuredUntil).getTime() - Date.now()) /
     (1000 * 60 * 60 * 24);
   assert.ok(diffDays >= 6.9 && diffDays <= 7.1);
+  assert.equal(state.boostTransactions?.length, 1);
+  assert.equal(state.boostTransactions?.[0].id, "boost-test-1");
+  assert.throws(() => transition(state, { type: "boostListing", listingId, transactionId: "boost-test-1" }), /already boosted/);
+});
+
+test("Demo availability is stable, listing-specific, and limited to October–December 2026", () => {
+  const state = createSeed("admin_demo");
+  assert.equal(state.listings.length, 22);
+  for (const listing of state.listings) {
+    const result = availabilityCalendar(state, listing, 92, "2026-10-01");
+    assert.equal(result.length, 92);
+    assert.ok(result.some((day) => day.status === "available"));
+  }
+  assert.equal(demoSlotAvailable("sony-a7iii", "2027-01-01", "10:00"), false);
+  assert.equal(demoSlotAvailable("sony-a7iii", "2026-09-30", "10:00"), false);
+  assert.deepEqual(
+    availabilityCalendar(state, state.listings[0], 30, "2026-11-01"),
+    availabilityCalendar(createSeed("admin_demo"), createSeed("admin_demo").listings[0], 30, "2026-11-01"),
+  );
+  assert.notDeepEqual(
+    ["sony-a7iii", "party-speaker"].map((id) => Array.from({ length: 12 }, (_, n) => demoSlotAvailable(id, `2026-11-${String(n + 1).padStart(2, "0")}`, "10:00"))),
+    ["party-speaker", "sony-a7iii"].map((id) => Array.from({ length: 12 }, (_, n) => demoSlotAvailable(id, `2026-11-${String(n + 1).padStart(2, "0")}`, "10:00"))),
+  );
+});
+
+test("Demo lender upcoming delivery hours are valid Malaysia time", () => {
+  const upcoming = createSeed("admin_demo").bookings.filter((booking) => booking.id.startsWith("demo-lender-upcoming-"));
+  assert.equal(upcoming.length, 2);
+  for (const booking of upcoming) {
+    assert.ok(["10:00", "14:00"].some((slot) => formatMalaysiaDateTime(booking.start).includes(slot === "10:00" ? "10:00 AM" : "02:00 PM")));
+    assert.equal(parseMalaysiaTimestamp(booking.start) - parseMalaysiaTimestamp(booking.cancellationCutoff!), 86400000);
+  }
+});
+
+test("booking and listing validation reject 2027 dates and unavailable lender hours", () => {
+  let state = createSeed("admin_demo");
+  const listing = state.listings.find((item) => item.id === "sony-a7iii")!;
+  assert.throws(() => availability(state, listing,
+    toMalaysiaUtcTimestamp("2026-12-30", "10:00"),
+    toMalaysiaUtcTimestamp("2027-01-01", "10:00")), /31 December 2026/);
+  state = transition(state, { type: "login", userId: listing.ownerId });
+  assert.throws(() => transition(state, {
+    type: "saveListing",
+    listing: { ...listing, availabilityPeriods: [{ start: "2026-12-01", end: "2027-01-01" }] },
+  }), /31 December 2026/);
+  const restricted = { ...listing, deliveryTimeSlots: ["10:00", "14:00"] };
+  assert.throws(() => availability(state, restricted,
+    toMalaysiaUtcTimestamp("2026-11-23", "11:00"),
+    toMalaysiaUtcTimestamp("2026-11-24", "11:00")), /delivery time/);
 });
 
 test("restrictions block rental requests for overdue obligations and banned users, and checkout for score < 30", () => {
@@ -1810,8 +1860,8 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
     type: "instantBook",
     id: "booking-eligible-after-req",
     listingId: "sony-a7iii",
-    start: "2026-11-20T11:00:00Z",
-    end: "2026-11-25T11:00:00Z",
+    start: "2026-11-23T02:00:00Z",
+    end: "2026-11-25T02:00:00Z",
     collectionMethod: "Delivery Only",
     paymentMethod: "Demo FPX",
   });
@@ -2798,8 +2848,8 @@ test("Confirm Received is gated by scheduled start and does not activate or resc
   let state = createSeed();
   state = transition(state, { type: "login", userId: "demo-renter" });
 
-  const bookingStartIso = new Date(Date.now() + 86_400_000).toISOString();
-  const bookingEndIso = new Date(Date.now() + 3 * 86_400_000).toISOString();
+  const bookingStartIso = toMalaysiaUtcTimestamp(dateAfter(1), "10:00");
+  const bookingEndIso = toMalaysiaUtcTimestamp(dateAfter(3), "10:00");
   state = transition(state, {
     type: "instantBook",
     id: "booking-time-gated",

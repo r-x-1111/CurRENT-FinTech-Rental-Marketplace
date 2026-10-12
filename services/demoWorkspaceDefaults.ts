@@ -52,13 +52,12 @@ export const DEMO_LISTING_TEMPLATE = {
 };
 
 export function getDemoListingAvailability(now = new Date()) {
-  const start = new Date(
-    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
-  );
+  const myDate = new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+  const start = new Date(`${myDate}T00:00:00Z`);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 90);
   return {
     start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10) > "2026-12-31" ? "2026-12-31" : end.toISOString().slice(0, 10),
   };
 }

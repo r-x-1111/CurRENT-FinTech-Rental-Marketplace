@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -17,16 +17,20 @@ import {
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
 import { calculateOwnerPayout } from "../../services/deposit";
-import { getEffectiveBookingStatus, money } from "../../services/booking";
+import { formatMalaysiaDateTime, getEffectiveBookingStatus, money } from "../../services/booking";
+import { newId } from "../../services/marketplace";
 import { colors } from "../../constants/theme";
 
 export default function OwnerDashboard() {
-  const { state, user, act } = useMarketplace();
+  const { state, user, act, actAndPersist } = useMarketplace();
   const { published } = useLocalSearchParams<{ published?: string }>();
   const [tab, setTab] = useState("Listings");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [deleting, setDeleting] = useState("");
+  const [pendingBoost, setPendingBoost] = useState<string | null>(null);
+  const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -63,6 +67,9 @@ export default function OwnerDashboard() {
   }
 
   const listings = state.listings.filter((l) => l.ownerId === user.id);
+  const transactions = (state.boostTransactions || []).filter((record) => record.ownerId === user.id);
+  const receipt = transactions.find((record) => record.id === receiptId);
+  const boostListing = listings.find((listing) => listing.id === pendingBoost);
   const bookings = state.bookings.filter((b) => b.ownerId === user.id);
   const complete = bookings.filter((b) => b.status === "completed");
   const earnings = complete.reduce(
@@ -117,7 +124,7 @@ export default function OwnerDashboard() {
 
       <Section title="Listing" />
       <Chips
-        options={["Listings", "Rentals", "Payout"]}
+        options={["Listings", "Rentals", "Payout", "Transaction"]}
         selected={tab}
         onSelect={setTab}
       />
@@ -190,15 +197,7 @@ export default function OwnerDashboard() {
                   <Pressable
                     accessibilityRole="button"
                     disabled={Boolean(isBoosted)}
-                    onPress={() => {
-                      try {
-                        act({ type: "boostListing", listingId: l.id });
-                        setError("");
-                        setSuccess(`Boost activated! "${l.title}" is featured for 7 days.`);
-                      } catch (e) {
-                        setError((e as Error).message);
-                      }
-                    }}
+                    onPress={() => { setPendingBoost(l.id); setReceiptId(null); setError(""); }}
                     style={[styles.actionBtn, isBoosted && styles.actionBtnActive]}
                   >
                     <Ionicons
@@ -336,11 +335,70 @@ export default function OwnerDashboard() {
           )}
         </>
       )}
+      {tab === "Transaction" && (
+        <>
+          <Notice text="Listing Boost payments are simulated. No real money was charged." />
+          {transactions.length ? transactions.map((record) => (
+            <Card key={record.id}>
+              <Text style={s.h2}>{record.listingName}</Text>
+              <Row label="Transaction type" value="Listing Boost" />
+              <Row label="Amount paid" value="RM10.00" />
+              <Row label="Payment method" value="FPX (Demo)" />
+              <Row label="Payment status" value="Successful" />
+              <Row label="Payment date/time" value={formatMalaysiaDateTime(record.paidAt)} />
+              <Row label="Transaction reference" value={record.id} />
+              <Row label="Boost activation" value={formatMalaysiaDateTime(record.activatedAt)} />
+              <Row label="Boost expiry" value={formatMalaysiaDateTime(record.expiresAt)} />
+              <Button secondary onPress={() => setReceiptId(record.id)}>View Receipt</Button>
+            </Card>
+          )) : <Empty title="No transactions yet" text="Your Listing Boost payments will appear here." />}
+        </>
+      )}
+      <Modal visible={Boolean(boostListing)} transparent animationType="fade" onRequestClose={() => { if (!paying) setPendingBoost(null); }}>
+        <View style={styles.paymentOverlay}><View style={styles.paymentPanel}>{boostListing && <Card>
+          <Text style={s.h2}>Payment Confirmation</Text>
+          <Row label="Listing name" value={boostListing.title} />
+          <Row label="Product" value="Listing Boost — 7 Days" />
+          <Row label="Boost fee" value="RM10.00" />
+          <Row label="Payment method" value="FPX" />
+          <Notice text="Simulated payment. No real money will be charged." />
+          {!!error && <Notice text={error} error />}
+          <Button disabled={paying} onPress={async () => {
+            if (paying) return;
+            setPaying(true);
+            const id = `BOOST-${newId()}`;
+            try {
+              await actAndPersist({ type: "boostListing", listingId: boostListing.id, transactionId: id });
+              setPendingBoost(null);
+              setReceiptId(id);
+              setTab("Transaction");
+            } catch (e) { setError((e as Error).message); }
+            finally { setPaying(false); }
+          }}>Pay</Button>
+          <Button secondary disabled={paying} onPress={() => setPendingBoost(null)}>Cancel</Button>
+        </Card>}</View></View>
+      </Modal>
+      <Modal visible={Boolean(receipt)} transparent animationType="fade" onRequestClose={() => setReceiptId(null)}>
+        <View style={styles.paymentOverlay}><View style={styles.paymentPanel}>{receipt && <Card>
+          <Text style={s.h2}>Payment Successful</Text>
+          <Row label="Listing name" value={receipt.listingName} />
+          <Row label="Listing Boost" value="RM10.00" />
+          <Row label="Payment method" value="FPX (Demo)" />
+          <Row label="Total paid" value="RM10.00" />
+          <Row label="Payment date/time" value={formatMalaysiaDateTime(receipt.paidAt)} />
+          <Row label="Transaction reference" value={receipt.id} />
+          <Row label="Boost expiry date" value={formatMalaysiaDateTime(receipt.expiresAt)} />
+          <Notice text="No real money was charged." />
+          <Button secondary onPress={() => setReceiptId(null)}>Close Receipt</Button>
+        </Card>}</View></View>
+      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  paymentOverlay: { flex: 1, justifyContent: "center", padding: 18, backgroundColor: "#0008" },
+  paymentPanel: { maxWidth: 520, width: "100%", alignSelf: "center" },
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
