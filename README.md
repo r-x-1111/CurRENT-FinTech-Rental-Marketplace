@@ -7,6 +7,17 @@
 **Baseline:** Founder-approved V3.51 previously published on GitHub main/README.md, 11 October 2026.  
 **Tagline:** *Rent what you need. Earn from what you own.*
 
+## Current messaging implementation (October 2026)
+
+This section describes the implemented messaging feature and supersedes older statements below that call for removing a standalone Messages page or restricting chat to rental details.
+
+- The bottom navigation has **Messages** between **Rentals** and **Profile**. A listing detail page offers **Chat with Owner** before booking; rental details also open the relevant conversation. Renters and owners can return to their conversations from the Messages tab.
+- The Messages page has a searchable conversation list and chat view, quick replies, unread counts, sent/read indicators, listing and rental links, and photo attachment with preview and full-size viewing. Shared-chat photos accept JPEG, PNG or WebP files up to **2 MB**.
+- Existing booking-linked message history remains visible when a listing chat is opened. The older rental conversation route remains available for existing records.
+- **Normal Accounts:** Conversations between authenticated owners and renters of published Normal-account listings use Supabase `chat_listings`, `chat_conversations`, `chat_messages`, and the private `chat-images` storage bucket. Row-level security limits conversations, messages and photos to their participants. Changes are refreshed through realtime subscriptions with periodic polling as a fallback. The schema is recorded in `supabase/migrations/003_shared_messaging.sql` and `004_chat_history_for_unpublished_listings.sql`.
+- **Demo Account:** New listing chats and messages use the Demo session workspace. They survive refresh during that session and reset on a fresh successful Demo sign-in, like other Demo edits.
+- The seeded catalogue contains fictional owner IDs rather than authenticated Supabase owners. Those sample owners can be messaged in Demo mode; they cannot receive cross-account Normal messages. Live shared Normal messaging requires a listing published by an authenticated owner. Legacy booking chats remain accessible.
+
 ## 0. V3.54 Current-code corrections and retained classroom overrides — HIGHEST PRECEDENCE
 
 **Authority and scope:** The existing classroom rules plus the descriptive source-code corrections in §0.11 supersede contradictory older V3.51–V3.53 text for their respective topics, especially Section 4.4, 11.3–11.4, 13.1, 14.4, 15.3 and the acceptance checklist. All other compatible requirements remain. **This document update is a specification edit ONLY**; it does not change the running application, apply SQL or deploy. CurRENT is a **university classroom demonstration**, not a new production backend project. Reuse the existing Expo/React Native Web/TypeScript components, Supabase Auth and current marketplace services and fixtures. **Do NOT add SQL migrations, new Supabase tables, RPCs, Edge Functions, staff infrastructure, or redesign/normalize the whole backend to implement these eight classroom changes.** Do not weaken existing Normal Account authentication, privacy or RLS. If a task cannot work safely with existing infrastructure, describe the limitation and seek founder approval rather than expanding scope. **Cross-device Demo sync and a new Demo backend authorization/session system are not required.**
@@ -130,7 +141,7 @@ These are the **EXACT credentials to provision and test** for the CurRENT *ficti
 | Discovery | Home contains search, 8 categories, Saved only, 22 seeds; no Explore route or old Home promotional blocks | 2–3 |
 | Visual system | Accessible navy/blue/off-white throughout; **public product cards remain white**, no visible View Details CTA | 2–3 |
 | Home footer | **Remove the entire dark-navy multi-column Home footer** (brand/tagline, Trust & Support/Account link columns, legal/disclaimer/copyright and its container); **keep the working white bottom Home/Rentals/Profile navigation bar** | 2, 17–18 |
-| Messages | No global Messages page; renter and lender chat via their **specific rental card/details** | 2, 13 |
+| Messages | Messages tab between Rentals and Profile; pre-booking listing chat, rental-linked history, and participant-scoped Normal-account conversations | Current messaging implementation above |
 | Lender listings | Compact Option-2 Boost/Edit/Pause/Delete cards; 6+ photos/1+ video for Normal Account newly published items; Demo Account may publish with zero media under §0.3; delivery-only | 4, 13 |
 | Booking | Clock begins at scheduled time, **not** at Confirm Received/condition checks; delivery-only | 7–11 |
 | Checkout | Eligible 30–100: FPX-only **simulated** payment and exact Pay button; 0–29: request only | 5–9 |

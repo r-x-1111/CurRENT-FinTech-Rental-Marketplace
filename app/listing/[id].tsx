@@ -863,9 +863,10 @@ export default function ListingDetailScreen() {
               {/* Scheduled Delivery Time Slots */}
               <View style={{ marginTop: 8 }}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={styles.fieldLabel}>Scheduled Delivery Time</Text>
+                  <Text style={styles.fieldLabel}>Scheduled Delivery Arrival Time</Text>
                   <Text style={styles.fieldSubtext}>Available delivery time slots</Text>
                 </View>
+                <Text style={styles.fieldSubtext}>Select the time when the item should arrive at your delivery address.</Text>
                 <View style={styles.timeSlotsRow}>
                   {FIXED_DELIVERY_SLOTS.map((opt) => {
                     const isSelected = effectivePickupTime === opt.value;
@@ -903,10 +904,11 @@ export default function ListingDetailScreen() {
                 <View style={styles.returnTimeRow}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                     <Ionicons name="time-outline" size={14} color={colors.navy} />
-                    <Text style={styles.returnTimeLabel}>Return Time</Text>
+                    <Text style={styles.returnTimeLabel}>Scheduled Return Time</Text>
                   </View>
                   <Text style={styles.returnTimeValue}>{formatHourAmPm(returnTime)}</Text>
                 </View>
+                <Text style={styles.fieldSubtext}>The time when you must hand the item to the courier.</Text>
               </View>
 
               {/* Collection: Delivery Only (fixed per V3.23 Section 7) */}
