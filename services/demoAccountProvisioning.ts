@@ -7,6 +7,7 @@ export interface DemoAuthAdmin {
     id: string,
     attributes: {
       password: string;
+      email_confirm: true;
       app_metadata: { account_kind: "demo"; verified_demo: true };
     },
   ): Promise<{ error: { code?: string } | null }>;
@@ -45,6 +46,7 @@ export async function provisionDemoAccount(
   if (existingUser) {
     const { error } = await admin.updateUserById(existingUser.id, {
       password,
+      email_confirm: true,
       app_metadata: demoMetadata,
     });
     if (error) {

@@ -140,6 +140,7 @@ test("Demo provisioning sets a provider-managed password for existing and new ac
     | {
         id: string;
         password: string;
+        email_confirm: true;
         app_metadata: { account_kind: string; verified_demo: boolean };
       }
     | undefined;
@@ -156,6 +157,7 @@ test("Demo provisioning sets a provider-managed password for existing and new ac
       id: string,
       attributes: {
         password: string;
+        email_confirm: true;
         app_metadata: { account_kind: "demo"; verified_demo: true };
       },
     ) {
@@ -172,6 +174,7 @@ test("Demo provisioning sets a provider-managed password for existing and new ac
   assert.deepEqual(updated, {
     id: "existing-demo-user",
     password,
+    email_confirm: true,
     app_metadata: { account_kind: "demo", verified_demo: true },
   });
 
