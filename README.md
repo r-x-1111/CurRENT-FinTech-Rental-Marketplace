@@ -1,15 +1,15 @@
 # CurRENT — Master App Development Prompt
 
-**Version:** V3.55 — current-code alignment for the signed-in Messages tab and inbox (§0.12), retaining V3.54 current-code corrections (§0.11), the V3.53 three-rental Demo seed and §0.10 Demo-only Listing Views exception.
+**Version:** V3.54 — README-only current-code alignment for eight identified differences (§0.11). Retains V3.53 three-rental Demo seed and §0.10 Demo-only Listing Views exception. This document is descriptive of the App already in GitHub `main`; **no App code or other files are changed**.  
 
 **Previous baseline:** V3.52 — founder-approved UNIVERSITY CLASSROOM DEMO overrides (Section 0): lightweight Demo session reset, seeded addresses, two-click no-media Demo listing, scripted Customer Service response, single lender Cancel/Dispute action panel with end-time gate, and renter/lender review timing. Retain compatible V3.51 mock OTP/eKYC signup rules and all unaffected marketplace requirements. **LATEST FOUNDER-APPROVED README SPECIFICATION**  
 **Project:** `r-x-1111/CurRENT-FinTech-Rental-Marketplace` · `main/README.md`  
 **Baseline:** Founder-approved V3.51 previously published on GitHub main/README.md, 11 October 2026.  
 **Tagline:** *Rent what you need. Earn from what you own.*
 
-## 0. V3.55 Current-code corrections and retained classroom overrides — HIGHEST PRECEDENCE
+## 0. V3.54 Current-code corrections and retained classroom overrides — HIGHEST PRECEDENCE
 
-**Authority and scope:** The existing classroom rules plus the descriptive source-code corrections in §§0.11–0.12 supersede contradictory older V3.51–V3.54 text for their respective topics, especially navigation and messaging. All other compatible requirements remain. This document records current app behavior and is not a deployment or backend change request. CurRENT is a **university classroom demonstration**, not a new production backend project. Reuse the existing Expo/React Native Web/TypeScript components, Supabase Auth and current marketplace services and fixtures. Do not weaken existing Normal Account authentication, privacy or RLS. If a task cannot work safely with existing infrastructure, describe the limitation and seek founder approval rather than expanding scope.
+**Authority and scope:** The existing classroom rules plus the descriptive source-code corrections in §0.11 supersede contradictory older V3.51–V3.53 text for their respective topics, especially Section 4.4, 11.3–11.4, 13.1, 14.4, 15.3 and the acceptance checklist. All other compatible requirements remain. **This document update is a specification edit ONLY**; it does not change the running application, apply SQL or deploy. CurRENT is a **university classroom demonstration**, not a new production backend project. Reuse the existing Expo/React Native Web/TypeScript components, Supabase Auth and current marketplace services and fixtures. **Do NOT add SQL migrations, new Supabase tables, RPCs, Edge Functions, staff infrastructure, or redesign/normalize the whole backend to implement these eight classroom changes.** Do not weaken existing Normal Account authentication, privacy or RLS. If a task cannot work safely with existing infrastructure, describe the limitation and seek founder approval rather than expanding scope. **Cross-device Demo sync and a new Demo backend authorization/session system are not required.**
 
 ### 0.1 Fresh Demo login = original seeded records ONLY
 
@@ -88,9 +88,9 @@
 - **Minimal implementation scope / acceptance:** Only adjust the Demo-only Views display/data where necessary. Do not alter the app's actual Save/Completed counts, unrelated screens, account separation, Supabase, SQL, authentication or backend architecture. Test two seeded Demo listings with different history, including one with Completed ≥ 1; ensure consistent counts and identical initial seeded Views after new Demo login. This latest explicit Demo exception overrides older generic statements forbidding seeded illustrative Views in Section 13.2 or the Lender Listing acceptance checklist; all other authenticity requirements remain for Normal Accounts.
 
 
-### 0.11 V3.54 — Eight current-code corrections
+### 0.11 V3.54 — Eight README corrections reflecting GitHub `main` code
 
-These eight points **describe existing implementation**. When older screenshots, historical acceptance checklists or V3.51–V3.53 paragraphs disagree, the code-aligned description here takes precedence for these topics only. §0.10's separate Demo-only seeded Views future requirement stays unchanged.
+These eight points **describe existing implementation**; they are not authorisation to change it. When older screenshots, historical acceptance checklists or V3.51–V3.53 paragraphs disagree, the code-aligned description here takes precedence for these topics only. §0.10's separate Demo-only seeded Views future requirement stays unchanged.
 
 1. **Review eligibility:** In `app/rental/[id].tsx`, `reviewEligible = effectiveStatus === "completed" && isEndReached`. In `services/marketplace.ts`, a new review requires stored `b.status === "completed"` AND now >= the scheduled rental END timestamp. `return_pending` is not eligible even if the scheduled END has passed. Both renter and lender obey the same rule; duplicate reviews are rejected.
 2. **Review order:** For both roles, `Payment breakdown` is rendered BEFORE `How did it go?` in Rental Details.
@@ -102,14 +102,6 @@ These eight points **describe existing implementation**. When older screenshots,
 8. **Lender KPI:** `Active / Upcoming Rentals` counts the effective statuses `upcoming`, `active` and **`return_pending`**; seeded initial value remains **2**. Completed/Cancelled are excluded.
 
 **Read-only source references:** `app/rental/[id].tsx`, `services/marketplace.ts`, `app/auth.tsx`, `app/(tabs)/profile.tsx`, `app/owner/edit.tsx`, `app/listing/[id].tsx`, `app/owner/index.tsx`, `services/booking.ts`, `data/seed.ts`.
-
-### 0.12 V3.55 — Signed-in Messages tab and rental conversation inbox
-
-- The signed-in bottom tab order is **Home → Rentals → Messages → Profile**. Messages uses a chat-bubbles icon and sits between Rentals and Profile.
-- The Messages screen lists the signed-in user's rental conversations, with the other participant, rental title, latest message (or a prompt to start chatting), and an unread count when applicable. Selecting an entry opens that rental's existing conversation, scoped to its booking.
-- Conversations remain linked to their rental: the message controls on rental cards and Rental Details continue to open the conversation for that specific booking. The inbox is an additional entry point, not a replacement or separate chat system. Accounts without bookings see an empty state with a link to Rentals.
-- These are existing app functions, shared by Normal and Demo accounts under their existing authenticated data access. The inbox does not create conversations independently of a booking.
-
 
 ## Demo Account login credentials — founder-approved, PUBLIC DEMO ONLY (V3.44)
 
@@ -137,8 +129,8 @@ These are the **EXACT credentials to provision and test** for the CurRENT *ficti
 | Normal vs Demo | Identical UI/features and server validation; only personal records/tenant differ | 1, 12, 15 |
 | Discovery | Home contains search, 8 categories, Saved only, 22 seeds; no Explore route or old Home promotional blocks | 2–3 |
 | Visual system | Accessible navy/blue/off-white throughout; **public product cards remain white**, no visible View Details CTA | 2–3 |
-| Home footer | **Remove the entire dark-navy multi-column Home footer** (brand/tagline, Trust & Support/Account link columns, legal/disclaimer/copyright and its container); keep the working white bottom navigation in the order **Home / Rentals / Messages / Profile** | 2, 17–18 |
-| Messages | Signed-in **Messages** tab between Rentals and Profile lists booking-linked conversations with participant, rental title, latest message and unread count; rental cards and details still open their own booking-scoped chat | 0.12, 2, 13 |
+| Home footer | **Remove the entire dark-navy multi-column Home footer** (brand/tagline, Trust & Support/Account link columns, legal/disclaimer/copyright and its container); **keep the working white bottom Home/Rentals/Profile navigation bar** | 2, 17–18 |
+| Messages | No global Messages page; renter and lender chat via their **specific rental card/details** | 2, 13 |
 | Lender listings | Compact Option-2 Boost/Edit/Pause/Delete cards; 6+ photos/1+ video for Normal Account newly published items; Demo Account may publish with zero media under §0.3; delivery-only | 4, 13 |
 | Booking | Clock begins at scheduled time, **not** at Confirm Received/condition checks; delivery-only | 7–11 |
 | Checkout | Eligible 30–100: FPX-only **simulated** payment and exact Pay button; 0–29: request only | 5–9 |
