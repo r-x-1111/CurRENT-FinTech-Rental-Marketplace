@@ -1,0 +1,236 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { Button, Empty, Notice, Screen, s } from "../../components/ui";
+import { useMarketplace } from "../../context/Marketplace";
+import { colors } from "../../constants/theme";
+import { formatMalaysiaDateTime, money } from "../../services/booking";
+import { newId } from "../../services/marketplace";
+import { supabase } from "../../lib/supabase";
+import { fetchChatInbox, markSharedChatRead, openSharedConversation, sendSharedMessage, signedChatImage, uploadChatImage, type SharedConversation, type SharedMessage } from "../../services/chat";
+import type { Listing } from "../../types";
+import type { Booking } from "../../types/marketplace";
+
+const suggestions = ["Hi, is this item still available?", "Is the rental price negotiable?", "Where is the pickup location?", "Does the item include all accessories?"];
+type Row = { id: string; kind: "shared" | "demo" | "booking"; listing: Listing; other: string; booking?: Booking; latestAt: string; preview: string; unread: number; shared?: SharedConversation };
+
+export default function MessagesScreen() {
+  const params = useLocalSearchParams<{ listingId?: string; bookingId?: string; chatId?: string }>();
+  const { state, user, act, actAndPersist } = useMarketplace();
+  const mobile = useWindowDimensions().width < 760;
+  const [shared, setShared] = useState<SharedConversation[]>([]);
+  const [remoteMessages, setRemoteMessages] = useState<SharedMessage[]>([]);
+  const [selected, setSelected] = useState<string | null>(params.chatId || null);
+  const [search, setSearch] = useState("");
+  const [draft, setDraft] = useState("");
+  const [photo, setPhoto] = useState<{ uri: string; mime: string } | null>(null);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+  const [largePhoto, setLargePhoto] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const opened = useRef("");
+  const lastRead = useRef("");
+  const scroll = useRef<ScrollView>(null);
+
+  const refresh = useCallback(async () => {
+    if (!user || state.mode === "admin_demo") return;
+    try { const data = await fetchChatInbox(); setShared(data.conversations); setRemoteMessages(data.messages); }
+    catch (failure) { setError((failure as Error).message); }
+  }, [user?.id, state.mode]);
+  useEffect(() => {
+    void refresh();
+    if (!supabase || !user || state.mode === "admin_demo") return;
+    const db = supabase;
+    const channel = db.channel(`chat-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => { void refresh(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_conversations" }, () => { void refresh(); }).subscribe();
+    const timer = setInterval(() => { void refresh(); }, 15000);
+    return () => { clearInterval(timer); void db.removeChannel(channel); };
+  }, [refresh, user?.id, state.mode]);
+  useEffect(() => {
+    const listingId = params.listingId;
+    if (!listingId || !user || opened.current === listingId) return;
+    const listing = state.listings.find((item) => item.id === listingId);
+    if (!listing) { setError("Listing unavailable for messaging."); return; }
+    if (listing.ownerId === user.id) { setError("You cannot message yourself."); return; }
+    opened.current = listingId;
+    if (state.mode === "admin_demo") { act({ type: "openChat", listingId }); return; }
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(listing.ownerId)) { setError("This sample owner cannot receive live messages. Choose a listing from an authenticated lender."); return; }
+    void openSharedConversation(listingId, listing.ownerId, user.id, user.name)
+      .then(async (chat) => { setSelected(chat.id); await refresh(); })
+      .catch((failure) => setError((failure as Error).message));
+  }, [params.listingId, user?.id, state.listings, state.mode]);
+  useEffect(() => {
+    if (state.mode !== "admin_demo" || !params.listingId || !user) return;
+    const chat = state.chatConversations?.find((item) => item.listingId === params.listingId && item.renterId === user.id);
+    if (chat) setSelected(chat.id);
+  }, [state.chatConversations, state.mode, params.listingId, user?.id]);
+  useEffect(() => {
+    if (!params.bookingId || !user) return;
+    const booking = state.bookings.find((item) => item.id === params.bookingId && [item.renterId, item.ownerId].includes(user.id));
+    if (!booking) return;
+    const linked = shared.find((chat) => chat.listing_id === booking.listingId && chat.renter_id === booking.renterId && chat.owner_id === booking.ownerId);
+    setSelected(linked?.id || `booking:${booking.id}`);
+  }, [params.bookingId, shared, state.bookings, user?.id]);
+  useEffect(() => {
+    if (!selected || !user) return;
+    const selectedChat = shared.find((item) => item.id === selected);
+    const demoChat = state.chatConversations?.find((item) => item.id === selected);
+    const linkedBooking = selectedChat && state.bookings.find((item) => item.listingId === selectedChat.listing_id && item.renterId === selectedChat.renter_id && item.ownerId === selectedChat.owner_id);
+    const demoBooking = demoChat && state.bookings.find((item) => item.listingId === demoChat.listingId && item.renterId === demoChat.renterId && item.ownerId === demoChat.ownerId);
+    const readKey = `${selected}:${linkedBooking?.id || demoBooking?.id || ""}`;
+    if (lastRead.current === readKey) return;
+    lastRead.current = readKey;
+    if (state.mode === "admin_demo" && demoChat) {
+      act({ type: "readChat", conversationId: selected });
+      if (demoBooking) act({ type: "readConversation", bookingId: demoBooking.id });
+    }
+    else if (selected.startsWith("booking:")) act({ type: "readConversation", bookingId: selected.slice(8) });
+    else {
+      if (linkedBooking) act({ type: "readConversation", bookingId: linkedBooking.id });
+      void markSharedChatRead(selected, user.id).then(refresh).catch((failure) => setError((failure as Error).message));
+    }
+  }, [selected, user?.id, state.mode, shared]);
+  useEffect(() => {
+    const paths = remoteMessages.map((message) => message.image_path).filter((path): path is string => !!path && !imageUrls[path]);
+    if (paths.length) void Promise.all(paths.map(async (path) => [path, await signedChatImage(path)] as const))
+      .then((entries) => setImageUrls((before) => ({ ...before, ...Object.fromEntries(entries) }))).catch(() => {});
+  }, [remoteMessages]);
+
+  if (!user) return <Redirect href="/auth" />;
+  const rows: Row[] = [];
+  for (const chat of shared) {
+    const listing = chat.chat_listings?.listing_data || state.listings.find((item) => item.id === chat.listing_id);
+    if (!listing) continue;
+    const booking = state.bookings.find((item) => item.listingId === chat.listing_id && item.renterId === chat.renter_id && item.ownerId === chat.owner_id);
+    const messages = remoteMessages.filter((message) => message.conversation_id === chat.id);
+    const legacy = state.messages.filter((message) => message.bookingId === booking?.id);
+    const latest = messages.at(-1);
+    const lastLegacy = legacy.at(-1);
+    const remoteIsLatest = !!latest && (!lastLegacy || latest.created_at >= lastLegacy.createdAt);
+    rows.push({ id: chat.id, kind: "shared", shared: chat, listing, booking,
+      other: chat.owner_id === user.id ? chat.renter_name : chat.chat_listings?.owner_name || "Owner",
+      latestAt: remoteIsLatest ? latest.created_at : lastLegacy?.createdAt || chat.updated_at,
+      preview: remoteIsLatest ? latest.body || "Photo" : lastLegacy?.text || "Start a conversation",
+      unread: messages.filter((message) => message.receiver_id === user.id && !message.read_at).length + legacy.filter((message) => message.authorId !== user.id && !message.read).length });
+  }
+  for (const chat of state.chatConversations || []) {
+    if (![chat.renterId, chat.ownerId].includes(user.id)) continue;
+    const listing = state.listings.find((item) => item.id === chat.listingId);
+    if (!listing) continue;
+    const booking = state.bookings.find((item) => item.listingId === chat.listingId && item.renterId === chat.renterId && item.ownerId === chat.ownerId);
+    const messages = state.messages.filter((message) => message.conversationId === chat.id || message.bookingId === booking?.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const latest = messages.at(-1);
+    const other = state.profiles.find((profile) => profile.id === (chat.ownerId === user.id ? chat.renterId : chat.ownerId));
+    rows.push({ id: chat.id, kind: "demo", listing, booking, other: other?.name || "Participant", latestAt: latest?.createdAt || chat.createdAt,
+      preview: latest?.text || (latest?.imageUri ? "Photo" : "Start a conversation"), unread: messages.filter((message) => message.authorId !== user.id && !message.read).length });
+  }
+  for (const booking of state.bookings.filter((item) => [item.renterId, item.ownerId].includes(user.id))) {
+    if (rows.some((row) => row.booking?.id === booking.id)) continue;
+    const listing = state.listings.find((item) => item.id === booking.listingId);
+    if (!listing) continue;
+    const messages = state.messages.filter((message) => message.bookingId === booking.id);
+    const latest = messages.at(-1);
+    const other = state.profiles.find((profile) => profile.id === (booking.ownerId === user.id ? booking.renterId : booking.ownerId));
+    rows.push({ id: `booking:${booking.id}`, kind: "booking", listing, booking, other: other?.name || "Participant",
+      latestAt: latest?.createdAt || booking.createdAt, preview: latest?.text || "Start a conversation",
+      unread: state.notifications.filter((notice) => notice.bookingId === booking.id && notice.userId === user.id && !notice.read && notice.title.includes("sent you a message")).length });
+  }
+  rows.sort((a, b) => b.latestAt.localeCompare(a.latestAt));
+  const visible = rows.filter((row) => `${row.other} ${row.listing.title}`.toLowerCase().includes(search.toLowerCase()));
+  const active = rows.find((row) => row.id === selected);
+  const messages = [
+    ...(active?.kind === "shared" ? remoteMessages.filter((message) => message.conversation_id === active.id)
+      .map((message) => ({ id: message.id, sender: message.sender_id, text: message.body, image: message.image_path ? imageUrls[message.image_path] : undefined, at: message.created_at, read: !!message.read_at })) : []),
+    ...state.messages.filter((message) => active?.kind === "demo" ? message.conversationId === active.id || message.bookingId === active.booking?.id : message.bookingId === active?.booking?.id)
+      .map((message) => ({ id: message.id, sender: message.authorId, text: message.text, image: message.imageUri, at: message.createdAt, read: !!message.read })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
+
+  async function attach() {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsMultipleSelection: false, quality: 0.75 });
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0], mime = asset.mimeType || "image/jpeg";
+      if (!["image/jpeg", "image/png", "image/webp"].includes(mime) || (asset.fileSize || 0) > 2 * 1024 * 1024) throw new Error("Choose a JPEG, PNG or WebP photo no larger than 2 MB.");
+      setPhoto({ uri: asset.uri, mime });
+    } catch (failure) { setError((failure as Error).message); }
+  }
+  async function send() {
+    if (!active || busy || (!draft.trim() && !photo)) return;
+    setBusy(true); setError("");
+    try {
+      if (active.kind === "shared" && active.shared) {
+        const path = photo ? await uploadChatImage(active.id, photo.uri, photo.mime) : undefined;
+        await sendSharedMessage(active.shared, user!.id, draft, path);
+        await refresh();
+      } else if (active.kind === "demo") await actAndPersist({ type: "sendChat", conversationId: active.id, id: newId(), text: draft, imageUri: photo?.uri });
+      else if (active.booking) {
+        if (photo) throw new Error("Photo sharing for this older rental conversation requires a shared listing chat.");
+        await actAndPersist({ type: "message", bookingId: active.booking.id, text: draft });
+      }
+      setDraft(""); setPhoto(null);
+    } catch (failure) { setError((failure as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  return <Screen title="Messages" subtitle="Chat with renters and owners about their listings.">
+    {!!error && <Notice text={error} error />}
+    <View style={[styles.shell, mobile && { minHeight: 540 }]}>
+      {(!mobile || !active) && <View style={[styles.sidebar, mobile && { width: "100%" }]}>
+        <TextInput accessibilityLabel="Search conversations" placeholder="Search conversations" value={search} onChangeText={setSearch} style={styles.search} />
+        <ScrollView style={{ flex: 1 }}>{visible.length ? visible.map((row) => <Pressable key={row.id} accessibilityRole="button" accessibilityLabel={`Open conversation with ${row.other} about ${row.listing.title}`}
+          onPress={() => { setSelected(row.id); setDraft(""); setPhoto(null); }} style={[styles.row, selected === row.id && { backgroundColor: colors.paleBlue }]}>
+          <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View>
+          <View style={{ flex: 1 }}><View style={styles.rowTop}><Text style={styles.name} numberOfLines={1}>{row.other}</Text><Text style={s.caption}>{formatMalaysiaDateTime(row.latestAt).split(", ")[1]}</Text></View>
+            <View style={styles.itemRow}>{!!row.listing.imageUrl && <Image source={{ uri: row.listing.imageUrl }} style={styles.smallImage} />}<Text style={styles.itemName} numberOfLines={1}>{row.listing.title}</Text></View>
+            <Text style={s.caption} numberOfLines={1}>{row.preview}</Text></View>
+          {!!row.unread && <View style={styles.badge}><Text style={styles.badgeText}>{row.unread}</Text></View>}
+        </Pressable>) : <Empty title="No messages yet" text="Open a listing and tap Chat with Owner to start." />}</ScrollView>
+      </View>}
+      {(!mobile || !!active) && <View style={styles.chat}>
+        {active ? <>
+          <View style={styles.header}>{mobile && <Pressable accessibilityRole="button" accessibilityLabel="Back to conversations" onPress={() => setSelected(null)}><Ionicons name="arrow-back" size={24} color={colors.navy} /></Pressable>}
+            <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View><View><Text style={styles.name}>{active.other}</Text><Text style={s.caption}>{active.booking?.status || "Listing enquiry"}</Text></View></View>
+          <Pressable accessibilityRole="button" onPress={() => router.push(`/listing/${active.listing.id}`)} style={styles.listing}>
+            {!!active.listing.imageUrl && <Image source={{ uri: active.listing.imageUrl }} style={styles.listingImage} />}
+            <View style={{ flex: 1 }}><Text style={styles.itemName}>{active.listing.title}</Text><Text style={s.caption}>{money(active.listing.dailyPrice)} / day · Owner: {active.listing.ownerId === user.id ? user.name : active.other}</Text></View>
+            <Ionicons name="chevron-forward" size={18} color={colors.blue} /></Pressable>
+          {!!active.booking && <Button secondary onPress={() => router.push(`/rental/${active.booking!.id}`)}>View Rental Details</Button>}
+          {active.listing.ownerId !== user.id && <Button secondary onPress={() => router.push(`/listing/${active.listing.id}`)}>Book This Item</Button>}
+          <ScrollView ref={scroll} style={styles.messages} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}>
+            {messages.map((message) => <View key={message.id} style={[styles.bubble, message.sender === user.id ? styles.sent : styles.received]}>
+              {!!message.text && <Text style={[s.body, message.sender === user.id && { color: "white" }]}>{message.text}</Text>}
+              {!!message.image && <Pressable accessibilityRole="button" accessibilityLabel="Open chat photo" onPress={() => setLargePhoto(message.image!)}><Image source={{ uri: message.image }} style={styles.messageImage} /></Pressable>}
+              <Text style={[styles.time, message.sender === user.id && { color: "#DCE8FF" }]}>{formatMalaysiaDateTime(message.at)} {message.sender === user.id ? message.read ? "· Read" : "· Sent" : ""}</Text>
+            </View>)}
+          </ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestions}>{suggestions.map((text) => <Pressable key={text} onPress={() => setDraft(text)} style={styles.suggestion}><Text style={{ color: colors.blue, fontSize: 12 }}>{text}</Text></Pressable>)}</ScrollView>
+          {!!photo && <View style={styles.photoPreview}><Image source={{ uri: photo.uri }} style={styles.listingImage} /><Text style={s.caption}>Photo ready to send</Text><Pressable onPress={() => setPhoto(null)}><Ionicons name="close-circle" size={23} color={colors.muted} /></Pressable></View>}
+          <View style={styles.composer}><Pressable accessibilityRole="button" accessibilityLabel="Attach photo" onPress={() => void attach()}><Ionicons name="image-outline" size={25} color={colors.blue} /></Pressable>
+            <TextInput accessibilityLabel="Message" placeholder="Write a message…" value={draft} onChangeText={setDraft} multiline maxLength={2000} style={styles.input} />
+            <Pressable accessibilityRole="button" accessibilityLabel="Send message" disabled={busy || (!draft.trim() && !photo)} onPress={() => void send()} style={[styles.send, (busy || (!draft.trim() && !photo)) && { opacity: 0.5 }]}><Ionicons name="send" size={20} color="white" /></Pressable></View>
+        </> : <Empty title="Select a conversation" text="Your messages will appear here." />}
+      </View>}
+    </View>
+    <Modal transparent visible={!!largePhoto} onRequestClose={() => setLargePhoto(null)}><Pressable onPress={() => setLargePhoto(null)} style={styles.overlay}>{!!largePhoto && <Image source={{ uri: largePhoto }} resizeMode="contain" style={{ width: "100%", height: "90%" }} />}</Pressable></Modal>
+  </Screen>;
+}
+
+const styles = StyleSheet.create({
+  shell: { flexDirection: "row", minHeight: 620, backgroundColor: "white", borderWidth: 1, borderColor: colors.border, borderRadius: 18, overflow: "hidden", marginTop: 12 },
+  sidebar: { width: "38%", borderRightWidth: 1, borderRightColor: colors.border }, search: { margin: 14, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.navy },
+  row: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border }, rowTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" }, name: { color: colors.navy, fontSize: 16, fontWeight: "700" },
+  itemRow: { flexDirection: "row", alignItems: "center", gap: 5, marginVertical: 3 }, smallImage: { width: 22, height: 22, borderRadius: 4 }, itemName: { color: colors.slate, fontSize: 13, fontWeight: "600", flexShrink: 1 },
+  badge: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" }, badgeText: { color: "white", fontSize: 11, fontWeight: "700" },
+  chat: { flex: 1, padding: 14, minWidth: 0 }, header: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 12 },
+  listing: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.paleBlue, padding: 10, borderRadius: 12, marginBottom: 10 }, listingImage: { width: 48, height: 48, borderRadius: 8 },
+  messages: { flex: 1, marginVertical: 10 }, bubble: { padding: 12, borderRadius: 14, marginVertical: 5, maxWidth: "80%" }, sent: { alignSelf: "flex-end", backgroundColor: colors.blue }, received: { alignSelf: "flex-start", backgroundColor: colors.paleBlue },
+  time: { fontSize: 10, color: colors.muted, marginTop: 5 }, messageImage: { width: 190, height: 160, borderRadius: 8, marginTop: 4 },
+  suggestions: { gap: 8, paddingVertical: 8 }, suggestion: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: colors.softBlue },
+  photoPreview: { flexDirection: "row", alignItems: "center", gap: 10 }, composer: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
+  input: { flex: 1, minHeight: 42, maxHeight: 110, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, color: colors.navy }, send: { backgroundColor: colors.blue, borderRadius: 12, padding: 11 },
+  overlay: { flex: 1, justifyContent: "center", backgroundColor: "#000D", padding: 20 },
+});

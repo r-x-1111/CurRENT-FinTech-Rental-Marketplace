@@ -1,16 +1,30 @@
+import { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../constants/theme";
 import { useMarketplace } from "../../context/Marketplace";
+import { fetchChatInbox } from "../../services/chat";
+import { supabase } from "../../lib/supabase";
 const icons = {
   index: "home-outline",
   rentals: "bag-handle-outline",
+  messages: "chatbubble-ellipses-outline",
   profile: "person-circle-outline",
 } as const;
 export default function TabsLayout() {
-  const { user } = useMarketplace();
+  const { user, state } = useMarketplace();
+  const [sharedUnread, setSharedUnread] = useState(0);
+  useEffect(() => {
+    if (!user || state.mode === "admin_demo") { setSharedUnread(0); return; }
+    const refresh = () => { void fetchChatInbox().then(({ messages }) => setSharedUnread(messages.filter((message) => message.receiver_id === user.id && !message.read_at).length)).catch(() => {}); };
+    refresh();
+    const timer = setInterval(refresh, 15000);
+    const channel = supabase?.channel(`chat-badge-${user.id}`).on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, refresh).subscribe();
+    return () => { clearInterval(timer); if (channel) void supabase?.removeChannel(channel); };
+  }, [user?.id, state.mode]);
   if (!user) return <Redirect href="/auth" />;
+  const unread = sharedUnread + state.notifications.filter((notice) => notice.userId === user.id && !notice.read && notice.title.includes("sent you a message")).length;
 
   return (
     <Tabs
@@ -37,6 +51,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
       <Tabs.Screen name="rentals" options={{ title: "Rentals" }} />
+      <Tabs.Screen name="messages" options={{ title: "Messages", tabBarBadge: unread || undefined }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>
   );

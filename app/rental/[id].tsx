@@ -393,7 +393,7 @@ export default function RentalDetail() {
           {owner ? "Renter" : "Lender"}: {other?.name} ·{" "}
           {other?.verification.replace("_", " ")}
         </Text>
-        <Button secondary onPress={() => router.push(`/conversation/${b.id}`)}>
+        <Button secondary onPress={() => router.push({ pathname: "/(tabs)/messages", params: { bookingId: b.id } })}>
           Message {other?.name.split(" ")[0] || "participant"}
         </Button>
       </Card>

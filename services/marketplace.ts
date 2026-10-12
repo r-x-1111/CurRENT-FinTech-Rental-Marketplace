@@ -31,6 +31,9 @@ export type Action =
   | { type: "saveDeliveryAddress"; address: SavedDeliveryAddress }
   | { type: "verify"; status: VerificationStatus }
   | { type: "favourite"; listingId: string }
+  | { type: "openChat"; listingId: string }
+  | { type: "sendChat"; conversationId: string; id: string; text: string; imageUri?: string }
+  | { type: "readChat"; conversationId: string }
   | { type: "saveListing"; listing: Listing }
   | { type: "deleteListing"; id: string }
   | { type: "boostListing"; listingId: string; transactionId: string }
@@ -482,6 +485,39 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         ? user.favourites.filter((id) => id !== action.listingId)
         : [...user.favourites, action.listingId];
       break;
+
+    case "openChat": {
+      const listing = state.listings.find((item) => item.id === action.listingId && item.status === "published");
+      requireThat(listing, "Listing is unavailable.");
+      requireThat(listing.ownerId !== user.id, "You cannot message yourself.");
+      state.chatConversations ||= [];
+      if (!state.chatConversations.some((chat) => chat.listingId === listing.id && chat.renterId === user.id && chat.ownerId === listing.ownerId)) {
+        state.chatConversations.push({ id: `chat-${newId()}`, listingId: listing.id, renterId: user.id, ownerId: listing.ownerId, createdAt: now });
+      }
+      break;
+    }
+
+    case "sendChat": {
+      const chat = state.chatConversations?.find((item) => item.id === action.conversationId);
+      requireThat(chat && [chat.renterId, chat.ownerId].includes(user.id), "Conversation unavailable.");
+      requireThat(!state.messages.some((message) => message.id === action.id), "Message already sent.");
+      requireThat((action.text.trim().length > 0 || !!action.imageUri) && action.text.length <= 2000, "Enter a message of up to 2,000 characters or attach an image.");
+      state.messages.push({ id: action.id, conversationId: chat.id, authorId: user.id,
+        text: action.text.trim(), imageUri: action.imageUri, createdAt: now });
+      state.notifications.unshift({ id: newId(), userId: user.id === chat.ownerId ? chat.renterId : chat.ownerId,
+        title: `${user.name} sent you a message.`, conversationId: chat.id, read: false, createdAt: now });
+      break;
+    }
+
+    case "readChat": {
+      const chat = state.chatConversations?.find((item) => item.id === action.conversationId);
+      requireThat(chat && [chat.renterId, chat.ownerId].includes(user.id), "Conversation unavailable.");
+      state.messages.filter((message) => message.conversationId === chat.id && message.authorId !== user.id)
+        .forEach((message) => { message.read = true; });
+      state.notifications.filter((notice) => notice.conversationId === chat.id && notice.userId === user.id)
+        .forEach((notice) => { notice.read = true; });
+      break;
+    }
 
     case "saveListing": {
       requireVerifiedListingAccount(user);

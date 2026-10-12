@@ -498,6 +498,11 @@ export default function ListingDetailScreen() {
                     ).length
                   } completed rentals`}
             </Text>
+            {user?.id !== listing.ownerId && <Button secondary onPress={() => user
+              ? router.push({ pathname: "/(tabs)/messages", params: { listingId: listing.id } })
+              : router.push("/auth")}>
+              <Ionicons name="chatbubble-ellipses-outline" size={17} color={colors.blue} /> Chat with Owner
+            </Button>}
           </Card>
 
           <Button

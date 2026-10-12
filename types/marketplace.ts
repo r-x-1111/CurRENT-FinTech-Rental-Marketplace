@@ -171,11 +171,21 @@ export interface ConditionIssueReport {
 
 export interface Message {
   id: string;
-  bookingId: string;
+  bookingId?: string;
+  conversationId?: string;
   authorId: string;
   text: string;
+  imageUri?: string;
   createdAt: string;
   read?: boolean;
+}
+
+export interface ChatConversation {
+  id: string;
+  listingId: string;
+  ownerId: string;
+  renterId: string;
+  createdAt: string;
 }
 
 export interface Review {
@@ -192,6 +202,7 @@ export interface Notice {
   userId: string;
   title: string;
   bookingId?: string;
+  conversationId?: string;
   read: boolean;
   createdAt: string;
 }
@@ -242,6 +253,7 @@ export interface Marketplace {
     expiresAt: string;
   }[];
   messages: Message[];
+  chatConversations?: ChatConversation[];
   evidence: Evidence[];
   issueReports?: ConditionIssueReport[];
   reviews: Review[];

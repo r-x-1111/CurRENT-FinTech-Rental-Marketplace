@@ -26,6 +26,26 @@ import {
   startDemoWorkspaceSession,
 } from "../services/demoWorkspaceSessions";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { fetchPublishedChatListings, publishChatListing, unpublishChatListing } from "../services/chat";
+
+async function includeSharedListings(workspace: Marketplace, ownerId: string): Promise<Marketplace> {
+  const ownerName = workspace.profiles.find((profile) => profile.id === ownerId)?.name || "Owner";
+  await Promise.all(workspace.listings.filter((listing) => listing.ownerId === ownerId).map((listing) => publishChatListing(listing, ownerName)));
+  const remote = await fetchPublishedChatListings();
+  const listings = [...workspace.listings];
+  const profiles = [...workspace.profiles];
+  for (const entry of remote) {
+    const listingIndex = listings.findIndex((listing) => listing.id === entry.listing_id);
+    if (listingIndex < 0) listings.push(entry.listing_data);
+    else if (entry.owner_id !== ownerId) listings[listingIndex] = entry.listing_data;
+    const profileIndex = profiles.findIndex((profile) => profile.id === entry.owner_id);
+    if (profileIndex < 0) profiles.push({
+      id: entry.owner_id, name: entry.owner_name, email: "", verification: "verified", favourites: [],
+    });
+    else if (entry.owner_id !== ownerId) profiles[profileIndex] = { ...profiles[profileIndex], name: entry.owner_name };
+  }
+  return { ...workspace, listings, profiles };
+}
 
 function createLoggedOutState(): Marketplace {
   const seed = createSeed();
@@ -147,6 +167,7 @@ export function MarketplaceProvider({
                   restored,
                 );
               }
+              restored = await includeSharedListings(restored, account.id);
             }
             authOwnerId.current = account.id;
             authAccountKind.current = account.accountKind;
@@ -207,6 +228,7 @@ export function MarketplaceProvider({
           authenticatedState,
         );
       }
+      authenticatedState = await includeSharedListings(authenticatedState, account.id);
     }
     authOwnerId.current = account.id;
     authAccountKind.current = account.accountKind;
@@ -234,7 +256,10 @@ export function MarketplaceProvider({
             saveDemoWorkspaceSession(ownerId, next);
             return;
           }
-          return saveMarketplaceWorkspace(supabase!, ownerId, accountKind, next);
+          return saveMarketplaceWorkspace(supabase!, ownerId, accountKind, next).then(async () => {
+            if (action.type === "saveListing") await publishChatListing(action.listing, next.profiles.find((p) => p.id === ownerId)?.name || "Owner");
+            if (action.type === "deleteListing") await unpublishChatListing(action.id);
+          });
         })
         .then(() => setStorageError(""))
         .catch(() =>
@@ -269,7 +294,10 @@ export function MarketplaceProvider({
         saveDemoWorkspaceSession(ownerId, next);
         return;
       }
-      return saveMarketplaceWorkspace(client, ownerId, accountKind, next);
+      return saveMarketplaceWorkspace(client, ownerId, accountKind, next).then(async () => {
+        if (action.type === "saveListing") await publishChatListing(action.listing, next.profiles.find((p) => p.id === ownerId)?.name || "Owner");
+        if (action.type === "deleteListing") await unpublishChatListing(action.id);
+      });
     });
     writes.current = save.then(
       () => undefined,

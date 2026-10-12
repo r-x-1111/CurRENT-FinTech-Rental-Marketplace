@@ -65,6 +65,26 @@ test("Demo workspace starts fresh, persists in-session, and clears on sign out",
   );
 });
 
+test("Demo listing chat reopens one thread and records unread messages for its owner", () => {
+  let state = createSeed("admin_demo");
+  const renterId = state.currentUserId;
+  const listing = state.listings.find((item) => item.status === "published" && item.ownerId !== renterId);
+  assert.ok(listing);
+  state = transition(state, { type: "openChat", listingId: listing.id });
+  const chat = state.chatConversations?.find((item) => item.listingId === listing.id && item.renterId === renterId);
+  assert.ok(chat);
+  state = transition(state, { type: "openChat", listingId: listing.id });
+  assert.equal(state.chatConversations?.filter((item) => item.listingId === listing.id && item.renterId === renterId).length, 1);
+  state = transition(state, { type: "sendChat", conversationId: chat.id, id: "chat-test-message", text: "Is it available?" });
+  assert.equal(state.messages.find((item) => item.id === "chat-test-message")?.text, "Is it available?");
+  assert.ok(state.notifications.some((item) => item.userId === listing.ownerId && item.conversationId === chat.id && !item.read));
+  assert.throws(() => transition(state, { type: "sendChat", conversationId: chat.id, id: "chat-test-message", text: "Duplicate" }), /already sent/);
+  state = transition(state, { type: "login", userId: listing.ownerId });
+  state = transition(state, { type: "readChat", conversationId: chat.id });
+  assert.equal(state.messages.find((item) => item.id === "chat-test-message")?.read, true);
+  assert.equal(state.notifications.find((item) => item.conversationId === chat.id)?.read, true);
+});
+
 test("new Supabase Normal workspaces start empty and are bound to their auth account", () => {
   const workspace = createNormalAccountWorkspace({
     id: "normal-auth-user",
