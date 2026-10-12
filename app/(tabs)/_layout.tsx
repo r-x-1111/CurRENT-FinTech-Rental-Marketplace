@@ -37,9 +37,9 @@ export default function TabsLayout() {
       })}
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
-      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
-      <Tabs.Screen name="messages" options={{ title: "Messages" }} />
       <Tabs.Screen name="rentals" options={{ title: "Rentals" }} />
+      <Tabs.Screen name="messages" options={{ title: "Messages" }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>
   );
 }
