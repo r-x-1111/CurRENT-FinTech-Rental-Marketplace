@@ -9,7 +9,7 @@ import { colors } from "../../constants/theme";
 import { formatMalaysiaDateTime, money } from "../../services/booking";
 import { newId } from "../../services/marketplace";
 import { supabase } from "../../lib/supabase";
-import { fetchChatInbox, markSharedChatRead, openSharedConversation, sendSharedMessage, signedChatImage, uploadChatImage, type SharedConversation, type SharedMessage } from "../../services/chat";
+import { fetchChatInbox, markSharedChatRead, openBookingConversation, openSharedConversation, sendSharedMessage, signedChatImage, uploadChatImage, type SharedConversation, type SharedMessage } from "../../services/chat";
 import type { Listing } from "../../types";
 import type { Booking } from "../../types/marketplace";
 
@@ -71,9 +71,18 @@ export default function MessagesScreen() {
     if (!params.bookingId || !user) return;
     const booking = state.bookings.find((item) => item.id === params.bookingId && [item.renterId, item.ownerId].includes(user.id));
     if (!booking) return;
+    if (state.mode === "admin_demo") {
+      const linked = state.chatConversations?.find((chat) => chat.listingId === booking.listingId && chat.renterId === booking.renterId && chat.ownerId === booking.ownerId);
+      setSelected(linked?.id || `booking:${booking.id}`);
+      return;
+    }
     const linked = shared.find((chat) => chat.listing_id === booking.listingId && chat.renter_id === booking.renterId && chat.owner_id === booking.ownerId);
-    setSelected(linked?.id || `booking:${booking.id}`);
-  }, [params.bookingId, shared, state.bookings, user?.id]);
+    if (linked) { setSelected(linked.id); return; }
+    const renterName = state.profiles.find((profile) => profile.id === booking.renterId)?.name || "Renter";
+    void openBookingConversation(booking.listingId, booking.ownerId, booking.renterId, renterName)
+      .then(async (chat) => { setSelected(chat.id); await refresh(); })
+      .catch((failure) => setError((failure as Error).message));
+  }, [params.bookingId, shared, state.bookings, state.chatConversations, state.mode, state.profiles, user?.id]);
   useEffect(() => {
     if (!selected || !user) return;
     const selectedChat = shared.find((item) => item.id === selected);
@@ -81,7 +90,7 @@ export default function MessagesScreen() {
     const linkedBooking = selectedChat && state.bookings.find((item) => item.listingId === selectedChat.listing_id && item.renterId === selectedChat.renter_id && item.ownerId === selectedChat.owner_id);
     const demoBooking = demoChat && state.bookings.find((item) => item.listingId === demoChat.listingId && item.renterId === demoChat.renterId && item.ownerId === demoChat.ownerId);
     const readKey = `${selected}:${linkedBooking?.id || demoBooking?.id || ""}`;
-    if (lastRead.current === readKey) return;
+    if (lastRead.current === readKey && !remoteMessages.some((message) => message.conversation_id === selected && message.receiver_id === user.id && !message.read_at)) return;
     lastRead.current = readKey;
     if (state.mode === "admin_demo" && demoChat) {
       act({ type: "readChat", conversationId: selected });
@@ -92,7 +101,7 @@ export default function MessagesScreen() {
       if (linkedBooking) act({ type: "readConversation", bookingId: linkedBooking.id });
       void markSharedChatRead(selected, user.id).then(refresh).catch((failure) => setError((failure as Error).message));
     }
-  }, [selected, user?.id, state.mode, shared]);
+  }, [selected, user?.id, state.mode, shared, remoteMessages]);
   useEffect(() => {
     const paths = remoteMessages.map((message) => message.image_path).filter((path): path is string => !!path && !imageUrls[path]);
     if (paths.length) void Promise.all(paths.map(async (path) => [path, await signedChatImage(path)] as const))
@@ -106,7 +115,7 @@ export default function MessagesScreen() {
     if (!listing) continue;
     const booking = state.bookings.find((item) => item.listingId === chat.listing_id && item.renterId === chat.renter_id && item.ownerId === chat.owner_id);
     const messages = remoteMessages.filter((message) => message.conversation_id === chat.id);
-    const legacy = state.messages.filter((message) => message.bookingId === booking?.id);
+    const legacy = state.mode === "admin_demo" ? state.messages.filter((message) => message.bookingId === booking?.id) : [];
     const latest = messages.at(-1);
     const lastLegacy = legacy.at(-1);
     const remoteIsLatest = !!latest && (!lastLegacy || latest.created_at >= lastLegacy.createdAt);
@@ -116,7 +125,7 @@ export default function MessagesScreen() {
       preview: remoteIsLatest ? latest.body || "Photo" : lastLegacy?.text || "Start a conversation",
       unread: messages.filter((message) => message.receiver_id === user.id && !message.read_at).length + legacy.filter((message) => message.authorId !== user.id && !message.read).length });
   }
-  for (const chat of state.chatConversations || []) {
+  for (const chat of state.mode === "admin_demo" ? state.chatConversations || [] : []) {
     if (![chat.renterId, chat.ownerId].includes(user.id)) continue;
     const listing = state.listings.find((item) => item.id === chat.listingId);
     if (!listing) continue;
@@ -127,7 +136,7 @@ export default function MessagesScreen() {
     rows.push({ id: chat.id, kind: "demo", listing, booking, other: other?.name || "Participant", latestAt: latest?.createdAt || chat.createdAt,
       preview: latest?.text || (latest?.imageUri ? "Photo" : "Start a conversation"), unread: messages.filter((message) => message.authorId !== user.id && !message.read).length });
   }
-  for (const booking of state.bookings.filter((item) => [item.renterId, item.ownerId].includes(user.id))) {
+  for (const booking of (state.mode === "admin_demo" ? state.bookings : []).filter((item) => [item.renterId, item.ownerId].includes(user.id))) {
     if (rows.some((row) => row.booking?.id === booking.id)) continue;
     const listing = state.listings.find((item) => item.id === booking.listingId);
     if (!listing) continue;
@@ -144,7 +153,7 @@ export default function MessagesScreen() {
   const messages = [
     ...(active?.kind === "shared" ? remoteMessages.filter((message) => message.conversation_id === active.id)
       .map((message) => ({ id: message.id, sender: message.sender_id, text: message.body, image: message.image_path ? imageUrls[message.image_path] : undefined, at: message.created_at, read: !!message.read_at })) : []),
-    ...state.messages.filter((message) => active?.kind === "demo" ? message.conversationId === active.id || message.bookingId === active.booking?.id : message.bookingId === active?.booking?.id)
+    ...state.messages.filter((message) => state.mode === "admin_demo" && (active?.kind === "demo" ? message.conversationId === active.id || message.bookingId === active.booking?.id : message.bookingId === active?.booking?.id))
       .map((message) => ({ id: message.id, sender: message.authorId, text: message.text, image: message.imageUri, at: message.createdAt, read: !!message.read })),
   ].sort((a, b) => a.at.localeCompare(b.at));
 

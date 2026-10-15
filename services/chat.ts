@@ -96,9 +96,19 @@ export async function openSharedConversation(listingId: string, ownerId: string,
   return created.data as SharedConversation;
 }
 
+export async function openBookingConversation(listingId: string, ownerId: string, renterId: string, renterName: string): Promise<SharedConversation> {
+  if (ownerId === renterId) throw new Error("You cannot message yourself.");
+  const db = client();
+  const { data: { user }, error: authError } = await db.auth.getUser();
+  fail(authError, "Could not verify your account.");
+  if (user?.id !== ownerId && user?.id !== renterId) throw new Error("Only rental participants can open this conversation.");
+  return openSharedConversation(listingId, ownerId, renterId, renterName);
+}
+
 export async function sendSharedMessage(conversation: SharedConversation, senderId: string, body: string, imagePath?: string) {
   const text = body.trim();
   if ((!text && !imagePath) || text.length > 2000) throw new Error("Enter a message of up to 2,000 characters or attach an image.");
+  if (senderId !== conversation.owner_id && senderId !== conversation.renter_id) throw new Error("Only conversation participants can send messages.");
   const receiverId = senderId === conversation.owner_id ? conversation.renter_id : conversation.owner_id;
   const { error } = await client().from("chat_messages").insert({
     conversation_id: conversation.id, sender_id: senderId, receiver_id: receiverId,

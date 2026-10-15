@@ -150,7 +150,7 @@ export function BookingCard({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Open rental conversation"
-              onPress={() => router.push(`/conversation/${booking.id}`)}
+              onPress={() => router.push({ pathname: "/(tabs)/messages", params: { bookingId: booking.id } })}
               style={styles.msgIconBtn}
             >
               <Ionicons name="chatbubbles" size={16} color={colors.blue} />
@@ -159,7 +159,7 @@ export function BookingCard({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Chat with ${counterpartyName}`}
-            onPress={() => router.push(`/conversation/${booking.id}`)}
+            onPress={() => router.push({ pathname: "/(tabs)/messages", params: { bookingId: booking.id } })}
           >
             <Text style={styles.statValue} numberOfLines={1}>
               {unreadMessages > 0
