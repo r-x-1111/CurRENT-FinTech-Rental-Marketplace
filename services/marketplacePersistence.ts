@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSeed } from "../data/seed";
 import type { Marketplace } from "../types/marketplace";
 import type { MarketplaceAccountKind } from "./auth";
+import { withoutRemovedSeedListings } from "./catalogue";
 
 const WORKSPACE_TABLE = "marketplace_workspaces";
 
@@ -83,7 +84,7 @@ export async function loadMarketplaceWorkspace(
       "The saved account workspace is invalid or does not match this account.",
     );
   }
-  return data.state;
+  return withoutRemovedSeedListings(data.state);
 }
 
 export async function saveMarketplaceWorkspace(

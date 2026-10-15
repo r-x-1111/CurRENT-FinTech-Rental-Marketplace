@@ -312,9 +312,9 @@ Immediately below the bullets, show one compact note: **`Only one final outcome 
 
 **Delete the whole standalone `Messages` / `Message` page**, including the old `A Little Conversation` heading, its proposed replacement `Message` heading, any Messages tab, separate inbox navigation, old page-specific header links and redundant Messages/Message Profile row. **This supersedes the earlier V3.26 request to rename that page**: there is no page left to rename. Do not delete real conversation data or messaging functionality. **All rental-related messaging access belongs inside rental records**: renters use `Your Rentals`; lenders use **Lender Dashboard → Rentals**, reached directly by clicking the **`Active / Upcoming Rentals`** overview card. **Remove the separate lender dashboard `Rental Messages` button entirely**; neither dashboard needs a global message shortcut. A working `Messages:` icon/unread indicator on each applicable renter/lender rental summary card and a conversation entry in the corresponding Rental Details open that booking's authorised in-context chat panel/drawer (not a standalone Messages page). Both renter and lender see the correct shared thread for bookings they are authorised to access. Completed, Cancelled and Disputed rental records retain chat access through their history; Upcoming/Active likewise. The pre-existing URL of a removed Messages page should safely redirect to `Your Rentals`, or to the specific Rental Details conversation when a valid accessible booking ID is supplied; do not leave broken links or route to another user’s chat. Remove unrelated global unread-inbox shortcuts, but retain meaningful **per-rental unread badges**, realtime send/receive and notifications. Remove orphaned navigation links without erasing any valid historical chat records. The `Messages:` label on a rental card is an entry/control label, **not a separate page title**.
 
-## 3. Exactly 22 seeded marketplace products, images and review rules
+## 3. Seeded marketplace products, images and review rules
 
-The public catalogue contains **21 Canva reference items plus the already-existing City Explorer Bicycle** (22 total), browseable in Normal Mode even when a new user's personal records are empty. Reconcile by stable item identity without duplicate demo seeds; do **not** delete authentic user-created listings, assets, receipts or bookings. Preserve the existing bicycle ID, image, daily price and area. Prices below are **daily rental rates**, not insured valuations; owner listing screens must not display any item replacement-value input.
+The public catalogue contains **20 seeded items**, browseable in Normal Mode even when a new user's personal records are empty. City Explorer Bicycle and Wedding Arch / Backdrop Stand have been removed from the seeded catalogue. Do **not** delete authentic user-created listings, assets, receipts or bookings. Prices below are **daily rental rates**, not insured valuations; owner listing screens must not display any item replacement-value input.
 
 | # | Listing | RM/day | Public demo area | Main category |
 |---|---|---:|---|---|
@@ -336,10 +336,8 @@ The public catalogue contains **21 Canva reference items plus the already-existi
 | 16 | Fishing Rod Set | 20 | Shah Alam | Outdoors |
 | 17 | Camping Tent | 35 | Petaling Jaya | Outdoors |
 | 18 | Portable Power Station | 50 | Kuala Lumpur | Outdoors |
-| 19 | Wedding Arch / Backdrop Stand | 60 | Kuala Lumpur | Event Gear |
-| 20 | LED Event Lighting Kit | 45 | Petaling Jaya | Event Gear |
-| 21 | Photo Booth Setup | 100 | Kuala Lumpur | Event Gear |
-| 22 | **Existing Bicycle — preserve current data** | Existing | Existing | Outdoors |
+| 19 | LED Event Lighting Kit | 45 | Petaling Jaya | Event Gear |
+| 20 | Photo Booth Setup | 100 | Kuala Lumpur | Event Gear |
 
 **Public catalogue cards — retain the founder's current screenshot layout:** Keep each item in its **existing white rounded card**; do not let the new global blue-and-white theme turn public rental cards blue. Preserve the top product photo, heart in its own independent hit area, small category tag, verified-owner metadata, product title, compact public area/map-pin row, divider and MYR/day price. **Remove the visible `View Details` pill/button from every item card**: card/photo/title body navigates to that same listing's details with accessible keyboard and screen-reader support. Preserve the existing card grid density (three columns on a sufficiently wide desktop, fewer responsively), clean white surfaces and item images. Maintain truth-in-rating rules: no fabricated numeric star ratings on items other than the expressly labelled Sony demo example; an item without actual supported reviews may have plain `New` metadata but never a pretend rating.
 

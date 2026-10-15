@@ -1,5 +1,6 @@
 import { createSeed } from "../data/seed";
 import type { Marketplace } from "../types/marketplace";
+import { withoutRemovedSeedListings } from "./catalogue";
 
 const STORAGE_PREFIX = "current:demo-session:";
 const memorySessions = new Map<string, Marketplace>();
@@ -44,14 +45,14 @@ export function loadDemoWorkspaceSession(accountId: string): Marketplace {
   if (serialized) {
     try {
       const state: unknown = JSON.parse(serialized);
-      if (isMarketplaceSnapshot(state)) return state;
+      if (isMarketplaceSnapshot(state)) return withoutRemovedSeedListings(state);
     } catch {
       storage?.removeItem(key(accountId));
     }
   }
 
   const memoryState = memorySessions.get(accountId);
-  if (memoryState && isMarketplaceSnapshot(memoryState)) return memoryState;
+  if (memoryState && isMarketplaceSnapshot(memoryState)) return withoutRemovedSeedListings(memoryState);
 
   const fresh = createSeed("admin_demo");
   saveDemoWorkspaceSession(accountId, fresh);

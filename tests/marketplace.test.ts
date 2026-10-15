@@ -36,6 +36,7 @@ import {
 } from "../services/auth";
 import { provisionDemoAccount } from "../services/demoAccountProvisioning";
 import { createNormalAccountWorkspace } from "../services/marketplacePersistence";
+import { withoutRemovedSeedListings } from "../services/catalogue";
 import {
   DEMO_LISTING_TEMPLATE,
   DEMO_SAVED_DELIVERY_ADDRESSES,
@@ -46,6 +47,18 @@ import {
   saveDemoWorkspaceSession,
   startDemoWorkspaceSession,
 } from "../services/demoWorkspaceSessions";
+
+test("removed seed listings stay out of saved catalogues without hiding user listings", () => {
+  const state = createSeed("normal");
+  assert.equal(state.listings.length, 20);
+  const userListing = { ...state.listings[0], id: "wedding-arch", ownerId: "real-owner" };
+  const oldWedding = { ...userListing, ownerId: "owner-daniel" };
+  const oldBicycle = { ...userListing, id: "city-explorer-bicycle", ownerId: "owner-sarah" };
+  const cleaned = withoutRemovedSeedListings({ ...state, listings: [...state.listings, userListing, oldWedding, oldBicycle] });
+  assert.equal(cleaned.listings.length, 21);
+  assert.ok(cleaned.listings.includes(userListing));
+  assert.equal(cleaned.bookings, state.bookings);
+});
 
 test("Demo workspace starts fresh, persists in-session, and clears on sign out", () => {
   const accountId = "demo-auth-user";
@@ -1180,7 +1193,7 @@ test("RM10 lender boost features listing for 7 days", () => {
 
 test("Demo availability is stable, listing-specific, and limited to October–December 2026", () => {
   const state = createSeed("admin_demo");
-  assert.equal(state.listings.length, 22);
+  assert.equal(state.listings.length, 20);
   for (const listing of state.listings) {
     const result = availabilityCalendar(state, listing, 92, "2026-10-01");
     assert.equal(result.length, 92);

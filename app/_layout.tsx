@@ -16,6 +16,7 @@ export default function RootLayout() {
           <Stack.Screen name="help" />
           <Stack.Screen name="what-you-should-know" />
           <Stack.Screen name="risk-score-history" />
+          <Stack.Screen name="rental-risk-score" />
           <Stack.Screen name="support/customer-service" />
         </Stack>
       </MarketplaceProvider>

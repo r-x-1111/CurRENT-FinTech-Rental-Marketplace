@@ -3,16 +3,13 @@ import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "r
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
-  Badge,
   Button,
   Card,
   Chips,
   Field,
   Notice,
   PhotoPicker,
-  Row,
   Screen,
-  Section,
   s,
 } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
@@ -25,7 +22,9 @@ import { signOutAuthenticatedAccount } from "../../services/auth";
 export default function ProfileScreen() {
   const { section } = useLocalSearchParams<{ section?: string }>();
   const { state, user, act, actAndPersist, closeAuthenticatedWorkspace } = useMarketplace();
-  const isMobile = useWindowDimensions().width <= 430;
+  const width = useWindowDimensions().width;
+  const isMobile = width <= 430;
+  const narrow = width < 350;
   const [ekycY, setEkycY] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -76,11 +75,13 @@ export default function ProfileScreen() {
 
   return (
     <Screen
-      title="Renter Dashboard"
-      subtitle={`Welcome back, ${user.name} · CurRENT Renter Mode`}
       scrollToY={section === "ekyc" ? ekycY : null}
       contentStyle={isMobile ? styles.mobileContent : styles.desktopContent}
     >
+      <View style={styles.dashboardHeader}>
+        <Text style={styles.dashboardTitle}>Renter Dashboard</Text>
+        <Text style={styles.dashboardSubtitle}>Welcome back, {user.name}</Text>
+      </View>
       {/* Account warnings */}
       {user.isBanned && (
         <Notice
@@ -99,51 +100,41 @@ export default function ProfileScreen() {
 
       {/* Profile Overview Card */}
       <Card style={styles.profileCard}>
-        <View style={{ flexDirection: "row", gap: 16, alignItems: "center" }}>
+        <View style={styles.profileRow}>
           {user.avatar ? (
             <Image
               source={{ uri: user.avatar }}
-              style={{ width: isMobile ? 54 : 64, height: isMobile ? 54 : 64, borderRadius: 32 }}
+              style={styles.avatar}
             />
           ) : (
-            <View
-              style={{
-                backgroundColor: colors.softBlue,
-                padding: isMobile ? 16 : 20,
-                borderRadius: 32,
-              }}
-            >
-              <Text style={s.h2}>{user.name[0]}</Text>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarInitial}>{user.name[0]}</Text>
             </View>
           )}
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[s.h2, isMobile && styles.profileName]}>{user.name}</Text>
+            <Text style={styles.profileName}>{user.name}</Text>
             <Text style={[s.caption, styles.profileEmail]}>{user.email}</Text>
-            <Badge
-              text={
-                user.verification === "verified"
-                  ? "Verified"
-                  : user.verification
-              }
-              green={user.verification === "verified"}
-            />
+            <View style={[styles.profileBadge, user.verification === "verified" && styles.profileBadgeVerified]}>
+              <Ionicons name={user.verification === "verified" ? "checkmark-circle" : "ellipse-outline"} size={10} color={user.verification === "verified" ? colors.green : colors.blue} />
+              <Text style={[styles.profileBadgeText, user.verification === "verified" && styles.profileBadgeTextVerified]}>{user.verification.replaceAll("_", " ")}</Text>
+            </View>
+            {state.mode === "admin_demo" && (
+              <Text style={styles.demoDisclosure}>Fictional account data for demonstration</Text>
+            )}
           </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setEditing(!editing);
+              setName(user.name);
+              setPhotos(user.avatar ? [user.avatar] : []);
+            }}
+            style={({ pressed }) => [styles.editButton, pressed && styles.supportNavPressed]}
+          >
+            <Ionicons name="create-outline" size={13} color={colors.blue} />
+            <Text style={styles.editButtonText}>Edit profile</Text>
+          </Pressable>
         </View>
-        {state.mode === "admin_demo" && (
-          <Text style={[s.caption, { marginTop: 8 }]}>
-            Fictional account data for demonstration
-          </Text>
-        )}
-        <Button
-          secondary
-          onPress={() => {
-            setEditing(!editing);
-            setName(user.name);
-            setPhotos(user.avatar ? [user.avatar] : []);
-          }}
-        >
-          Edit profile
-        </Button>
         {editing && (
           <>
             <Field label="Full name" value={name} onChangeText={setName} />
@@ -165,7 +156,11 @@ export default function ProfileScreen() {
         )}
       </Card>
 
-      <View style={styles.lenderButton}><Button onPress={() => router.push("/owner")}>Lender Mode</Button></View>
+      <Pressable accessibilityRole="button" onPress={() => router.push("/owner")} style={({ pressed }) => [styles.lenderButton, pressed && styles.supportNavPressed]}>
+        <View style={styles.lenderIcon}><Ionicons name="briefcase" size={18} color={colors.white} /></View>
+        <View style={{ flex: 1 }}><Text style={styles.lenderTitle}>Lender Mode</Text><Text style={styles.lenderSubtitle}>Switch to manage your listings and earnings</Text></View>
+        <Ionicons name="chevron-forward" size={19} color={colors.white} />
+      </Pressable>
 
       {user.hasOverdueObligation && (
         <Card>
@@ -191,23 +186,24 @@ export default function ProfileScreen() {
       )}
 
       <View onLayout={(event) => setEkycY(Math.max(0, event.nativeEvent.layout.y - 16))}>
-        <Section title="Identity Verification (Demo eKYC)" compact />
-      </View>
       <Card style={styles.compactCard}>
+        <View style={styles.cardHeading}>
+          <View style={styles.headingIcon}><Ionicons name="shield-checkmark" size={17} color={colors.blue} /></View>
+          <View style={{ flex: 1 }}><Text style={styles.cardTitle}>Identity Verification (Demo eKYC)</Text><Text style={styles.cardSubtitle}>Simulated eKYC — Demo Only</Text></View>
+        </View>
         {user.verification === "verified" ? (
           <>
-            <Text style={s.caption}>Simulated eKYC — Demo Only</Text>
-            <View style={styles.verificationStage}>
-              <Ionicons name="checkmark-circle" size={20} color={colors.green} />
-              <Text style={styles.verificationStageText}>
-                Identity Document — Completed
-              </Text>
+            <View style={[styles.verificationStage, styles.verificationStageFirst]}>
+              <View style={styles.stageIcon}><Ionicons name="document-text-outline" size={16} color={colors.blue} /></View>
+              <View style={{ flex: 1 }}><Text style={styles.verificationStageText}>Identity Document</Text><Text style={styles.stageSubtitle}>NRIC or Passport</Text></View>
+              <Ionicons name="checkmark-circle" size={16} color={colors.green} />
+              <Text style={styles.completedBadge}>Completed</Text>
             </View>
             <View style={styles.verificationStage}>
-              <Ionicons name="checkmark-circle" size={20} color={colors.green} />
-              <Text style={styles.verificationStageText}>
-                Face Verification — Completed
-              </Text>
+              <View style={styles.stageIcon}><Ionicons name="scan-outline" size={16} color={colors.blue} /></View>
+              <View style={{ flex: 1 }}><Text style={styles.verificationStageText}>Face Verification</Text><Text style={styles.stageSubtitle}>Selfie verifies check</Text></View>
+              <Ionicons name="checkmark-circle" size={16} color={colors.green} />
+              <Text style={styles.completedBadge}>Completed</Text>
             </View>
           </>
         ) : (
@@ -295,59 +291,40 @@ export default function ProfileScreen() {
           </>
         )}
       </Card>
+      </View>
 
       {/* Rental Risk Score Section */}
-      <Section title="Rental Risk Score" compact />
       <Card style={[styles.compactCard, styles.riskCard]}>
-        <View style={{ alignItems: "center", paddingVertical: 2 }}>
-          <RiskGauge score={risk.score} label={risk.label} />
+        <View style={styles.cardHeading}>
+          <View style={styles.headingIcon}><Ionicons name="stats-chart" size={16} color={colors.blue} /></View>
+          <Text style={[styles.cardTitle, { flex: 1 }]}>Rental Risk Score</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Learn more about the Rental Risk Score" onPress={() => router.push("/rental-risk-score")} style={styles.learnMore}><Text style={styles.learnMoreText}>Learn more</Text><Ionicons name="information-circle-outline" size={14} color={colors.blue} /></Pressable>
         </View>
-        <Text style={s.caption}>
-          CurRENT Rental Risk Score is a platform reliability metric, NOT a
-          consumer credit score. It transparently determines your refundable
-          security deposit tier and booking permissions.
-        </Text>
-        <Row label="Initial verified score" value="80 (Low Risk)" />
-        <Row
-          label="Deposit basis"
-          value={
-            risk.score === null
-              ? "N/A"
-              : risk.score >= 80
-                ? "5% (capped at RM500)"
-                : risk.score >= 40
-                  ? "10% (capped at RM1,000)"
-                  : risk.score >= 30
-                    ? "15% (capped at RM1,500)"
-                    : "Platform assessment required"
-          }
-        />
-        <Row
-          label={`${completed} completed rentals`}
-          value={`+${netPoints} points`}
-        />
+        <View style={[styles.riskBody, narrow && styles.riskBodyNarrow]}>
+          <View style={isMobile && !narrow ? styles.compactGauge : styles.fullGauge}>
+            <View style={isMobile && !narrow ? styles.scaledGauge : undefined}><RiskGauge score={risk.score} label={risk.label} /></View>
+          </View>
+          <View style={styles.riskDetails}>
+            <Text style={styles.riskExplanation}>
+              CurRENT Rental Risk Score is a platform reliability metric, NOT a consumer credit score. It transparently determines your refundable security deposit tier and booking permissions.
+            </Text>
+            <View style={styles.riskMetricRow}><Ionicons name="star" size={11} color={colors.navy} /><Text style={styles.riskMetricLabel}>Initial verified score</Text><Text style={styles.riskMetricValue}>80 (Low Risk)</Text></View>
+            <View style={styles.riskMetricRow}><Ionicons name="wallet" size={11} color={colors.navy} /><Text style={styles.riskMetricLabel}>Deposit basis</Text><Text style={styles.riskMetricValue}>{risk.score === null ? "N/A" : risk.score >= 80 ? "5% (capped at RM500)" : risk.score >= 40 ? "10% (capped at RM1,000)" : risk.score >= 30 ? "15% (capped at RM1,500)" : "Platform assessment required"}</Text></View>
+            <View style={styles.riskMetricRow}><Ionicons name="calendar" size={11} color={colors.navy} /><Text style={styles.riskMetricLabel}>{completed} completed rentals</Text><Text style={styles.riskMetricValue}>+{netPoints} points</Text></View>
+          </View>
+        </View>
       </Card>
 
       {/* Trust and Support */}
-      <Section title="Trust and Support" compact />
-      <View style={{ gap: 10, marginBottom: 16 }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="What You Should Know" onPress={() => router.push("/what-you-should-know")} style={({ pressed, hovered }) => [styles.supportNavCard, styles.supportNavFeatured, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}>
-          <View style={styles.supportNavIconWrap}><Ionicons name="information-circle-outline" size={20} color={colors.blue} /></View>
-          <View style={{ flex: 1 }}><Text style={styles.supportNavTitle}>What You Should Know</Text><Text style={styles.supportNavDesc}>Deposit rules and score changes</Text></View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Risk Score History" onPress={() => router.push("/risk-score-history")} style={({ pressed, hovered }) => [styles.supportNavCard, styles.supportNavFeatured, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}>
-          <View style={styles.supportNavIconWrap}><Ionicons name="time-outline" size={20} color={colors.blue} /></View>
-          <View style={{ flex: 1 }}><Text style={styles.supportNavTitle}>Risk Score History</Text><Text style={styles.supportNavDesc}>View past score updates and incidents</Text></View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </Pressable>
+      <View style={styles.supportList}>
+        <View style={styles.supportHeading}><View style={styles.headingIcon}><Ionicons name="headset" size={17} color={colors.blue} /></View><Text style={styles.cardTitle}>Trust and Support</Text></View>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/how-it-works")}
           style={({ hovered, pressed }) => [styles.supportNavCard, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}
         >
           <View style={styles.supportNavIconWrap}>
-            <Ionicons name="bulb-outline" size={20} color={colors.blue} />
+            <Ionicons name="bulb-outline" size={15} color={colors.blue} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.supportNavTitle}>How CurRENT Works</Text>
@@ -355,7 +332,7 @@ export default function ProfileScreen() {
               A simple 4-step way to rent peer-to-peer
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          <Ionicons name="chevron-forward" size={14} color={colors.muted} />
         </Pressable>
 
         <Pressable
@@ -366,7 +343,7 @@ export default function ProfileScreen() {
           <View style={styles.supportNavIconWrap}>
             <Ionicons
               name="shield-checkmark-outline"
-              size={20}
+              size={15}
               color={colors.blue}
             />
           </View>
@@ -376,7 +353,7 @@ export default function ProfileScreen() {
               Confidence and protection built into the journey
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          <Ionicons name="chevron-forward" size={14} color={colors.muted} />
         </Pressable>
 
         <Pressable
@@ -387,7 +364,7 @@ export default function ProfileScreen() {
           <View style={styles.supportNavIconWrap}>
             <Ionicons
               name="help-circle-outline"
-              size={20}
+              size={15}
               color={colors.blue}
             />
           </View>
@@ -397,7 +374,7 @@ export default function ProfileScreen() {
               Frequently asked questions and answers
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          <Ionicons name="chevron-forward" size={14} color={colors.muted} />
         </Pressable>
 
         <Pressable
@@ -406,7 +383,7 @@ export default function ProfileScreen() {
           style={({ hovered, pressed }) => [styles.supportNavCard, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}
         >
           <View style={styles.supportNavIconWrap}>
-            <Ionicons name="headset-outline" size={20} color={colors.blue} />
+            <Ionicons name="headset-outline" size={15} color={colors.blue} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.supportNavTitle}>Customer Service</Text>
@@ -414,15 +391,15 @@ export default function ProfileScreen() {
               CurRENT Assistant · Automated Support & Human Handoff
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          <Ionicons name="chevron-forward" size={14} color={colors.muted} />
         </Pressable>
       </View>
 
       {/* Sign Out */}
-      <View style={styles.signOutWrap}><Button
-        secondary
-        danger
+      <Pressable
         accessibilityLabel="Sign out"
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.signOutButton, pressed && styles.supportNavPressed]}
         onPress={async () => {
           try {
             await closeAuthenticatedWorkspace();
@@ -436,33 +413,71 @@ export default function ProfileScreen() {
           }
         }}
       >
-        Sign Out
-      </Button></View>
+        <Ionicons name="log-out-outline" size={16} color={colors.danger} />
+        <Text style={styles.signOutText}>Sign Out</Text>
+      </Pressable>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  mobileContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 100 },
+  mobileContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 },
   desktopContent: { maxWidth: 860, paddingBottom: 68 },
-  profileCard: { padding: 18, gap: 12, marginBottom: 14, backgroundColor: colors.paleBlue, borderColor: colors.softBlue, borderLeftWidth: 3, borderLeftColor: colors.blue },
-  profileName: { fontSize: 18, lineHeight: 23 },
-  profileEmail: { fontSize: 13, lineHeight: 18, flexShrink: 1 },
-  lenderButton: { marginBottom: 4 },
-  compactCard: { padding: 16, gap: 8, marginBottom: 12 },
-  riskCard: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue, borderTopWidth: 3, borderTopColor: colors.blue },
-  signOutWrap: { marginTop: 14, marginBottom: 16 },
+  dashboardHeader: { marginBottom: 10 },
+  dashboardTitle: { color: colors.navy, fontSize: 20, lineHeight: 24, fontWeight: "800", letterSpacing: -0.5 },
+  dashboardSubtitle: { color: colors.slate, fontSize: 11, lineHeight: 15 },
+  profileCard: { padding: 10, gap: 8, marginBottom: 8, backgroundColor: colors.white, borderColor: colors.border, borderRadius: 13 },
+  profileRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" },
+  avatarInitial: { fontSize: 19, fontWeight: "800", color: colors.navy },
+  profileName: { fontSize: 12, lineHeight: 15, fontWeight: "800", color: colors.navy },
+  profileEmail: { fontSize: 10, lineHeight: 13, marginTop: 0, flexShrink: 1 },
+  profileBadge: { flexDirection: "row", alignItems: "center", gap: 2, alignSelf: "flex-start", backgroundColor: colors.paleBlue, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1, marginTop: 3 },
+  profileBadgeVerified: { backgroundColor: "#E7F6EC" },
+  profileBadgeText: { fontSize: 9, color: colors.blue, fontWeight: "700", textTransform: "capitalize" },
+  profileBadgeTextVerified: { color: colors.green },
+  demoDisclosure: { color: colors.slate, fontSize: 9, lineHeight: 12, marginTop: 3 },
+  editButton: { flexDirection: "row", alignItems: "center", gap: 3, borderWidth: 1, borderColor: colors.blue, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 5, alignSelf: "flex-start", cursor: "pointer" },
+  editButtonText: { color: colors.blue, fontSize: 9, fontWeight: "700" },
+  lenderButton: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.blue, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8, minHeight: 42, cursor: "pointer" },
+  lenderIcon: { width: 28, height: 28, borderRadius: 7, backgroundColor: colors.mediumBlue, alignItems: "center", justifyContent: "center" },
+  lenderTitle: { color: colors.white, fontSize: 12, fontWeight: "700" },
+  lenderSubtitle: { color: colors.white, fontSize: 9, lineHeight: 12 },
+  compactCard: { padding: 11, gap: 6, marginBottom: 8, borderRadius: 12 },
+  riskCard: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue },
+  cardHeading: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
+  headingIcon: { width: 27, height: 27, borderRadius: 9, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" },
+  cardTitle: { color: colors.navy, fontSize: 12, fontWeight: "800" },
+  cardSubtitle: { color: colors.slate, fontSize: 9, lineHeight: 12 },
+  stageIcon: { width: 24, height: 24, borderRadius: 6, backgroundColor: colors.paleBlue, alignItems: "center", justifyContent: "center" },
+  stageSubtitle: { color: colors.slate, fontSize: 9, lineHeight: 12 },
+  completedBadge: { color: colors.green, backgroundColor: "#E7F6EC", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, fontSize: 9, fontWeight: "700" },
+  learnMore: { flexDirection: "row", alignItems: "center", gap: 3, cursor: "pointer" },
+  learnMoreText: { color: colors.blue, fontSize: 9, fontWeight: "700" },
+  riskBody: { flexDirection: "row", gap: 8, alignItems: "center" },
+  riskBodyNarrow: { flexDirection: "column", alignItems: "stretch" },
+  compactGauge: { width: 135, height: 125, overflow: "hidden", justifyContent: "center" },
+  scaledGauge: { width: 190, left: -28, top: -7, transform: [{ scale: 0.7 }] },
+  fullGauge: { alignItems: "center" },
+  riskDetails: { flex: 1, minWidth: 0, gap: 3 },
+  riskExplanation: { color: colors.slate, fontSize: 9, lineHeight: 12, marginBottom: 3 },
+  riskMetricRow: { flexDirection: "row", alignItems: "center", gap: 3, borderTopWidth: 1, borderTopColor: colors.border, minHeight: 20 },
+  riskMetricLabel: { color: colors.navy, fontSize: 9, fontWeight: "600", flex: 1 },
+  riskMetricValue: { color: colors.navy, fontSize: 9, fontWeight: "800", textAlign: "right", flexShrink: 1 },
+  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, minHeight: 32, backgroundColor: "#FFF0ED", borderWidth: 1, borderColor: colors.danger, borderRadius: 7, marginTop: 7, marginBottom: 12, cursor: "pointer" },
+  signOutText: { color: colors.danger, fontSize: 11, fontWeight: "700" },
   verificationStage: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginTop: 5,
+    gap: 7,
+    paddingVertical: 5,
   },
+  verificationStageFirst: { borderBottomWidth: 1, borderBottomColor: colors.border },
   verificationStageText: {
     flex: 1,
     color: colors.text,
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
   },
   samplePhotoTile: {
     minHeight: 76,
@@ -477,35 +492,35 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paleBlue,
     borderRadius: 12,
   },
+  supportList: { backgroundColor: colors.white, borderRadius: 11, borderWidth: 1, borderColor: colors.border, overflow: "hidden", marginTop: 8 },
+  supportHeading: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4 },
   supportNavCard: {
-    backgroundColor: "white",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 7,
     cursor: "pointer",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  supportNavFeatured: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue },
-  supportNavHovered: { backgroundColor: colors.softBlue, borderColor: colors.blue },
+  supportNavHovered: { backgroundColor: colors.paleBlue },
   supportNavPressed: { opacity: 0.82 },
   supportNavIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+    width: 23,
+    height: 23,
+    borderRadius: 6,
     backgroundColor: colors.paleBlue,
     alignItems: "center",
     justifyContent: "center",
   },
   supportNavTitle: {
-    fontSize: 15,
+    fontSize: 11,
     fontWeight: "700",
     color: colors.navy,
   },
   supportNavDesc: {
-    fontSize: 12,
+    fontSize: 9,
     color: colors.slate,
   },
 });
