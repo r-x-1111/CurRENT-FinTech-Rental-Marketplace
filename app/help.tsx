@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   },
   stepDivider: {
     height: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.lightGrey,
     marginVertical: 4,
   },
   trustItem: {

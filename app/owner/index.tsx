@@ -446,6 +446,11 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 6,
     marginBottom: 16,
+    shadowColor: colors.navy,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
   },
   kpiCardClickable: {
     borderColor: colors.blue,

@@ -214,7 +214,7 @@ export function MediaPicker({
               (disabled || videos.length >= maxVideos) && styles.uploadBtnDisabled,
             ]}
           >
-            <View style={[styles.iconCircle, { backgroundColor: "#EFF6FF" }]}>
+            <View style={[styles.iconCircle, { backgroundColor: colors.paleBlue }]}>
               <Ionicons name="videocam-outline" size={20} color={colors.blue} />
             </View>
             <View style={{ flex: 1 }}>
@@ -437,14 +437,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 4,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     gap: 4,
   },
   photoThumb: {
     width: "100%",
     height: 85,
     borderRadius: 8,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.lightGrey,
   },
   photoBadgeRow: {
     flexDirection: "row",
@@ -460,7 +460,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "800",
     color: colors.blue,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.paleBlue,
     paddingHorizontal: 4,
     borderRadius: 4,
   },
@@ -491,9 +491,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: colors.border,
     borderRadius: 10,
     padding: 10,
   },

@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../constants/theme";
 import { useMarketplace } from "../../context/Marketplace";
 import { fetchChatInbox } from "../../services/chat";
+import { newId } from "../../services/marketplace";
 import { supabase } from "../../lib/supabase";
 const icons = {
   index: "home-outline",
@@ -19,7 +20,7 @@ export default function TabsLayout() {
     const refresh = () => { void fetchChatInbox().then(({ messages }) => setSharedUnread(messages.filter((message) => message.receiver_id === user.id && !message.read_at).length)).catch(() => {}); };
     refresh();
     const timer = setInterval(refresh, 15000);
-    const channel = supabase?.channel(`chat-badge-${user.id}`).on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, refresh).subscribe();
+    const channel = supabase?.channel(`chat-badge-${user.id}-${newId()}`).on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, refresh).subscribe();
     return () => { clearInterval(timer); if (channel) void supabase?.removeChannel(channel); };
   }, [user?.id, state.mode]);
   const unread = sharedUnread + (user ? state.notifications.filter((notice) => notice.userId === user.id && !notice.read && notice.title.includes("sent you a message")).length : 0);

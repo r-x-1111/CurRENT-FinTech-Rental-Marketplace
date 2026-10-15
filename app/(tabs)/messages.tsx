@@ -44,7 +44,7 @@ export default function MessagesScreen() {
     void refresh();
     if (!supabase || !user || state.mode === "admin_demo") return;
     const db = supabase;
-    const channel = db.channel(`chat-${user.id}`)
+    const channel = db.channel(`chat-${user.id}-${newId()}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => { void refresh(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_conversations" }, () => { void refresh(); }).subscribe();
     const timer = setInterval(() => { void refresh(); }, 15000);
@@ -229,13 +229,13 @@ export default function MessagesScreen() {
 }
 
 const styles = StyleSheet.create({
-  shell: { flexDirection: "row", minHeight: 620, backgroundColor: "white", borderWidth: 1, borderColor: colors.border, borderRadius: 18, overflow: "hidden", marginTop: 12 },
-  sidebar: { width: "38%", borderRightWidth: 1, borderRightColor: colors.border }, search: { margin: 14, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.navy },
-  row: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border }, rowTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  shell: { flexDirection: "row", minHeight: 620, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 18, overflow: "hidden", marginTop: 12, shadowColor: colors.navy, shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  sidebar: { width: "38%", borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.paleBlue }, search: { margin: 14, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.navy, backgroundColor: colors.white },
+  row: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border, cursor: "pointer" }, rowTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" }, name: { color: colors.navy, fontSize: 16, fontWeight: "700" },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 5, marginVertical: 3 }, smallImage: { width: 22, height: 22, borderRadius: 4 }, itemName: { color: colors.slate, fontSize: 13, fontWeight: "600", flexShrink: 1 },
   badge: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" }, badgeText: { color: "white", fontSize: 11, fontWeight: "700" },
-  chat: { flex: 1, padding: 14, minWidth: 0 }, header: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 12 },
+  chat: { flex: 1, padding: 14, minWidth: 0 }, header: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   listing: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.paleBlue, padding: 10, borderRadius: 12, marginBottom: 10 }, listingImage: { width: 48, height: 48, borderRadius: 8 },
   messages: { flex: 1, marginVertical: 10 }, bubble: { padding: 12, borderRadius: 14, marginVertical: 5, maxWidth: "80%" }, sent: { alignSelf: "flex-end", backgroundColor: colors.blue }, received: { alignSelf: "flex-start", backgroundColor: colors.paleBlue },
   time: { fontSize: 10, color: colors.muted, marginTop: 5 }, messageImage: { width: 190, height: 160, borderRadius: 8, marginTop: 4 },

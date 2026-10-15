@@ -331,8 +331,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#DCE5F2",
-    backgroundColor: "#F4F7FB",
+    borderColor: colors.border,
+    backgroundColor: colors.paleBlue,
   },
   phonePrefixText: {
     color: colors.navy,

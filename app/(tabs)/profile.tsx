@@ -35,8 +35,6 @@ export default function ProfileScreen() {
   const [scanningFace, setScanningFace] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [rulesExpanded, setRulesExpanded] = useState(false);
-  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   if (!user) {
     return <Screen title="Profile" subtitle="Welcome to CurRENT">
@@ -200,13 +198,13 @@ export default function ProfileScreen() {
           <>
             <Text style={s.caption}>Simulated eKYC — Demo Only</Text>
             <View style={styles.verificationStage}>
-              <Ionicons name="checkmark-circle" size={20} color="#167A53" />
+              <Ionicons name="checkmark-circle" size={20} color={colors.green} />
               <Text style={styles.verificationStageText}>
                 Identity Document — Completed
               </Text>
             </View>
             <View style={styles.verificationStage}>
-              <Ionicons name="checkmark-circle" size={20} color="#167A53" />
+              <Ionicons name="checkmark-circle" size={20} color={colors.green} />
               <Text style={styles.verificationStageText}>
                 Face Verification — Completed
               </Text>
@@ -248,7 +246,7 @@ export default function ProfileScreen() {
                   <Ionicons
                     name={selected ? "checkmark-circle" : "camera-outline"}
                     size={24}
-                    color={selected ? "#167A53" : colors.blue}
+                    color={selected ? colors.green : colors.blue}
                   />
                   <Text style={styles.verificationStageText}>
                     {documentType === "MyKad"
@@ -300,7 +298,7 @@ export default function ProfileScreen() {
 
       {/* Rental Risk Score Section */}
       <Section title="Rental Risk Score" compact />
-      <Card style={styles.compactCard}>
+      <Card style={[styles.compactCard, styles.riskCard]}>
         <View style={{ alignItems: "center", paddingVertical: 2 }}>
           <RiskGauge score={risk.score} label={risk.label} />
         </View>
@@ -330,126 +328,23 @@ export default function ProfileScreen() {
         />
       </Card>
 
-      <View style={styles.expandableCard}>
-        <Pressable accessibilityRole="button" accessibilityLabel="What You Should Know" accessibilityState={{ expanded: rulesExpanded }}
-          onPress={() => setRulesExpanded((expanded) => !expanded)} style={styles.expandableHeader}>
-          <View style={{ flex: 1 }}><Text style={styles.expandableTitle}>What You Should Know</Text>
-            <Text style={styles.expandableSubtitle}>Deposit rules and score changes</Text></View>
-          <Ionicons name={rulesExpanded ? "chevron-up" : "chevron-down"} size={19} color={colors.navy} />
-        </Pressable>
-        {rulesExpanded && <View style={styles.rulesContainer}>
-          <Text style={styles.rulesSubheading}>Deposit & Booking Rules</Text>
-          <Text style={styles.rulesBullet}>
-            • Low Risk (80–100): 5% deposit, capped at RM500 (Direct checkout)
-          </Text>
-          <Text style={styles.rulesBullet}>
-            • Medium Risk (40–79): 10% deposit, capped at RM1,000 (Direct
-            checkout)
-          </Text>
-          <Text style={styles.rulesBullet}>
-            • High Risk (30–39): 15% deposit, capped at RM1,500 (Direct
-            checkout)
-          </Text>
-          <Text style={styles.rulesBullet}>
-            • Very High Risk (0–29): CurRENT Platform Review request (Pending
-            only, no checkout)
-          </Text>
-          <Text style={styles.rulesSubheading}>How Your Score Changes</Text>
-          <Text style={styles.rulesBullet}>
-            • +2 points: Complete a rental on time with no issues.
-          </Text>
-          <Text style={styles.rulesBullet}>
-            • −5 points: Confirmed late return
-          </Text>
-          <Text style={styles.rulesBullet}>
-            • −10 points: Confirmed minor damage.
-          </Text>
-          <Text style={styles.rulesBullet}>
-            • −30 points: Confirmed serious damage or accidental loss.
-          </Text>
-          <Text style={styles.rulesBullet}>
-            • Confirmed intentional theft or fraud: Permanent ban, not an
-            additional numerical penalty.
-          </Text>
-          <Text style={styles.rulesNote}>
-            Only one final outcome applies per rental. If multiple issues occur,
-            the most serious confirmed outcome applies; pending reports do not
-            change your score. Successful appeals correct the original outcome.
-          </Text>
-        </View>}
-      </View>
-
-      {/* Risk Score History */}
-      <View style={styles.expandableCard}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Risk Score History" accessibilityState={{ expanded: historyExpanded }}
-          onPress={() => setHistoryExpanded((expanded) => !expanded)} style={styles.expandableHeader}>
-          <View style={{ flex: 1 }}><Text style={styles.expandableTitle}>Risk Score History</Text>
-            <Text style={styles.expandableSubtitle}>View past score updates and incidents</Text></View>
-          <Ionicons name={historyExpanded ? "chevron-up" : "chevron-down"} size={19} color={colors.navy} />
-        </Pressable>
-        {historyExpanded && <View style={styles.historyContent}>
-        <Text style={s.caption}>
-          Single Winning Incident Rule: When multiple violations occur on the
-          same physical rental chain, only the single most serious penalty is
-          applied. Secondary incidents are recorded in audit history but not
-          stacked.
-        </Text>
-        {user.riskHistory && user.riskHistory.length > 0 ? (
-          user.riskHistory.map((item) => (
-            <View
-              key={item.id}
-              style={{
-                backgroundColor: colors.paleBlue,
-                borderWidth: 1,
-                borderColor: colors.softBlue,
-                padding: 12,
-                borderRadius: 10,
-                marginTop: 8,
-                gap: 4,
-              }}
-            >
-              <View style={s.row}>
-                <Text style={s.bold}>{item.itemTitle}</Text>
-                <Text style={s.caption}>{item.date}</Text>
-              </View>
-              {item.incidents.map((inc, i) => (
-                <View key={i} style={s.row}>
-                  <Text style={[s.caption, { color: colors.navy }]}>
-                    • {inc.description}
-                  </Text>
-                  <Badge
-                    text={
-                      inc.isWinning
-                        ? `${inc.penalty >= 0 ? "+" : ""}${inc.penalty} (Applied)`
-                        : "Recorded"
-                    }
-                    green={inc.isWinning && inc.penalty > 0}
-                  />
-                </View>
-              ))}
-              <Row
-                label="Score impact"
-                value={`${item.scoreBefore} → ${item.scoreAfter} (${item.effectiveAdjustment >= 0 ? "+" : ""}${item.effectiveAdjustment})`}
-                strong
-              />
-            </View>
-          ))
-        ) : (
-          <Text style={[s.caption, { marginVertical: 8 }]}>
-            No incident records. Clean rental history established with initial
-            verified score of 80.
-          </Text>
-        )}
-        </View>}
-      </View>
-
       {/* Trust and Support */}
       <Section title="Trust and Support" compact />
       <View style={{ gap: 10, marginBottom: 16 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="What You Should Know" onPress={() => router.push("/what-you-should-know")} style={({ pressed, hovered }) => [styles.supportNavCard, styles.supportNavFeatured, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}>
+          <View style={styles.supportNavIconWrap}><Ionicons name="information-circle-outline" size={20} color={colors.blue} /></View>
+          <View style={{ flex: 1 }}><Text style={styles.supportNavTitle}>What You Should Know</Text><Text style={styles.supportNavDesc}>Deposit rules and score changes</Text></View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Risk Score History" onPress={() => router.push("/risk-score-history")} style={({ pressed, hovered }) => [styles.supportNavCard, styles.supportNavFeatured, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}>
+          <View style={styles.supportNavIconWrap}><Ionicons name="time-outline" size={20} color={colors.blue} /></View>
+          <View style={{ flex: 1 }}><Text style={styles.supportNavTitle}>Risk Score History</Text><Text style={styles.supportNavDesc}>View past score updates and incidents</Text></View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </Pressable>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/how-it-works")}
-          style={styles.supportNavCard}
+          style={({ hovered, pressed }) => [styles.supportNavCard, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}
         >
           <View style={styles.supportNavIconWrap}>
             <Ionicons name="bulb-outline" size={20} color={colors.blue} />
@@ -466,7 +361,7 @@ export default function ProfileScreen() {
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/trust")}
-          style={styles.supportNavCard}
+          style={({ hovered, pressed }) => [styles.supportNavCard, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}
         >
           <View style={styles.supportNavIconWrap}>
             <Ionicons
@@ -487,7 +382,7 @@ export default function ProfileScreen() {
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/faq")}
-          style={styles.supportNavCard}
+          style={({ hovered, pressed }) => [styles.supportNavCard, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}
         >
           <View style={styles.supportNavIconWrap}>
             <Ionicons
@@ -508,7 +403,7 @@ export default function ProfileScreen() {
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/support/customer-service")}
-          style={styles.supportNavCard}
+          style={({ hovered, pressed }) => [styles.supportNavCard, hovered && styles.supportNavHovered, pressed && styles.supportNavPressed]}
         >
           <View style={styles.supportNavIconWrap}>
             <Ionicons name="headset-outline" size={20} color={colors.blue} />
@@ -550,48 +445,13 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   mobileContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 100 },
   desktopContent: { maxWidth: 860, paddingBottom: 68 },
-  profileCard: { padding: 16, gap: 10, marginBottom: 12 },
+  profileCard: { padding: 18, gap: 12, marginBottom: 14, backgroundColor: colors.paleBlue, borderColor: colors.softBlue, borderLeftWidth: 3, borderLeftColor: colors.blue },
   profileName: { fontSize: 18, lineHeight: 23 },
   profileEmail: { fontSize: 13, lineHeight: 18, flexShrink: 1 },
   lenderButton: { marginBottom: 4 },
   compactCard: { padding: 16, gap: 8, marginBottom: 12 },
-  expandableCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
-    borderRadius: 14, marginTop: 12, overflow: "hidden" },
-  expandableHeader: { minHeight: 64, paddingHorizontal: 16, paddingVertical: 12,
-    flexDirection: "row", alignItems: "center", gap: 12 },
-  expandableTitle: { color: colors.navy, fontSize: 16, fontWeight: "700" },
-  expandableSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 3 },
-  historyContent: { paddingHorizontal: 16, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border },
+  riskCard: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue, borderTopWidth: 3, borderTopColor: colors.blue },
   signOutWrap: { marginTop: 14, marginBottom: 16 },
-  rulesContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 16,
-    borderTopWidth: 1,
-    borderColor: colors.border,
-    gap: 6,
-  },
-  rulesSubheading: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.navy,
-    marginTop: 4,
-  },
-  rulesBullet: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.slate,
-  },
-  rulesNote: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: colors.slate,
-    fontStyle: "italic",
-    marginTop: 4,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderColor: colors.softBlue,
-  },
   verificationStage: {
     flexDirection: "row",
     alignItems: "center",
@@ -626,7 +486,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    cursor: "pointer",
   },
+  supportNavFeatured: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue },
+  supportNavHovered: { backgroundColor: colors.softBlue, borderColor: colors.blue },
+  supportNavPressed: { opacity: 0.82 },
   supportNavIconWrap: {
     width: 38,
     height: 38,

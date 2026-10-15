@@ -433,7 +433,7 @@ export default function ListingDetailScreen() {
               width: "100%",
               height: width < 650 ? 270 : 380,
               borderRadius: 20,
-              backgroundColor: "#F1F5F9",
+              backgroundColor: colors.lightGrey,
             }}
           />
           {/* Section 3 & 17.5: Only Sony shows 3 thumbnails; all other listings show cover photo and ZERO thumbnails */}
@@ -1267,7 +1267,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     borderColor: "transparent",
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.lightGrey,
   },
   galleryThumbActive: {
     borderColor: colors.blue,
@@ -1309,16 +1309,16 @@ const styles = StyleSheet.create({
   },
   dateBox: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   dateBoxActive: {
     borderColor: colors.blue,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.softBlue,
   },
   dateBoxLabel: {
     fontSize: 10,
@@ -1337,10 +1337,10 @@ const styles = StyleSheet.create({
     color: colors.navy,
   },
   calendarContainer: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.paleBlue,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     padding: 10,
     marginTop: 10,
   },
@@ -1359,7 +1359,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 8,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.paleBlue,
   },
   calendarSelectors: {
     flex: 1,
@@ -1419,7 +1419,7 @@ const styles = StyleSheet.create({
   },
   calendarModalOptionSelected: {
     borderColor: colors.blue,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.softBlue,
   },
   calendarModalOptionText: {
     color: colors.navy,
@@ -1517,9 +1517,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   arrangementSection: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 10,
     marginTop: 12,
@@ -1530,7 +1530,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: colors.border,
     paddingBottom: 6,
   },
   arrangementTitle: {
@@ -1564,7 +1564,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: colors.border,
   },
   timeSlotBtnSelected: {
     backgroundColor: colors.blue,
@@ -1765,7 +1765,7 @@ const styles = StyleSheet.create({
   },
   fpxBadgeSelected: {
     borderColor: colors.blue,
-    backgroundColor: "#F0F7FF",
+    backgroundColor: colors.softBlue,
   },
   fpxBadgeText: {
     fontSize: 13,
@@ -1841,7 +1841,7 @@ const styles = StyleSheet.create({
   addressInput: {
     backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 7,

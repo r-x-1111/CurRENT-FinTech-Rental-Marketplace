@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "#DDEAFF",
+    borderColor: colors.softBlue,
   },
   chipButtonText: {
     fontSize: 13,
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.paleBlue,
     borderWidth: 1,
     borderColor: "#BFDBFE",
   },

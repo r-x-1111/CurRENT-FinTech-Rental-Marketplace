@@ -302,6 +302,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     marginBottom: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.blue,
   },
   headerBannerIcon: {
     width: 38,
@@ -340,11 +342,16 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   txCard: {
-    backgroundColor: "white",
+    backgroundColor: colors.white,
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: colors.navy,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   txType: {
     fontSize: 14,
@@ -399,6 +406,6 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 8,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.lightGrey,
   },
 });

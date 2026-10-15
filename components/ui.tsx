@@ -97,6 +97,7 @@ export function Button({
   danger?: boolean;
   accessibilityLabel?: string;
 }) {
+  const [focused, setFocused] = useState(false);
   return (
     <Pressable
       accessibilityRole="button"
@@ -104,17 +105,22 @@ export function Button({
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={({ pressed }) => [
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={({ pressed, hovered }) => [
         s.button,
         secondary && s.secondary,
         danger && { backgroundColor: "#FFF0ED", borderColor: "#FFCCC2" },
-        (disabled || pressed) && { opacity: 0.55 },
+        hovered && !disabled && !danger && { backgroundColor: secondary ? colors.paleBlue : colors.mediumBlue },
+        focused && !disabled && { borderColor: colors.navy, borderWidth: 2 },
+        pressed && !disabled && { opacity: 0.82 },
+        disabled && { opacity: 0.55 },
       ]}
     >
       <Text
         style={[
           s.buttonText,
-          secondary && { color: colors.navy },
+          secondary && { color: colors.blue },
           danger && { color: colors.danger },
         ]}
       >
@@ -161,6 +167,7 @@ export function Section({
   );
 }
 export function Field({ label, ...props }: TextInputProps & { label: string }) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 7, marginBottom: 14 }}>
       <Text style={s.label}>{label}</Text>
@@ -168,10 +175,13 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
         accessibilityLabel={label}
         placeholderTextColor="#929BAA"
         {...props}
+        onFocus={(event) => { setFocused(true); props.onFocus?.(event); }}
+        onBlur={(event) => { setFocused(false); props.onBlur?.(event); }}
         style={[
           s.input,
           props.multiline && { minHeight: 94, textAlignVertical: "top" },
           props.style,
+          focused && { borderColor: colors.blue },
         ]}
       />
     </View>
@@ -284,12 +294,12 @@ export function Chips({
           style={[
             s.chip,
             option === selected && {
-              backgroundColor: colors.blue,
+              backgroundColor: colors.softBlue,
               borderColor: colors.blue,
             },
           ]}
         >
-          <Text style={[s.label, option === selected && { color: "white" }]}>
+          <Text style={[s.label, option === selected && { color: colors.blue }]}>
             {option}
           </Text>
         </Pressable>
@@ -407,17 +417,18 @@ export const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
-    marginBottom: 24,
+    marginBottom: 28,
   },
   title: {
-    fontSize: 30,
+    fontSize: 31,
     fontWeight: "800",
     color: colors.navy,
     letterSpacing: -1,
+    lineHeight: 38,
   },
   h2: {
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "800",
     color: colors.navy,
     letterSpacing: -0.4,
   },
@@ -435,17 +446,23 @@ export const s = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 20,
     paddingVertical: 12,
+    cursor: "pointer",
   },
-  secondary: { backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1 },
-  buttonText: { fontSize: 14, color: "white", fontWeight: "700" },
+  secondary: { backgroundColor: colors.white, borderColor: colors.blue, borderWidth: 1 },
+  buttonText: { fontSize: 14, color: "white", fontWeight: "700", letterSpacing: 0.2 },
   card: {
-    backgroundColor: "white",
+    backgroundColor: colors.white,
     padding: 20,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     gap: 10,
     marginBottom: 16,
+    shadowColor: colors.navy,
+    shadowOpacity: 0.045,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
   },
   section: {
     flexDirection: "row",
@@ -453,11 +470,11 @@ export const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 24,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   label: { fontSize: 14, fontWeight: "600", color: colors.navy },
   input: {
-    backgroundColor: "white",
+    backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,

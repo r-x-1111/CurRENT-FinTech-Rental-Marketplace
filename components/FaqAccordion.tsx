@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#DDEAFF",
+    borderColor: colors.softBlue,
     overflow: "hidden",
   },
   header: {

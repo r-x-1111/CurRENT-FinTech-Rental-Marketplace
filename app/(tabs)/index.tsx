@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#16335C",
+    backgroundColor: colors.navy,
     position: "relative",
   },
   notificationCount: {
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   eyebrowBadge: {
-    backgroundColor: "#16335C",
+    backgroundColor: colors.navy,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 6,
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: colors.paleBlue,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -593,7 +593,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   quickCatPill: {
-    backgroundColor: "#16335C",
+    backgroundColor: colors.navy,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
@@ -605,7 +605,7 @@ const styles = StyleSheet.create({
     borderColor: "white",
   },
   quickCatText: {
-    color: "#DCEBFF",
+    color: colors.softBlue,
     fontSize: 12,
     fontWeight: "600",
   },

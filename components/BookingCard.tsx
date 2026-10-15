@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 10,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.lightGrey,
   },
   subtext: {
     fontSize: 12,
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.lightGrey,
   },
   bottomRow: {
     flexDirection: "row",

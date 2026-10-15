@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 75,
     borderRadius: 12,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.lightGrey,
   },
   itemTitle: {
     fontSize: 16,
