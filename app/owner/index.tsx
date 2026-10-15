@@ -68,7 +68,7 @@ export default function OwnerDashboard() {
             Complete Identity Verification to manage listings.
           </Text>
           <Notice text="Complete Identity Verification to create or publish a listing." />
-          <Button onPress={() => router.push("/(tabs)/profile")}>
+          <Button onPress={() => router.push({ pathname: "/(tabs)/profile", params: { section: "ekyc" } })}>
             Complete Identity Verification
           </Button>
         </Card>

@@ -1203,7 +1203,7 @@ export default function ListingDetailScreen() {
                     Sign in to Rent
                   </Button>
                 ) : user.verification !== "verified" ? (
-                  <Button onPress={() => router.push("/(tabs)/profile")}>
+                  <Button onPress={() => router.push({ pathname: "/(tabs)/profile", params: { section: "ekyc" } })}>
                     Complete Demo eKYC in Profile to Rent
                   </Button>
                 ) : renterRisk?.level === "very_high" ? (

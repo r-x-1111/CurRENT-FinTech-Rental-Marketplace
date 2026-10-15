@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { Redirect, router } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
@@ -24,7 +24,9 @@ import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { signOutAuthenticatedAccount } from "../../services/auth";
 
 export default function ProfileScreen() {
-  const { state, user, act, closeAuthenticatedWorkspace } = useMarketplace();
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const { state, user, act, actAndPersist, closeAuthenticatedWorkspace } = useMarketplace();
+  const [ekycY, setEkycY] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
@@ -55,9 +57,12 @@ export default function ProfileScreen() {
     0,
   );
 
-  function verify(status: "pending" | "verified" | "failed") {
+  async function verify(status: "pending" | "verified" | "failed") {
     try {
-      act({ type: "verify", status });
+      if (status === "verified" && user?.verification !== "pending") {
+        await actAndPersist({ type: "verify", status: "pending" });
+      }
+      await actAndPersist({ type: "verify", status });
       setError("");
       setSuccess(
         status === "verified"
@@ -73,6 +78,7 @@ export default function ProfileScreen() {
     <Screen
       title="Renter Dashboard"
       subtitle={`Welcome back, ${user.name} · CurRENT Renter Mode`}
+      scrollToY={section === "ekyc" ? ekycY : null}
     >
       {/* Account warnings */}
       {user.isBanned && (
@@ -183,7 +189,9 @@ export default function ProfileScreen() {
 
       <Button onPress={() => router.push("/owner")}>Lender Mode</Button>
 
-      <Section title="Identity Verification (Demo eKYC)" />
+      <View onLayout={(event) => setEkycY(Math.max(0, event.nativeEvent.layout.y - 16))}>
+        <Section title="Identity Verification (Demo eKYC)" />
+      </View>
       <Card>
         {user.verification === "verified" ? (
           <>
@@ -269,9 +277,12 @@ export default function ProfileScreen() {
                   disabled={!documentsReady || scanningFace}
                   onPress={async () => {
                     setScanningFace(true);
-                    await new Promise((resolve) => setTimeout(resolve, 900));
-                    setScanningFace(false);
-                    verify("verified");
+                    try {
+                      await new Promise((resolve) => setTimeout(resolve, 900));
+                      await verify("verified");
+                    } finally {
+                      setScanningFace(false);
+                    }
                   }}
                 >
                   {scanningFace
