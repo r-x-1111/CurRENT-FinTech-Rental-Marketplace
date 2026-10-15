@@ -29,6 +29,7 @@ export function Screen({
   scrollToY,
   scrollRequestId,
   contentStyle,
+  bounded,
 }: {
   children: React.ReactNode;
   title?: string;
@@ -38,6 +39,7 @@ export function Screen({
   scrollToY?: number | null;
   scrollRequestId?: number;
   contentStyle?: StyleProp<ViewStyle>;
+  bounded?: boolean;
 }) {
   const { storageError } = useMarketplace();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -48,13 +50,7 @@ export function Screen({
       );
     }
   }, [scrollToY, scrollRequestId]);
-  return (
-    <SafeAreaView edges={["top", "left", "right"]} style={s.screen}>
-      <ScrollView
-        ref={scrollViewRef}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[s.content, contentStyle]}
-      >
+  const content = <>
         {back && (
           <Pressable
             accessibilityRole="button"
@@ -78,7 +74,14 @@ export function Screen({
         )}
         {!!storageError && <Notice text={storageError} error />}
         {children}
-      </ScrollView>
+      </>;
+  return (
+    <SafeAreaView edges={["top", "left", "right"]} style={s.screen}>
+      {bounded ? (
+        <View style={[s.content, s.boundedContent, contentStyle]}>{content}</View>
+      ) : (
+        <ScrollView ref={scrollViewRef} keyboardShouldPersistTaps="handled" contentContainerStyle={[s.content, contentStyle]}>{content}</ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -407,6 +410,7 @@ export const s = StyleSheet.create({
     padding: 22,
     paddingBottom: 44,
   },
+  boundedContent: { flex: 1, minHeight: 0, paddingBottom: 12 },
   back: {
     flexDirection: "row",
     gap: 8,

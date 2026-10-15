@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -185,12 +185,13 @@ export default function MessagesScreen() {
     finally { setBusy(false); }
   }
 
-  return <Screen title="Messages" subtitle="Chat with renters and owners about their listings.">
+  return <Screen bounded contentStyle={styles.pageContent} title="Messages" subtitle="Chat with renters and owners about their listings.">
     {!!error && <Notice text={error} error />}
-    <View style={[styles.shell, mobile && { minHeight: 540 }]}>
+    <KeyboardAvoidingView style={styles.keyboardArea} behavior={mobile && Platform.OS === "ios" ? "padding" : undefined}>
+    <View style={styles.shell}>
       {(!mobile || !active) && <View style={[styles.sidebar, mobile && { width: "100%" }]}>
         <TextInput accessibilityLabel="Search conversations" placeholder="Search conversations" value={search} onChangeText={setSearch} style={styles.search} />
-        <ScrollView style={{ flex: 1 }}>{visible.length ? visible.map((row) => <Pressable key={row.id} accessibilityRole="button" accessibilityLabel={`Open conversation with ${row.other} about ${row.listing.title}`}
+        <ScrollView style={styles.conversationList} keyboardShouldPersistTaps="handled">{visible.length ? visible.map((row) => <Pressable key={row.id} accessibilityRole="button" accessibilityLabel={`Open conversation with ${row.other} about ${row.listing.title}`}
           onPress={() => { setSelected(row.id); setDraft(""); setPhoto(null); }} style={[styles.row, selected === row.id && { backgroundColor: colors.paleBlue }]}>
           <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View>
           <View style={{ flex: 1 }}><View style={styles.rowTop}><Text style={styles.name} numberOfLines={1}>{row.other}</Text><Text style={s.caption}>{formatMalaysiaDateTime(row.latestAt).split(", ")[1]}</Text></View>
@@ -209,14 +210,15 @@ export default function MessagesScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.blue} /></Pressable>
           {!!active.booking && <Button secondary onPress={() => router.push(`/rental/${active.booking!.id}`)}>View Rental Details</Button>}
           {active.listing.ownerId !== user.id && <Button secondary onPress={() => router.push(`/listing/${active.listing.id}`)}>Book This Item</Button>}
-          <ScrollView ref={scroll} style={styles.messages} onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}>
+          <ScrollView ref={scroll} style={styles.messages} keyboardShouldPersistTaps="handled" onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}>
+            {!messages.length && <Text style={styles.emptyChat}>No messages yet. Send the first message.</Text>}
             {messages.map((message) => <View key={message.id} style={[styles.bubble, message.sender === user.id ? styles.sent : styles.received]}>
               {!!message.text && <Text style={[s.body, message.sender === user.id && { color: "white" }]}>{message.text}</Text>}
               {!!message.image && <Pressable accessibilityRole="button" accessibilityLabel="Open chat photo" onPress={() => setLargePhoto(message.image!)}><Image source={{ uri: message.image }} style={styles.messageImage} /></Pressable>}
               <Text style={[styles.time, message.sender === user.id && { color: "#DCE8FF" }]}>{formatMalaysiaDateTime(message.at)} {message.sender === user.id ? message.read ? "· Read" : "· Sent" : ""}</Text>
             </View>)}
           </ScrollView>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestions}>{suggestions.map((text) => <Pressable key={text} onPress={() => setDraft(text)} style={styles.suggestion}><Text style={{ color: colors.blue, fontSize: 12 }}>{text}</Text></Pressable>)}</ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.suggestionScroll} contentContainerStyle={styles.suggestions}>{suggestions.map((text) => <Pressable key={text} accessibilityRole="button" onPress={() => setDraft(text)} style={styles.suggestion}><Text style={styles.suggestionText} numberOfLines={1}>{text}</Text></Pressable>)}</ScrollView>
           {!!photo && <View style={styles.photoPreview}><Image source={{ uri: photo.uri }} style={styles.listingImage} /><Text style={s.caption}>Photo ready to send</Text><Pressable onPress={() => setPhoto(null)}><Ionicons name="close-circle" size={23} color={colors.muted} /></Pressable></View>}
           <View style={styles.composer}><Pressable accessibilityRole="button" accessibilityLabel="Attach photo" onPress={() => void attach()}><Ionicons name="image-outline" size={25} color={colors.blue} /></Pressable>
             <TextInput accessibilityLabel="Message" placeholder="Write a message…" value={draft} onChangeText={setDraft} multiline maxLength={2000} style={styles.input} />
@@ -224,22 +226,29 @@ export default function MessagesScreen() {
         </> : <Empty title="Select a conversation" text="Your messages will appear here." />}
       </View>}
     </View>
+    </KeyboardAvoidingView>
     <Modal transparent visible={!!largePhoto} onRequestClose={() => setLargePhoto(null)}><Pressable onPress={() => setLargePhoto(null)} style={styles.overlay}>{!!largePhoto && <Image source={{ uri: largePhoto }} resizeMode="contain" style={{ width: "100%", height: "90%" }} />}</Pressable></Modal>
   </Screen>;
 }
 
 const styles = StyleSheet.create({
-  shell: { flexDirection: "row", minHeight: 620, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 18, overflow: "hidden", marginTop: 12, shadowColor: colors.navy, shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  sidebar: { width: "38%", borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.paleBlue }, search: { margin: 14, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.navy, backgroundColor: colors.white },
+  pageContent: { minHeight: 0 },
+  keyboardArea: { flex: 1, minHeight: 0 },
+  shell: { flex: 1, minHeight: 0, flexDirection: "row", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 18, overflow: "hidden", marginTop: 12, shadowColor: colors.navy, shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  sidebar: { width: "38%", minHeight: 0, minWidth: 0, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.paleBlue }, search: { margin: 14, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.navy, backgroundColor: colors.white },
+  conversationList: { flex: 1, minHeight: 0 },
   row: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border, cursor: "pointer" }, rowTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" }, name: { color: colors.navy, fontSize: 16, fontWeight: "700" },
   itemRow: { flexDirection: "row", alignItems: "center", gap: 5, marginVertical: 3 }, smallImage: { width: 22, height: 22, borderRadius: 4 }, itemName: { color: colors.slate, fontSize: 13, fontWeight: "600", flexShrink: 1 },
   badge: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" }, badgeText: { color: "white", fontSize: 11, fontWeight: "700" },
-  chat: { flex: 1, padding: 14, minWidth: 0 }, header: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  chat: { flex: 1, minHeight: 0, padding: 14, minWidth: 0 }, header: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   listing: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.paleBlue, padding: 10, borderRadius: 12, marginBottom: 10 }, listingImage: { width: 48, height: 48, borderRadius: 8 },
-  messages: { flex: 1, marginVertical: 10 }, bubble: { padding: 12, borderRadius: 14, marginVertical: 5, maxWidth: "80%" }, sent: { alignSelf: "flex-end", backgroundColor: colors.blue }, received: { alignSelf: "flex-start", backgroundColor: colors.paleBlue },
+  messages: { flex: 1, minHeight: 0, marginVertical: 10 }, emptyChat: { color: colors.muted, fontSize: 13, textAlign: "center", marginTop: 20 }, bubble: { padding: 12, borderRadius: 14, marginVertical: 5, maxWidth: "80%" }, sent: { alignSelf: "flex-end", backgroundColor: colors.blue }, received: { alignSelf: "flex-start", backgroundColor: colors.paleBlue },
   time: { fontSize: 10, color: colors.muted, marginTop: 5 }, messageImage: { width: 190, height: 160, borderRadius: 8, marginTop: 4 },
-  suggestions: { gap: 8, paddingVertical: 8 }, suggestion: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: colors.softBlue },
+  suggestionScroll: { flexGrow: 0, flexShrink: 0, width: "100%" },
+  suggestions: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 },
+  suggestion: { alignSelf: "center", flexShrink: 0, backgroundColor: colors.white, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 22, borderWidth: 1, borderColor: colors.blue, cursor: "pointer" },
+  suggestionText: { color: colors.blue, fontSize: 12 },
   photoPreview: { flexDirection: "row", alignItems: "center", gap: 10 }, composer: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 },
   input: { flex: 1, minHeight: 42, maxHeight: 110, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: colors.border, color: colors.navy }, send: { backgroundColor: colors.blue, borderRadius: 12, padding: 11 },
   overlay: { flex: 1, justifyContent: "center", backgroundColor: "#000D", padding: 20 },
