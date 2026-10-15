@@ -10,12 +10,20 @@ import {
   parseMalaysiaTimestamp,
 } from "../../services/booking";
 import { colors } from "../../constants/theme";
+import { GuestAuthGate } from "../../components/GuestAuth";
 
 export default function RentalsScreen() {
   const { state, user } = useMarketplace();
+  const [activeTab, setActiveTab] = useState("Upcoming");
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (!user) {
-    return <Redirect href="/auth" />;
+    return <GuestAuthGate title="Rentals" returnTo="/(tabs)/rentals" />;
   }
 
   const visiblePlatformRequests = state.platformReviewRequests.filter(
@@ -32,14 +40,6 @@ export default function RentalsScreen() {
     "Payment & Transaction History",
     ...(visiblePlatformRequests.length > 0 ? ["Platform Review Requests"] : []),
   ];
-
-  const [activeTab, setActiveTab] = useState("Upcoming");
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, []);
 
   const userBookings = state.bookings.filter((b) => b.renterId === user?.id);
 

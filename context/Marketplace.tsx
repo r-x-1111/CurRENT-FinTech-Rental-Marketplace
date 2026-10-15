@@ -50,7 +50,35 @@ async function includeSharedListings(workspace: Marketplace, ownerId: string): P
 function createLoggedOutState(): Marketplace {
   const seed = createSeed();
   seed.currentUserId = null;
+  seed.profiles = seed.profiles
+    .filter((profile) => seed.listings.some((listing) => listing.ownerId === profile.id))
+    .map((profile) => ({ id: profile.id, name: profile.name, email: "", verification: profile.verification, favourites: [] }));
+  seed.bookings = [];
+  seed.messages = [];
+  seed.notifications = [];
+  seed.evidence = [];
+  seed.disputes = [];
+  seed.reviews = [];
   return seed;
+}
+
+async function loadGuestBrowseState(): Promise<Marketplace> {
+  const guest = createLoggedOutState();
+  if (!isSupabaseConfigured || !supabase) return guest;
+  try {
+    const remote = await fetchPublishedChatListings();
+    for (const entry of remote) {
+      const index = guest.listings.findIndex((listing) => listing.id === entry.listing_id);
+      if (index < 0) guest.listings.push(entry.listing_data);
+      else guest.listings[index] = entry.listing_data;
+      if (!guest.profiles.some((profile) => profile.id === entry.owner_id)) guest.profiles.push({
+        id: entry.owner_id, name: entry.owner_name, email: "", verification: "verified", favourites: [],
+      });
+    }
+  } catch {
+    // Public seed listings remain browsable if the catalog is unavailable.
+  }
+  return guest;
 }
 
 const Context = createContext<{
@@ -173,10 +201,10 @@ export function MarketplaceProvider({
             authAccountKind.current = account.accountKind;
           } else {
             if (session) await supabase.auth.signOut();
-            restored = createLoggedOutState();
+            restored = await loadGuestBrowseState();
           }
         } else {
-          restored = createLoggedOutState();
+          restored = await loadGuestBrowseState();
         }
         if (mounted) {
           current.current = restored;
@@ -238,13 +266,20 @@ export function MarketplaceProvider({
   }
 
   function act(action: Action) {
-    const next = transition(current.current, action);
+    const next = action.type === "login" && action.userId === null
+      ? createLoggedOutState() : transition(current.current, action);
     current.current = next;
     setState(next);
 
     if (action.type === "login" && action.userId === null) {
       authOwnerId.current = null;
       authAccountKind.current = null;
+      void loadGuestBrowseState().then((guest) => {
+        if (authOwnerId.current === null && current.current === next) {
+          current.current = guest;
+          setState(guest);
+        }
+      });
     }
 
     const ownerId = authOwnerId.current;

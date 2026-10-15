@@ -25,6 +25,7 @@ export function Screen({
   back,
   action,
   scrollToY,
+  scrollRequestId,
 }: {
   children: React.ReactNode;
   title?: string;
@@ -32,6 +33,7 @@ export function Screen({
   back?: boolean;
   action?: React.ReactNode;
   scrollToY?: number | null;
+  scrollRequestId?: number;
 }) {
   const { storageError } = useMarketplace();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -41,7 +43,7 @@ export function Screen({
         scrollViewRef.current?.scrollTo({ y: scrollToY, animated: true }),
       );
     }
-  }, [scrollToY]);
+  }, [scrollToY, scrollRequestId]);
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={s.screen}>
       <ScrollView

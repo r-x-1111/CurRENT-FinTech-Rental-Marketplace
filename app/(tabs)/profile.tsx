@@ -35,7 +35,15 @@ export default function ProfileScreen() {
   const [success, setSuccess] = useState("");
 
   if (!user) {
-    return <Redirect href="/auth" />;
+    return <Screen title="Profile" subtitle="Welcome to CurRENT">
+      <Card>
+        <Text style={s.h2}>Your CurRENT account</Text>
+        <Text style={[s.body, { marginVertical: 14 }]}>Log in or create an account to manage your rentals, bookings and profile.</Text>
+        <Button onPress={() => router.push({ pathname: "/auth", params: { returnTo: "/(tabs)/profile" } })}>Log In</Button>
+        <View style={{ height: 10 }} />
+        <Button secondary onPress={() => router.push({ pathname: "/auth", params: { mode: "Create account", returnTo: "/(tabs)/profile" } })}>Sign Up</Button>
+      </Card>
+    </Screen>;
   }
 
   const risk = riskFor(state, user);
@@ -498,7 +506,7 @@ export default function ProfileScreen() {
               await signOutAuthenticatedAccount(supabase.auth);
             }
             act({ type: "login", userId: null });
-            router.replace("/auth");
+            router.replace("/(tabs)");
           } catch (e) {
             setError((e as Error).message);
           }

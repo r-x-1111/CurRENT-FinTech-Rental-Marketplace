@@ -42,6 +42,7 @@ import {
 import { colors } from "../../constants/theme";
 import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
+import { GuestAuthPrompt } from "../../components/GuestAuth";
 
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
@@ -130,6 +131,7 @@ export default function ListingDetailScreen() {
   const [isPaying, setIsPaying] = useState(false);
   const payInProgress = useRef(false);
   const [error, setError] = useState("");
+  const [authPrompt, setAuthPrompt] = useState(false);
   const [successNotice, setSuccessNotice] = useState("");
   const [photo, setPhoto] = useState("");
 
@@ -278,7 +280,7 @@ export default function ListingDetailScreen() {
   // Handle Request to Rent submission for Very High Risk renters (scores 0–29)
   function handleNavigateToRequest() {
     if (!user) {
-      router.push("/auth");
+      setAuthPrompt(true);
       return;
     }
     if (!listing) return;
@@ -317,7 +319,7 @@ export default function ListingDetailScreen() {
   async function handleConfirmInstantBook() {
     if (payInProgress.current) return;
     if (!user) {
-      router.push("/auth");
+      setAuthPrompt(true);
       return;
     }
     if (!deliveryAddressIsComplete()) {
@@ -382,7 +384,7 @@ export default function ListingDetailScreen() {
 
   function handleSaveDeliveryAddress() {
     if (!user) {
-      router.push("/auth");
+      setAuthPrompt(true);
       return;
     }
     try {
@@ -421,6 +423,7 @@ export default function ListingDetailScreen() {
 
   return (
     <Screen back>
+      <GuestAuthPrompt visible={authPrompt} onClose={() => setAuthPrompt(false)} returnTo={`/listing/${id}`} />
       <View style={[s.split, width < 800 && { flexDirection: "column" }]}>
         {/* Left Column: Image, Details, Reviews */}
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -500,7 +503,7 @@ export default function ListingDetailScreen() {
             </Text>
             {user?.id !== listing.ownerId && <Button secondary onPress={() => user
               ? router.push({ pathname: "/(tabs)/messages", params: { listingId: listing.id } })
-              : router.push("/auth")}>
+              : setAuthPrompt(true)}>
               <Ionicons name="chatbubble-ellipses-outline" size={17} color={colors.blue} /> Chat with Owner
             </Button>}
           </Card>
@@ -510,7 +513,7 @@ export default function ListingDetailScreen() {
             onPress={() =>
               user
                 ? act({ type: "favourite", listingId: id })
-                : router.push("/auth")
+                : setAuthPrompt(true)
             }
           >
             {user?.favourites.includes(id)
@@ -1196,7 +1199,7 @@ export default function ListingDetailScreen() {
             {!showCheckout && (
               <View style={{ marginTop: 14, gap: 8 }}>
                 {!user ? (
-                  <Button onPress={() => router.push("/auth")}>
+                  <Button onPress={() => setAuthPrompt(true)}>
                     Sign in to Rent
                   </Button>
                 ) : user.verification !== "verified" ? (

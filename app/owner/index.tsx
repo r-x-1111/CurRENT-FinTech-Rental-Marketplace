@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,6 +32,16 @@ export default function OwnerDashboard() {
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [scrollToY, setScrollToY] = useState<number | null>(null);
+  const [scrollRequestId, setScrollRequestId] = useState(0);
+  const contentY = useRef(0);
+
+  function openSummarySection(section: "Listings" | "Rentals" | "Payout") {
+    setTab(section);
+    setScrollToY(Math.max(0, contentY.current - 20));
+    setScrollRequestId((request) => request + 1);
+  }
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -87,30 +97,36 @@ export default function OwnerDashboard() {
       back
       title="Listing"
       subtitle={`Owner Mode · Welcome back, ${user.name}`}
+      scrollToY={scrollToY}
+      scrollRequestId={scrollRequestId}
     >
       <View style={s.split}>
         {[
-          ["Net Earnings (88%)", money(earnings), false],
+          ["Net Earnings (88%)", money(earnings), "Payout"],
           [
             "Live Listings",
             `${listings.filter((l) => l.status === "published").length}`,
-            false,
+            "Listings",
           ],
           [
             "Active / Upcoming Rentals",
             `${activeRentalsCount}`,
-            true,
+            "Rentals",
           ],
-        ].map(([label, value, clickable]) => (
+        ].map(([label, value, section]) => (
           <Pressable
             key={label as string}
-            disabled={!clickable}
-            onPress={clickable ? () => setTab("Rentals") : undefined}
-            style={[styles.kpiCard, clickable && styles.kpiCardClickable]}
+            accessibilityRole="button"
+            accessibilityLabel={`${label}: ${value}. Open ${section}`}
+            onPress={() => openSummarySection(section as "Listings" | "Rentals" | "Payout")}
+            onHoverIn={() => setHoveredCard(label as string)}
+            onHoverOut={() => setHoveredCard(null)}
+            style={({ pressed }) => [styles.kpiCard, styles.kpiCardClickable,
+              hoveredCard === label && styles.kpiCardHovered, pressed && styles.kpiCardPressed]}
           >
             <Text style={styles.kpiLabel}>{label as string}</Text>
-            <Text style={[styles.kpiValue, clickable ? { color: colors.blue } : {}]}>{value as string}</Text>
-            {clickable ? <Text style={styles.kpiSub}>Tap to view →</Text> : null}
+            <Text style={[styles.kpiValue, { color: colors.blue }]}>{value as string}</Text>
+            <Text style={styles.kpiSub}>Tap to view →</Text>
           </Pressable>
         ))}
       </View>
@@ -131,6 +147,8 @@ export default function OwnerDashboard() {
 
       {!!error && <Notice text={error} error />}
       {!!success && <Notice text={success} />}
+
+      <View onLayout={(event) => { contentY.current = event.nativeEvent.layout.y; }} />
 
       {tab === "Rentals" &&
         (bookings.length ? (
@@ -431,7 +449,10 @@ const styles = StyleSheet.create({
   },
   kpiCardClickable: {
     borderColor: colors.blue,
+    cursor: "pointer",
   },
+  kpiCardHovered: { backgroundColor: colors.softBlue },
+  kpiCardPressed: { opacity: 0.85 },
   kpiLabel: {
     fontSize: 13,
     color: colors.slate,

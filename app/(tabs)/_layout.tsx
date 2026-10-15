@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
-import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../constants/theme";
 import { useMarketplace } from "../../context/Marketplace";
@@ -23,8 +22,7 @@ export default function TabsLayout() {
     const channel = supabase?.channel(`chat-badge-${user.id}`).on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, refresh).subscribe();
     return () => { clearInterval(timer); if (channel) void supabase?.removeChannel(channel); };
   }, [user?.id, state.mode]);
-  if (!user) return <Redirect href="/auth" />;
-  const unread = sharedUnread + state.notifications.filter((notice) => notice.userId === user.id && !notice.read && notice.title.includes("sent you a message")).length;
+  const unread = sharedUnread + (user ? state.notifications.filter((notice) => notice.userId === user.id && !notice.read && notice.title.includes("sent you a message")).length : 0);
 
   return (
     <Tabs

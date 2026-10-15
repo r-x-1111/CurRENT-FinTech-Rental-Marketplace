@@ -18,6 +18,7 @@ import { Empty } from "../../components/ui";
 import { colors } from "../../constants/theme";
 import { MAIN_CATEGORIES, locations } from "../../constants/categories";
 import { useMarketplace } from "../../context/Marketplace";
+import { GuestAuthPrompt } from "../../components/GuestAuth";
 
 export default function HomeScreen() {
   const { state, user } = useMarketplace();
@@ -40,6 +41,7 @@ export default function HomeScreen() {
   const [selectedLocation, setSelectedLocation] = useState(params.location || "All Klang Valley");
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [savedOnly, setSavedOnly] = useState(params.saved === "1");
+  const [authPrompt, setAuthPrompt] = useState(false);
 
   useEffect(() => {
     if (params.q !== undefined) setSearchQuery(params.q);
@@ -100,6 +102,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
+      <GuestAuthPrompt visible={authPrompt} onClose={() => setAuthPrompt(false)} returnTo="/(tabs)" />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
@@ -126,7 +129,7 @@ export default function HomeScreen() {
                       ? `Notifications, ${unreadNotifications} unread`
                       : "Notifications"
                   }
-                  onPress={() => router.push("/notifications")}
+                  onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
                   style={styles.notificationButton}
                 >
                   <Ionicons
@@ -374,7 +377,7 @@ export default function HomeScreen() {
                 <Switch
                   accessibilityLabel="Saved items only"
                   value={savedOnly}
-                  onValueChange={setSavedOnly}
+                  onValueChange={(value) => user ? setSavedOnly(value) : setAuthPrompt(true)}
                   trackColor={{ false: "#CBD5E1", true: colors.blue }}
                 />
               </View>

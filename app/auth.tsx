@@ -15,7 +15,9 @@ import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 export default function Auth() {
   const { state, activateAuthenticatedWorkspace } = useMarketplace();
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; returnTo?: string }>();
+  const returnTo = params.returnTo?.startsWith("/listing/") || params.returnTo?.startsWith("/(tabs)/")
+    ? params.returnTo : "/(tabs)/profile";
   const [mode, setMode] = useState(
     params.mode === "Create account" ? "Create account" : "Sign in",
   );
@@ -42,6 +44,7 @@ export default function Auth() {
   }, [state.currentUserId]);
 
   async function submit() {
+    if (busy) return;
     setBusy(true);
     setError("");
     setInfoNotice("");
@@ -94,7 +97,7 @@ export default function Auth() {
           password,
         );
         await activateAuthenticatedWorkspace(account);
-        router.replace("/(tabs)/profile");
+        router.replace(returnTo as never);
         return;
       } else {
         // Sign In
@@ -109,7 +112,7 @@ export default function Auth() {
         );
         await activateAuthenticatedWorkspace(account);
       }
-      router.replace("/(tabs)/profile");
+      router.replace(returnTo as never);
     } catch (e) {
       setError((e as Error).message);
     } finally {

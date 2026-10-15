@@ -12,6 +12,7 @@ import { supabase } from "../../lib/supabase";
 import { fetchChatInbox, markSharedChatRead, openBookingConversation, openSharedConversation, sendSharedMessage, signedChatImage, uploadChatImage, type SharedConversation, type SharedMessage } from "../../services/chat";
 import type { Listing } from "../../types";
 import type { Booking } from "../../types/marketplace";
+import { GuestAuthGate } from "../../components/GuestAuth";
 
 const suggestions = ["Hi, is this item still available?", "Is the rental price negotiable?", "Where is the pickup location?", "Does the item include all accessories?"];
 type Row = { id: string; kind: "shared" | "demo" | "booking"; listing: Listing; other: string; booking?: Booking; latestAt: string; preview: string; unread: number; shared?: SharedConversation };
@@ -108,7 +109,7 @@ export default function MessagesScreen() {
       .then((entries) => setImageUrls((before) => ({ ...before, ...Object.fromEntries(entries) }))).catch(() => {});
   }, [remoteMessages]);
 
-  if (!user) return <Redirect href="/auth" />;
+  if (!user) return <GuestAuthGate title="Messages" returnTo="/(tabs)/messages" />;
   const rows: Row[] = [];
   for (const chat of shared) {
     const listing = chat.chat_listings?.listing_data || state.listings.find((item) => item.id === chat.listing_id);

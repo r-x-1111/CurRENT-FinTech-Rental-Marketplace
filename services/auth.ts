@@ -50,6 +50,10 @@ export function describeSupabaseAuthError(
       : "";
   const status =
     typeof authError.status === "number" ? ` (HTTP ${authError.status})` : "";
+  if (authError.code === "over_email_send_rate_limit" ||
+      (authError.status === 429 && /email rate limit/i.test(message))) {
+    return "Supabase has temporarily reached its email sending limit. Please wait before trying again, or sign in if your account already exists. The project owner needs to configure custom SMTP in Supabase Authentication > Email to support more sign-ups.";
+  }
   const triggerHint =
     operation === "sign-up" && /database error saving new user/i.test(message)
       ? " Supabase rejected the Auth user hook; verify the initial profiles migration and handle_new_user trigger in the Dashboard."

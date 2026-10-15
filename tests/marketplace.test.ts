@@ -154,6 +154,15 @@ test("Supabase sign-up errors retain provider code, status, and trigger guidance
   );
 });
 
+test("email send limits explain the required Supabase configuration", () => {
+  const message = describeSupabaseAuthError({
+    message: "email rate limit exceeded", code: "over_email_send_rate_limit", status: 429,
+  }, "sign-up");
+  assert.match(message, /temporarily reached its email sending limit/);
+  assert.match(message, /custom SMTP/);
+  assert.doesNotMatch(message, /Registration accepted/);
+});
+
 test("Demo provisioning sets a provider-managed password for existing and new accounts", async () => {
   const password = "test-only-provisioned-password";
   let updated:
