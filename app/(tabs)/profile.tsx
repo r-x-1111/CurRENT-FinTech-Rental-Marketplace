@@ -1,13 +1,12 @@
 import { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
   Button,
   Card,
   Chips,
-  Empty,
   Field,
   Notice,
   PhotoPicker,
@@ -26,6 +25,7 @@ import { signOutAuthenticatedAccount } from "../../services/auth";
 export default function ProfileScreen() {
   const { section } = useLocalSearchParams<{ section?: string }>();
   const { state, user, act, actAndPersist, closeAuthenticatedWorkspace } = useMarketplace();
+  const isMobile = useWindowDimensions().width <= 430;
   const [ekycY, setEkycY] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -35,6 +35,8 @@ export default function ProfileScreen() {
   const [scanningFace, setScanningFace] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [rulesExpanded, setRulesExpanded] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
 
   if (!user) {
     return <Screen title="Profile" subtitle="Welcome to CurRENT">
@@ -79,6 +81,7 @@ export default function ProfileScreen() {
       title="Renter Dashboard"
       subtitle={`Welcome back, ${user.name} · CurRENT Renter Mode`}
       scrollToY={section === "ekyc" ? ekycY : null}
+      contentStyle={isMobile ? styles.mobileContent : styles.desktopContent}
     >
       {/* Account warnings */}
       {user.isBanned && (
@@ -97,27 +100,27 @@ export default function ProfileScreen() {
       {!!success && <Notice text={success} />}
 
       {/* Profile Overview Card */}
-      <Card>
+      <Card style={styles.profileCard}>
         <View style={{ flexDirection: "row", gap: 16, alignItems: "center" }}>
           {user.avatar ? (
             <Image
               source={{ uri: user.avatar }}
-              style={{ width: 64, height: 64, borderRadius: 32 }}
+              style={{ width: isMobile ? 54 : 64, height: isMobile ? 54 : 64, borderRadius: 32 }}
             />
           ) : (
             <View
               style={{
                 backgroundColor: colors.softBlue,
-                padding: 20,
+                padding: isMobile ? 16 : 20,
                 borderRadius: 32,
               }}
             >
               <Text style={s.h2}>{user.name[0]}</Text>
             </View>
           )}
-          <View style={{ flex: 1 }}>
-            <Text style={s.h2}>{user.name}</Text>
-            <Text style={s.caption}>{user.email}</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[s.h2, isMobile && styles.profileName]}>{user.name}</Text>
+            <Text style={[s.caption, styles.profileEmail]}>{user.email}</Text>
             <Badge
               text={
                 user.verification === "verified"
@@ -164,6 +167,8 @@ export default function ProfileScreen() {
         )}
       </Card>
 
+      <View style={styles.lenderButton}><Button onPress={() => router.push("/owner")}>Lender Mode</Button></View>
+
       {user.hasOverdueObligation && (
         <Card>
           <Text style={[s.bold, { color: "#C53030", fontSize: 15 }]}>
@@ -187,12 +192,10 @@ export default function ProfileScreen() {
         </Card>
       )}
 
-      <Button onPress={() => router.push("/owner")}>Lender Mode</Button>
-
       <View onLayout={(event) => setEkycY(Math.max(0, event.nativeEvent.layout.y - 16))}>
-        <Section title="Identity Verification (Demo eKYC)" />
+        <Section title="Identity Verification (Demo eKYC)" compact />
       </View>
-      <Card>
+      <Card style={styles.compactCard}>
         {user.verification === "verified" ? (
           <>
             <Text style={s.caption}>Simulated eKYC — Demo Only</Text>
@@ -296,9 +299,9 @@ export default function ProfileScreen() {
       </Card>
 
       {/* Rental Risk Score Section */}
-      <Section title="Rental Risk Score" />
-      <Card>
-        <View style={{ alignItems: "center", paddingVertical: 8 }}>
+      <Section title="Rental Risk Score" compact />
+      <Card style={styles.compactCard}>
+        <View style={{ alignItems: "center", paddingVertical: 2 }}>
           <RiskGauge score={risk.score} label={risk.label} />
         </View>
         <Text style={s.caption}>
@@ -325,8 +328,16 @@ export default function ProfileScreen() {
           label={`${completed} completed rentals`}
           value={`+${netPoints} points`}
         />
-        <View style={styles.rulesContainer}>
-          <Text style={styles.rulesHeading}>What You Should Know</Text>
+      </Card>
+
+      <View style={styles.expandableCard}>
+        <Pressable accessibilityRole="button" accessibilityLabel="What You Should Know" accessibilityState={{ expanded: rulesExpanded }}
+          onPress={() => setRulesExpanded((expanded) => !expanded)} style={styles.expandableHeader}>
+          <View style={{ flex: 1 }}><Text style={styles.expandableTitle}>What You Should Know</Text>
+            <Text style={styles.expandableSubtitle}>Deposit rules and score changes</Text></View>
+          <Ionicons name={rulesExpanded ? "chevron-up" : "chevron-down"} size={19} color={colors.navy} />
+        </Pressable>
+        {rulesExpanded && <View style={styles.rulesContainer}>
           <Text style={styles.rulesSubheading}>Deposit & Booking Rules</Text>
           <Text style={styles.rulesBullet}>
             • Low Risk (80–100): 5% deposit, capped at RM500 (Direct checkout)
@@ -365,12 +376,18 @@ export default function ProfileScreen() {
             the most serious confirmed outcome applies; pending reports do not
             change your score. Successful appeals correct the original outcome.
           </Text>
-        </View>
-      </Card>
+        </View>}
+      </View>
 
       {/* Risk Score History */}
-      <Section title="Risk Score History" />
-      <Card>
+      <View style={styles.expandableCard}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Risk Score History" accessibilityState={{ expanded: historyExpanded }}
+          onPress={() => setHistoryExpanded((expanded) => !expanded)} style={styles.expandableHeader}>
+          <View style={{ flex: 1 }}><Text style={styles.expandableTitle}>Risk Score History</Text>
+            <Text style={styles.expandableSubtitle}>View past score updates and incidents</Text></View>
+          <Ionicons name={historyExpanded ? "chevron-up" : "chevron-down"} size={19} color={colors.navy} />
+        </Pressable>
+        {historyExpanded && <View style={styles.historyContent}>
         <Text style={s.caption}>
           Single Winning Incident Rule: When multiple violations occur on the
           same physical rental chain, only the single most serious penalty is
@@ -423,10 +440,11 @@ export default function ProfileScreen() {
             verified score of 80.
           </Text>
         )}
-      </Card>
+        </View>}
+      </View>
 
       {/* Trust and Support */}
-      <Section title="Trust and Support" />
+      <Section title="Trust and Support" compact />
       <View style={{ gap: 10, marginBottom: 16 }}>
         <Pressable
           accessibilityRole="button"
@@ -506,7 +524,7 @@ export default function ProfileScreen() {
       </View>
 
       {/* Sign Out */}
-      <Button
+      <View style={styles.signOutWrap}><Button
         secondary
         danger
         accessibilityLabel="Sign out"
@@ -524,25 +542,34 @@ export default function ProfileScreen() {
         }}
       >
         Sign Out
-      </Button>
+      </Button></View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  mobileContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 100 },
+  desktopContent: { maxWidth: 860, paddingBottom: 68 },
+  profileCard: { padding: 16, gap: 10, marginBottom: 12 },
+  profileName: { fontSize: 18, lineHeight: 23 },
+  profileEmail: { fontSize: 13, lineHeight: 18, flexShrink: 1 },
+  lenderButton: { marginBottom: 4 },
+  compactCard: { padding: 16, gap: 8, marginBottom: 12 },
+  expandableCard: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border,
+    borderRadius: 14, marginTop: 12, overflow: "hidden" },
+  expandableHeader: { minHeight: 64, paddingHorizontal: 16, paddingVertical: 12,
+    flexDirection: "row", alignItems: "center", gap: 12 },
+  expandableTitle: { color: colors.navy, fontSize: 16, fontWeight: "700" },
+  expandableSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 18, marginTop: 3 },
+  historyContent: { paddingHorizontal: 16, paddingBottom: 16, borderTopWidth: 1, borderTopColor: colors.border },
+  signOutWrap: { marginTop: 14, marginBottom: 16 },
   rulesContainer: {
-    marginTop: 14,
-    padding: 14,
-    backgroundColor: colors.paleBlue,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.softBlue,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+    borderColor: colors.border,
     gap: 6,
-  },
-  rulesHeading: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.navy,
   },
   rulesSubheading: {
     fontSize: 13,
@@ -551,13 +578,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   rulesBullet: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.slate,
   },
   rulesNote: {
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 18,
     color: colors.slate,
     fontStyle: "italic",
     marginTop: 4,
@@ -569,7 +596,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: 8,
+    marginTop: 5,
   },
   verificationStageText: {
     flex: 1,
@@ -578,7 +605,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   samplePhotoTile: {
-    minHeight: 88,
+    minHeight: 76,
     marginTop: 10,
     padding: 12,
     gap: 6,

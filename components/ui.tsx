@@ -8,6 +8,8 @@ import {
   TextInput,
   View,
   type TextInputProps,
+  type StyleProp,
+  type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +28,7 @@ export function Screen({
   action,
   scrollToY,
   scrollRequestId,
+  contentStyle,
 }: {
   children: React.ReactNode;
   title?: string;
@@ -34,6 +37,7 @@ export function Screen({
   action?: React.ReactNode;
   scrollToY?: number | null;
   scrollRequestId?: number;
+  contentStyle?: StyleProp<ViewStyle>;
 }) {
   const { storageError } = useMarketplace();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -49,7 +53,7 @@ export function Screen({
       <ScrollView
         ref={scrollViewRef}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={s.content}
+        contentContainerStyle={[s.content, contentStyle]}
       >
         {back && (
           <Pressable
@@ -122,12 +126,14 @@ export function Button({
 export function Card({
   children,
   onLayout,
+  style,
 }: {
   children: React.ReactNode;
   onLayout?: (event: import("react-native").LayoutChangeEvent) => void;
+  style?: StyleProp<ViewStyle>;
 }) {
   return (
-    <View style={s.card} onLayout={onLayout}>
+    <View style={[s.card, style]} onLayout={onLayout}>
       {children}
     </View>
   );
@@ -136,14 +142,16 @@ export function Section({
   title,
   action,
   onPress,
+  compact,
 }: {
   title: string;
   action?: string;
   onPress?: () => void;
+  compact?: boolean;
 }) {
   return (
-    <View style={s.section}>
-      <Text style={s.h2}>{title}</Text>
+    <View style={[s.section, compact && { marginTop: 17, marginBottom: 11 }]}>
+      <Text style={[s.h2, compact && { fontSize: 17 }]}>{title}</Text>
       {action && (
         <Pressable accessibilityRole="button" onPress={onPress}>
           <Text style={s.link}>{action}</Text>
