@@ -24,6 +24,7 @@ export default function HomeScreen() {
   const { state, user } = useMarketplace();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 800;
+  const isMobile = width < 768;
   const unreadNotifications = state.notifications.filter(
     (notice) => notice.userId === user?.id && !notice.read,
   ).length;
@@ -110,11 +111,12 @@ export default function HomeScreen() {
         {/* =========================================================================
             1. HERO SECTION (Canva Page 2 Dark Navy Anchor)
            ========================================================================= */}
-        <View style={styles.heroWrapper}>
+        <View style={[styles.heroWrapper, isMobile && styles.mobileHeroWrapper]}>
           <View style={styles.heroContainer}>
             <View
               style={[
                 styles.heroContent,
+                isMobile && styles.mobileHeroContent,
                 { width: isDesktop ? "62%" : "100%" },
               ]}
             >
@@ -148,18 +150,18 @@ export default function HomeScreen() {
               </View>
 
               {/* Main Headline */}
-              <Text style={styles.heroHeadline}>
+              <Text style={[styles.heroHeadline, isMobile && styles.mobileHeroHeadline]}>
                 Rent what you need.{"\n"}Earn from what you own.
               </Text>
 
               {/* Subtitle */}
-              <Text style={styles.heroSubhead}>
+              <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead]}>
                 Useful things, nearby. Discover trusted rentals across Klang Valley
                 or turn your idle gear into extra income.
               </Text>
 
               {/* Search Bar Container */}
-              <View style={styles.searchContainer}>
+              <View style={[styles.searchContainer, isMobile && styles.mobileSearchContainer]}>
                 <View style={styles.searchInputRow}>
                   <Ionicons name="search-outline" size={19} color={colors.muted} />
                   <TextInput
@@ -182,11 +184,12 @@ export default function HomeScreen() {
                   )}
                 </View>
 
+                <View style={isMobile ? styles.mobileSearchActions : styles.desktopSearchActions}>
                 {/* Location selector toggle */}
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => setShowLocationPicker(!showLocationPicker)}
-                  style={styles.locationDropdownBtn}
+                  style={[styles.locationDropdownBtn, isMobile && styles.mobileLocationBtn]}
                 >
                   <Ionicons name="location-outline" size={15} color={colors.navy} />
                   <Text style={styles.locationBtnText} numberOfLines={1}>
@@ -204,11 +207,12 @@ export default function HomeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Search marketplace"
                   onPress={() => router.setParams({ q: searchQuery.trim() })}
-                  style={styles.searchSubmitBtn}
+                  style={[styles.searchSubmitBtn, isMobile && styles.mobileSearchSubmitBtn]}
                 >
                   <Ionicons name="search" size={18} color="white" />
-                  {isDesktop && <Text style={styles.searchSubmitText}>Search</Text>}
+                  {(isDesktop || isMobile) && <Text style={styles.searchSubmitText}>Search</Text>}
                 </Pressable>
+                </View>
               </View>
 
               {/* Location Picker dropdown items */}
@@ -244,8 +248,8 @@ export default function HomeScreen() {
               )}
 
               {/* 8 Main Categories pills with responsive wrapping */}
-              <View style={styles.quickCatSection}>
-                <View style={styles.quickCatWrapper}>
+              <View style={[styles.quickCatSection, isMobile && styles.mobileQuickCatSection]}>
+                <ScrollView horizontal={isMobile} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.quickCatWrapper, isMobile && styles.mobileQuickCatWrapper]}>
                   <Text style={styles.quickCatLabel}>Categories:</Text>
                   <Pressable
                     accessibilityRole="button"
@@ -291,7 +295,7 @@ export default function HomeScreen() {
                       </Pressable>
                     );
                   })}
-                </View>
+                </ScrollView>
               </View>
             </View>
 
@@ -353,8 +357,8 @@ export default function HomeScreen() {
         {/* =========================================================================
             2. DISCOVERY CATALOGUE SECTION (Merged Explore Functionality)
            ========================================================================= */}
-        <View style={styles.catalogueSection}>
-          <View style={styles.catalogueControlsRow}>
+        <View style={[styles.catalogueSection, isMobile && styles.mobileCatalogueSection]}>
+          <View style={[styles.catalogueControlsRow, isMobile && styles.mobileCatalogueControlsRow]}>
             {/* Left: Results count & active category indicator */}
             <View style={{ flex: 1 }}>
               <Text style={styles.resultsCount}>
@@ -397,7 +401,7 @@ export default function HomeScreen() {
 
           {/* Catalogue Grid */}
           {filteredListings.length > 0 ? (
-            <ListingGrid listings={filteredListings} />
+            <ListingGrid listings={filteredListings} compactMobile />
           ) : (
             <Empty
               title="No matches found"
@@ -426,6 +430,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 36,
   },
+  mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 18 },
   heroContainer: {
     maxWidth: 1180,
     width: "100%",
@@ -437,6 +442,7 @@ const styles = StyleSheet.create({
   heroContent: {
     gap: 16,
   },
+  mobileHeroContent: { gap: 10 },
   heroTopRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -489,12 +495,14 @@ const styles = StyleSheet.create({
     letterSpacing: -1.2,
     lineHeight: 46,
   },
+  mobileHeroHeadline: { fontSize: 30, lineHeight: 34, letterSpacing: -0.8 },
   heroSubhead: {
     color: "#C5D2E2",
     fontSize: 15,
     lineHeight: 24,
     maxWidth: 520,
   },
+  mobileHeroSubhead: { fontSize: 13, lineHeight: 19 },
   searchContainer: {
     backgroundColor: "white",
     borderRadius: 14,
@@ -508,6 +516,9 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
   },
+  mobileSearchContainer: { flexDirection: "column", alignItems: "stretch", gap: 5, marginTop: 2, padding: 7 },
+  desktopSearchActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  mobileSearchActions: { flexDirection: "row", alignItems: "stretch", gap: 7 },
   searchInputRow: {
     flex: 1,
     flexDirection: "row",
@@ -531,6 +542,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     maxWidth: 140,
   },
+  mobileLocationBtn: { flex: 1, maxWidth: undefined, minHeight: 42 },
   locationBtnText: {
     fontSize: 12,
     fontWeight: "600",
@@ -545,6 +557,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
+  mobileSearchSubmitBtn: { minHeight: 42, justifyContent: "center", paddingHorizontal: 18 },
   searchSubmitText: {
     color: "white",
     fontSize: 14,
@@ -579,12 +592,14 @@ const styles = StyleSheet.create({
   quickCatSection: {
     marginTop: 8,
   },
+  mobileQuickCatSection: { marginTop: 2, marginRight: -22 },
   quickCatWrapper: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
   },
+  mobileQuickCatWrapper: { flexWrap: "nowrap", paddingRight: 22, alignItems: "center" },
   quickCatLabel: {
     fontSize: 12,
     color: "#8FA3BF",
@@ -672,6 +687,7 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     gap: 16,
   },
+  mobileCatalogueSection: { paddingHorizontal: 16, paddingTop: 15, gap: 12 },
   catalogueControlsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -682,6 +698,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
   },
+  mobileCatalogueControlsRow: { gap: 7, paddingBottom: 7 },
   resultsCount: {
     fontSize: 18,
     fontWeight: "800",

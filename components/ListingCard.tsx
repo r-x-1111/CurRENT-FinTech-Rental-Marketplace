@@ -9,9 +9,11 @@ import { router } from "expo-router";
 export function ListingCard({
   listing,
   onPress,
+  compact = false,
 }: {
   listing: Listing;
   onPress: () => void;
+  compact?: boolean;
 }) {
   const { user, act } = useMarketplace();
   const saved = user?.favourites.includes(listing.id);
@@ -28,7 +30,7 @@ export function ListingCard({
         onPress={onPress}
       >
         <View style={styles.imageArea}>
-          <Image source={{ uri: listing.imageUrl }} style={styles.image} />
+          <Image source={{ uri: listing.imageUrl }} style={[styles.image, compact && styles.compactImage]} resizeMode="cover" />
 
           {isFeatured && (
             <View style={styles.featuredBadge}>
@@ -43,13 +45,13 @@ export function ListingCard({
           </View>
         </View>
 
-        <View style={styles.body}>
-          <View style={styles.topRow}>
+        <View style={[styles.body, compact && styles.compactBody]}>
+          <View style={[styles.topRow, compact && styles.compactTopRow]}>
             <View style={styles.verifiedRow}>
               {listing.verifiedOwner ? (
-                <Text style={styles.verifiedText}>✓ Verified Owner</Text>
+                <Text style={[styles.verifiedText, compact && styles.compactStatusText]}>✓ Verified Owner</Text>
               ) : (
-                <Text style={styles.unverifiedText}>Community listing</Text>
+                <Text style={[styles.unverifiedText, compact && styles.compactStatusText]}>Community listing</Text>
               )}
             </View>
             <View style={styles.ratingRow}>
@@ -60,17 +62,17 @@ export function ListingCard({
             </View>
           </View>
 
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, compact && styles.compactTitle]} numberOfLines={1}>
             {listing.title}
           </Text>
 
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={13} color={colors.muted} />
-            <Text style={styles.locationText}>{listing.location}</Text>
+            <Text style={[styles.locationText, compact && styles.compactLocation]} numberOfLines={1}>{listing.location}</Text>
           </View>
 
           <View style={styles.bottomRow}>
-            <Text style={styles.priceText}>
+            <Text style={[styles.priceText, compact && styles.compactPrice]}>
               RM{listing.dailyPrice}
               <Text style={styles.perDayText}>/day</Text>
             </Text>
@@ -122,6 +124,7 @@ const styles = StyleSheet.create({
     height: 190,
     backgroundColor: colors.lightGrey,
   },
+  compactImage: { height: 124 },
   heart: {
     position: "absolute",
     right: 12,
@@ -167,11 +170,14 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 8,
   },
+  compactBody: { padding: 10, gap: 5 },
   topRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+  compactTopRow: { gap: 2 },
+  compactStatusText: { fontSize: 9, flexShrink: 1 },
   verifiedRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -200,6 +206,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.navy,
   },
+  compactTitle: { fontSize: 13 },
   locationRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -209,6 +216,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
   },
+  compactLocation: { fontSize: 11, flexShrink: 1 },
   bottomRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -223,6 +231,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.navy,
   },
+  compactPrice: { fontSize: 15 },
   perDayText: {
     fontSize: 12,
     fontWeight: "500",

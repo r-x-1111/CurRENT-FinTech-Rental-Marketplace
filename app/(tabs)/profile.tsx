@@ -157,7 +157,8 @@ export default function ProfileScreen() {
       </Card>
 
       <Pressable accessibilityRole="button" onPress={() => router.push("/owner")} style={({ pressed }) => [styles.lenderButton, pressed && styles.supportNavPressed]}>
-        <View style={styles.lenderIcon}><Ionicons name="briefcase" size={18} color={colors.white} /></View>
+        <View pointerEvents="none" style={styles.lenderAccent} />
+        <View style={styles.lenderIcon}><Ionicons name="briefcase" size={22} color={colors.white} /></View>
         <View style={{ flex: 1 }}><Text style={styles.lenderTitle}>Lender Mode</Text><Text style={styles.lenderSubtitle}>Switch to manage your listings and earnings</Text></View>
         <Ionicons name="chevron-forward" size={19} color={colors.white} />
       </Pressable>
@@ -194,15 +195,15 @@ export default function ProfileScreen() {
         {user.verification === "verified" ? (
           <>
             <View style={[styles.verificationStage, styles.verificationStageFirst]}>
-              <View style={styles.stageIcon}><Ionicons name="document-text-outline" size={16} color={colors.blue} /></View>
+              <View style={styles.stageIcon}><Ionicons name="document-text-outline" size={22} color={colors.blue} /></View>
               <View style={{ flex: 1 }}><Text style={styles.verificationStageText}>Identity Document</Text><Text style={styles.stageSubtitle}>NRIC or Passport</Text></View>
-              <Ionicons name="checkmark-circle" size={16} color={colors.green} />
+              <Ionicons name="checkmark-circle" size={22} color={colors.green} />
               <Text style={styles.completedBadge}>Completed</Text>
             </View>
             <View style={styles.verificationStage}>
-              <View style={styles.stageIcon}><Ionicons name="scan-outline" size={16} color={colors.blue} /></View>
+              <View style={styles.stageIcon}><Ionicons name="scan-outline" size={22} color={colors.blue} /></View>
               <View style={{ flex: 1 }}><Text style={styles.verificationStageText}>Face Verification</Text><Text style={styles.stageSubtitle}>Selfie verifies check</Text></View>
-              <Ionicons name="checkmark-circle" size={16} color={colors.green} />
+              <Ionicons name="checkmark-circle" size={22} color={colors.green} />
               <Text style={styles.completedBadge}>Completed</Text>
             </View>
           </>
@@ -296,9 +297,9 @@ export default function ProfileScreen() {
       {/* Rental Risk Score Section */}
       <Card style={[styles.compactCard, styles.riskCard]}>
         <View style={styles.cardHeading}>
-          <View style={styles.headingIcon}><Ionicons name="stats-chart" size={16} color={colors.blue} /></View>
+          <View style={styles.headingIcon}><Ionicons name="stats-chart" size={21} color={colors.blue} /></View>
           <Text style={[styles.cardTitle, { flex: 1 }]}>Rental Risk Score</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Learn more about the Rental Risk Score" onPress={() => router.push("/rental-risk-score")} style={styles.learnMore}><Text style={styles.learnMoreText}>Learn more</Text><Ionicons name="information-circle-outline" size={14} color={colors.blue} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Learn more about the Rental Risk Score" onPress={() => router.push("/rental-risk-score")} style={styles.learnMore}><Text style={styles.learnMoreText}>Learn more</Text><Ionicons name="information-circle-outline" size={19} color={colors.blue} /></Pressable>
         </View>
         <View style={[styles.riskBody, narrow && styles.riskBodyNarrow]}>
           <View style={isMobile && !narrow ? styles.compactGauge : styles.fullGauge}>
@@ -317,7 +318,7 @@ export default function ProfileScreen() {
 
       {/* Trust and Support */}
       <View style={styles.supportList}>
-        <View style={styles.supportHeading}><View style={styles.headingIcon}><Ionicons name="headset" size={17} color={colors.blue} /></View><Text style={styles.cardTitle}>Trust and Support</Text></View>
+        <View style={styles.supportHeading}><View style={styles.headingIcon}><Ionicons name="headset" size={21} color={colors.blue} /></View><Text style={styles.cardTitle}>Trust and Support</Text></View>
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push("/how-it-works")}
@@ -421,62 +422,63 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  mobileContent: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 100 },
+  mobileContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 100 },
   desktopContent: { maxWidth: 860, paddingBottom: 68 },
-  dashboardHeader: { marginBottom: 10 },
-  dashboardTitle: { color: colors.navy, fontSize: 20, lineHeight: 24, fontWeight: "800", letterSpacing: -0.5 },
-  dashboardSubtitle: { color: colors.slate, fontSize: 11, lineHeight: 15 },
-  profileCard: { padding: 10, gap: 8, marginBottom: 8, backgroundColor: colors.white, borderColor: colors.border, borderRadius: 13 },
-  profileRow: { flexDirection: "row", alignItems: "center", gap: 9 },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" },
-  avatarInitial: { fontSize: 19, fontWeight: "800", color: colors.navy },
-  profileName: { fontSize: 12, lineHeight: 15, fontWeight: "800", color: colors.navy },
-  profileEmail: { fontSize: 10, lineHeight: 13, marginTop: 0, flexShrink: 1 },
-  profileBadge: { flexDirection: "row", alignItems: "center", gap: 2, alignSelf: "flex-start", backgroundColor: colors.paleBlue, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1, marginTop: 3 },
+  dashboardHeader: { marginBottom: 16 },
+  dashboardTitle: { color: colors.navy, fontSize: 27, lineHeight: 32, fontWeight: "800", letterSpacing: -0.7 },
+  dashboardSubtitle: { color: colors.slate, fontSize: 14, lineHeight: 20 },
+  profileCard: { padding: 16, gap: 12, marginBottom: 12, backgroundColor: colors.white, borderColor: colors.border, borderRadius: 20 },
+  profileRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" },
+  avatarInitial: { fontSize: 28, fontWeight: "800", color: colors.navy },
+  profileName: { fontSize: 17, lineHeight: 21, fontWeight: "800", color: colors.navy },
+  profileEmail: { fontSize: 12, lineHeight: 16, marginTop: 1, flexShrink: 1 },
+  profileBadge: { flexDirection: "row", alignItems: "center", gap: 3, alignSelf: "flex-start", backgroundColor: colors.paleBlue, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2, marginTop: 4 },
   profileBadgeVerified: { backgroundColor: "#E7F6EC" },
-  profileBadgeText: { fontSize: 9, color: colors.blue, fontWeight: "700", textTransform: "capitalize" },
+  profileBadgeText: { fontSize: 11, color: colors.blue, fontWeight: "700", textTransform: "capitalize" },
   profileBadgeTextVerified: { color: colors.green },
-  demoDisclosure: { color: colors.slate, fontSize: 9, lineHeight: 12, marginTop: 3 },
-  editButton: { flexDirection: "row", alignItems: "center", gap: 3, borderWidth: 1, borderColor: colors.blue, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 5, alignSelf: "flex-start", cursor: "pointer" },
-  editButtonText: { color: colors.blue, fontSize: 9, fontWeight: "700" },
-  lenderButton: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.blue, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 8, minHeight: 42, cursor: "pointer" },
-  lenderIcon: { width: 28, height: 28, borderRadius: 7, backgroundColor: colors.mediumBlue, alignItems: "center", justifyContent: "center" },
-  lenderTitle: { color: colors.white, fontSize: 12, fontWeight: "700" },
-  lenderSubtitle: { color: colors.white, fontSize: 9, lineHeight: 12 },
-  compactCard: { padding: 11, gap: 6, marginBottom: 8, borderRadius: 12 },
+  demoDisclosure: { color: colors.slate, fontSize: 10, lineHeight: 14, marginTop: 4 },
+  editButton: { flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: colors.blue, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 8, alignSelf: "flex-start", cursor: "pointer" },
+  editButtonText: { color: colors.blue, fontSize: 10, fontWeight: "700" },
+  lenderButton: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.blue, borderRadius: 17, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 12, minHeight: 68, overflow: "hidden", cursor: "pointer" },
+  lenderAccent: { position: "absolute", width: 240, height: 120, borderRadius: 120, right: -65, bottom: -82, backgroundColor: colors.softBlue, opacity: 0.13 },
+  lenderIcon: { width: 43, height: 43, borderRadius: 12, backgroundColor: colors.mediumBlue, alignItems: "center", justifyContent: "center" },
+  lenderTitle: { color: colors.white, fontSize: 17, fontWeight: "700" },
+  lenderSubtitle: { color: colors.white, fontSize: 11, lineHeight: 15 },
+  compactCard: { padding: 16, gap: 10, marginBottom: 12, borderRadius: 19 },
   riskCard: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue },
-  cardHeading: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
-  headingIcon: { width: 27, height: 27, borderRadius: 9, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" },
-  cardTitle: { color: colors.navy, fontSize: 12, fontWeight: "800" },
-  cardSubtitle: { color: colors.slate, fontSize: 9, lineHeight: 12 },
-  stageIcon: { width: 24, height: 24, borderRadius: 6, backgroundColor: colors.paleBlue, alignItems: "center", justifyContent: "center" },
-  stageSubtitle: { color: colors.slate, fontSize: 9, lineHeight: 12 },
-  completedBadge: { color: colors.green, backgroundColor: "#E7F6EC", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, fontSize: 9, fontWeight: "700" },
+  cardHeading: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 3 },
+  headingIcon: { width: 41, height: 41, borderRadius: 12, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" },
+  cardTitle: { color: colors.navy, fontSize: 16, fontWeight: "800" },
+  cardSubtitle: { color: colors.slate, fontSize: 12, lineHeight: 17 },
+  stageIcon: { width: 39, height: 39, borderRadius: 10, backgroundColor: colors.paleBlue, alignItems: "center", justifyContent: "center" },
+  stageSubtitle: { color: colors.slate, fontSize: 11, lineHeight: 15 },
+  completedBadge: { color: colors.green, backgroundColor: "#E7F6EC", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, fontSize: 10, fontWeight: "700" },
   learnMore: { flexDirection: "row", alignItems: "center", gap: 3, cursor: "pointer" },
-  learnMoreText: { color: colors.blue, fontSize: 9, fontWeight: "700" },
-  riskBody: { flexDirection: "row", gap: 8, alignItems: "center" },
+  learnMoreText: { color: colors.blue, fontSize: 11, fontWeight: "700" },
+  riskBody: { flexDirection: "row", gap: 10, alignItems: "center" },
   riskBodyNarrow: { flexDirection: "column", alignItems: "stretch" },
-  compactGauge: { width: 135, height: 125, overflow: "hidden", justifyContent: "center" },
-  scaledGauge: { width: 190, left: -28, top: -7, transform: [{ scale: 0.7 }] },
+  compactGauge: { width: 145, height: 135, overflow: "hidden", justifyContent: "center" },
+  scaledGauge: { width: 190, left: -23, top: -5, transform: [{ scale: 0.75 }] },
   fullGauge: { alignItems: "center" },
-  riskDetails: { flex: 1, minWidth: 0, gap: 3 },
-  riskExplanation: { color: colors.slate, fontSize: 9, lineHeight: 12, marginBottom: 3 },
-  riskMetricRow: { flexDirection: "row", alignItems: "center", gap: 3, borderTopWidth: 1, borderTopColor: colors.border, minHeight: 20 },
+  riskDetails: { flex: 1, minWidth: 0, gap: 5 },
+  riskExplanation: { color: colors.slate, fontSize: 10, lineHeight: 14, marginBottom: 5 },
+  riskMetricRow: { flexDirection: "row", alignItems: "center", gap: 4, borderTopWidth: 1, borderTopColor: colors.border, minHeight: 26 },
   riskMetricLabel: { color: colors.navy, fontSize: 9, fontWeight: "600", flex: 1 },
   riskMetricValue: { color: colors.navy, fontSize: 9, fontWeight: "800", textAlign: "right", flexShrink: 1 },
-  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, minHeight: 32, backgroundColor: "#FFF0ED", borderWidth: 1, borderColor: colors.danger, borderRadius: 7, marginTop: 7, marginBottom: 12, cursor: "pointer" },
-  signOutText: { color: colors.danger, fontSize: 11, fontWeight: "700" },
+  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 46, backgroundColor: "#FFF0ED", borderWidth: 1, borderColor: colors.danger, borderRadius: 10, marginTop: 12, marginBottom: 16, cursor: "pointer" },
+  signOutText: { color: colors.danger, fontSize: 15, fontWeight: "700" },
   verificationStage: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    paddingVertical: 5,
+    gap: 9,
+    paddingVertical: 9,
   },
   verificationStageFirst: { borderBottomWidth: 1, borderBottomColor: colors.border },
   verificationStageText: {
     flex: 1,
     color: colors.text,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "700",
   },
   samplePhotoTile: {
@@ -492,14 +494,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paleBlue,
     borderRadius: 12,
   },
-  supportList: { backgroundColor: colors.white, borderRadius: 11, borderWidth: 1, borderColor: colors.border, overflow: "hidden", marginTop: 8 },
-  supportHeading: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingTop: 8, paddingBottom: 4 },
+  supportList: { backgroundColor: colors.white, borderRadius: 19, borderWidth: 1, borderColor: colors.border, overflow: "hidden", marginTop: 4 },
+  supportHeading: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingTop: 15, paddingBottom: 8 },
   supportNavCard: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
+    gap: 10,
     cursor: "pointer",
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -507,20 +509,20 @@ const styles = StyleSheet.create({
   supportNavHovered: { backgroundColor: colors.paleBlue },
   supportNavPressed: { opacity: 0.82 },
   supportNavIconWrap: {
-    width: 23,
-    height: 23,
-    borderRadius: 6,
+    width: 34,
+    height: 34,
+    borderRadius: 9,
     backgroundColor: colors.paleBlue,
     alignItems: "center",
     justifyContent: "center",
   },
   supportNavTitle: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "700",
     color: colors.navy,
   },
   supportNavDesc: {
-    fontSize: 9,
+    fontSize: 10,
     color: colors.slate,
   },
 });
