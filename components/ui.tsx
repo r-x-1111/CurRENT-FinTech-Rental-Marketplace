@@ -32,6 +32,7 @@ export function Screen({
   scrollRequestId,
   contentStyle,
   bounded,
+  headerGradient,
 }: {
   children: React.ReactNode;
   title?: string;
@@ -42,6 +43,8 @@ export function Screen({
   scrollRequestId?: number;
   contentStyle?: StyleProp<ViewStyle>;
   bounded?: boolean;
+  /** Opt-in soft light-blue gradient wash behind the header, also on desktop widths (not just mobile). */
+  headerGradient?: boolean;
 }) {
   const { storageError } = useMarketplace();
   const mobile = useWindowDimensions().width < 768;
@@ -80,9 +83,9 @@ export function Screen({
       </>;
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={s.screen}>
-      {mobile && <>
-        <LinearGradient pointerEvents="none" colors={["#EAF3FF", colors.paleBlue, colors.offWhite]} locations={[0, 0.38, 1]} style={StyleSheet.absoluteFill} />
-        <View pointerEvents="none" style={s.mobileBackgroundCurve} />
+      {(mobile || headerGradient) && <>
+        <LinearGradient pointerEvents="none" colors={["#EAF3FF", colors.paleBlue, colors.offWhite]} locations={[0, 0.38, 1]} style={mobile ? StyleSheet.absoluteFill : s.desktopHeaderGradient} />
+        <View pointerEvents="none" style={mobile ? s.mobileBackgroundCurve : s.desktopBackgroundCurve} />
       </>}
       {bounded ? (
         <View style={[s.content, s.boundedContent, contentStyle]}>{content}</View>
@@ -265,15 +268,17 @@ export function Empty({
   text,
   action,
   onPress,
+  icon = "sparkles-outline",
 }: {
   title: string;
   text: string;
   action?: string;
   onPress?: () => void;
+  icon?: keyof typeof Ionicons.glyphMap;
 }) {
   return (
     <View style={s.empty}>
-      <Ionicons name="sparkles-outline" size={32} color={colors.blue} />
+      <Ionicons name={icon} size={32} color={colors.blue} />
       <Text style={s.h2}>{title}</Text>
       <Text style={[s.caption, { textAlign: "center" }]}>{text}</Text>
       {action && onPress && <Button onPress={onPress}>{action}</Button>}
@@ -307,13 +312,13 @@ export function Chips({
           style={[
             s.chip,
             segmented && s.segmentedChip,
-            segmented && option === selected ? s.segmentedChipSelected : option === selected && {
-              backgroundColor: colors.softBlue,
+            option === selected && (segmented ? s.segmentedChipSelected : {
+              backgroundColor: colors.blue,
               borderColor: colors.blue,
-            },
+            }),
           ]}
         >
-          <Text style={[s.label, segmented && s.segmentedLabel, option === selected && { color: segmented ? colors.white : colors.blue }]}>
+          <Text style={[s.label, segmented && s.segmentedLabel, option === selected && { color: colors.white }]}>
             {option}
           </Text>
         </Pressable>
@@ -415,6 +420,8 @@ export function PhotoPicker({
 export const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.offWhite },
   mobileBackgroundCurve: { position: "absolute", top: 0, right: -80, width: 270, height: 220, borderBottomLeftRadius: 180, backgroundColor: colors.softBlue, opacity: 0.3 },
+  desktopHeaderGradient: { position: "absolute", top: 0, left: 0, right: 0, height: 320 },
+  desktopBackgroundCurve: { position: "absolute", top: -60, right: -120, width: 420, height: 320, borderBottomLeftRadius: 320, backgroundColor: colors.softBlue, opacity: 0.25 },
   content: {
     width: "100%",
     maxWidth: 1180,

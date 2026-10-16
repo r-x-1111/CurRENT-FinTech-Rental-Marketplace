@@ -209,7 +209,7 @@ export default function MessagesScreen() {
     }
   }
 
-  return <Screen bounded contentStyle={[styles.pageContent, mobile && styles.mobilePageContent]} title="Messages" subtitle={mobile ? undefined : "Chat with renters and owners about their listings."}>
+  return <Screen bounded contentStyle={[styles.pageContent, mobile && styles.mobilePageContent]} title="Messages" subtitle={mobile ? undefined : "Chat with renters and owners about their listings."} headerGradient>
     {!!error && <Notice text={error} error />}
     <KeyboardAvoidingView style={styles.keyboardArea} behavior={mobile && Platform.OS === "ios" ? "padding" : undefined}>
     <View style={styles.shell}>
@@ -252,7 +252,7 @@ export default function MessagesScreen() {
           <View style={styles.composer}><Pressable accessibilityRole="button" accessibilityLabel="Attach photo" onPress={() => void attach()}><Ionicons name="image-outline" size={25} color={colors.blue} /></Pressable>
             <TextInput accessibilityLabel="Message" placeholder="Write a message…" value={draft} onChangeText={setDraft} multiline maxLength={2000} style={styles.input} />
             <Pressable accessibilityRole="button" accessibilityLabel="Send message" disabled={busy || (!draft.trim() && !photo)} onPress={() => void send()} style={[styles.send, (busy || (!draft.trim() && !photo)) && { opacity: 0.5 }]}><Ionicons name="send" size={20} color="white" /></Pressable></View>
-        </> : <Empty title="Select a conversation" text="Your messages will appear here." />}
+        </> : <Empty title="Select a conversation" text="Choose a conversation to view its messages." icon="chatbubble-ellipses-outline" />}
       </View>}
     </View>
     </KeyboardAvoidingView>
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   mobileBadge: { backgroundColor: colors.danger },
   keyboardArea: { flex: 1, minHeight: 0 },
   shell: { flex: 1, minHeight: 0, flexDirection: "row", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 18, overflow: "hidden", marginTop: 12, shadowColor: colors.navy, shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  sidebar: { width: "38%", minHeight: 0, minWidth: 0, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.paleBlue }, search: { margin: 14, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.navy, backgroundColor: colors.white },
+  sidebar: { width: "38%", minHeight: 0, minWidth: 0, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.white }, search: { margin: 14, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.navy, backgroundColor: colors.white },
   conversationList: { flex: 1, minHeight: 0 },
   row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderBottomWidth: 1, borderBottomColor: colors.border, cursor: "pointer" }, rowTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" }, name: { color: colors.navy, fontSize: 16, fontWeight: "700" },

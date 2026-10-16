@@ -77,6 +77,7 @@ export default function ProfileScreen() {
     <Screen
       scrollToY={section === "ekyc" ? ekycY : null}
       contentStyle={isMobile ? styles.mobileContent : styles.desktopContent}
+      headerGradient
     >
       <View style={styles.dashboardHeader}>
         <Text style={styles.dashboardTitle}>Renter Dashboard</Text>

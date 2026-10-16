@@ -171,12 +171,35 @@ export function BookingCard({
             </Text>
           </Pressable>
         </View>
+
+        {!mobile && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View booking details for ${booking.title}`}
+            onPress={() => router.push(`/rental/${booking.id}`)}
+            style={styles.viewBookingBtn}
+          >
+            <Text style={styles.viewBookingText}>View booking</Text>
+            <Ionicons name="chevron-forward" size={14} color={colors.blue} />
+          </Pressable>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  viewBookingBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderWidth: 1,
+    borderColor: colors.blue,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  viewBookingText: { color: colors.blue, fontWeight: "700", fontSize: 13 },
   mobileCard: { padding: 14, borderRadius: 19, gap: 10, shadowOpacity: 0.07, shadowRadius: 12 },
   mobileTopRow: { alignItems: "flex-start", gap: 11 },
   mobileThumb: { width: 72, height: 72, borderRadius: 12 },

@@ -435,9 +435,10 @@ export default function RentalsScreen() {
 
   return (
     <Screen
-      title={mobile ? "My Rentals" : "Your rentals"}
+      title="My Rentals"
       subtitle={mobile ? undefined : "From your first request to your next adventure."}
       contentStyle={mobile && styles.mobileContent}
+      headerGradient
     >
       {!mobile && protectionBanner}
 

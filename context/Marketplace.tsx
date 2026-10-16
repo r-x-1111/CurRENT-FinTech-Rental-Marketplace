@@ -393,7 +393,7 @@ export function MarketplaceProvider({
           gap: 16,
         }}
       >
-        <ActivityIndicator color="#2F6BFF" />
+        <ActivityIndicator color="#2463FF" />
         <Text>Opening CurRENT…</Text>
       </View>
     );

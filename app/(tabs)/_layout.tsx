@@ -51,7 +51,7 @@ export default function TabsLayout() {
       })}
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
-      <Tabs.Screen name="rentals" options={{ title: mobile ? "My Rentals" : "Rentals" }} />
+      <Tabs.Screen name="rentals" options={{ title: "My Rentals" }} />
       <Tabs.Screen name="messages" options={{ title: "Messages", tabBarBadge: unread || undefined }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>

@@ -9,7 +9,7 @@ import { Text, View } from "react-native";
 export default function RootLayout() {
   const [iconsLoaded, iconError] = useFonts(Ionicons.font);
   if (!iconsLoaded && !iconError) {
-    return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F7F7F4" }}>
+    return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F7F8FA" }}>
       <Text style={{ color: "#0B1F3A", fontSize: 24, fontWeight: "800" }}>CurRENT</Text>
     </View>;
   }
