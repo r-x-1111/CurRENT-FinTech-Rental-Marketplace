@@ -39,11 +39,10 @@ export default function HomeScreen() {
 
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState(params.q || "");
-  const [selectedCategory, setSelectedCategory] = useState(params.category || "All items");
+  const [selectedCategory, setSelectedCategory] = useState(params.category === "All Items" ? "All items" : params.category || "All items");
   const [selectedLocation, setSelectedLocation] = useState(params.location === "All Klang Valley" ? "All Malaysia" : params.location || "All Malaysia");
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
-  const [categoryHasSelection, setCategoryHasSelection] = useState(Boolean(params.category));
   const categoryMenuAnimation = useRef(new Animated.Value(0)).current;
   const [savedOnly, setSavedOnly] = useState(params.saved === "1");
   const [authPrompt, setAuthPrompt] = useState(false);
@@ -51,8 +50,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (params.q !== undefined) setSearchQuery(params.q);
     if (params.category !== undefined) {
-      setSelectedCategory(params.category);
-      setCategoryHasSelection(Boolean(params.category));
+      setSelectedCategory(params.category === "All Items" ? "All items" : params.category);
     }
     if (params.saved !== undefined) setSavedOnly(params.saved === "1");
     if (params.location !== undefined) setSelectedLocation(params.location === "All Klang Valley" ? "All Malaysia" : params.location || "All Malaysia");
@@ -66,18 +64,10 @@ export default function HomeScreen() {
     }).start();
   }, [categoryMenuAnimation, showCategoryMenu]);
 
-  function handleCategoryClick(cat: string) {
-    if (selectedCategory === cat) {
-      setSelectedCategory("All items");
-    } else {
-      setSelectedCategory(cat);
-    }
-  }
-
   function handleClearFilters() {
     setSearchQuery("");
     setSelectedCategory("All items");
-    setCategoryHasSelection(false);
+    setShowCategoryMenu(false);
     setSelectedLocation("All Malaysia");
     setSavedOnly(false);
   }
@@ -262,8 +252,7 @@ export default function HomeScreen() {
                 </ScrollView>
               )}
 
-              {isMobile ? (
-                <View style={styles.mobileCategorySection}>
+                <View style={[styles.mobileCategorySection, !isMobile && styles.desktopCategorySection]}>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Choose category"
@@ -272,7 +261,7 @@ export default function HomeScreen() {
                     style={styles.mobileCategoryButton}
                   >
                     <Text style={styles.mobileCategoryButtonText}>
-                      {categoryHasSelection ? (selectedCategory === "All items" ? "All Items" : selectedCategory) : "All Categories"}
+                      {selectedCategory === "All items" ? "All Items" : selectedCategory}
                     </Text>
                     <Ionicons name={showCategoryMenu ? "chevron-up" : "chevron-down"} size={17} color={colors.blue} />
                   </Pressable>
@@ -291,7 +280,6 @@ export default function HomeScreen() {
                             accessibilityState={{ selected }}
                             onPress={() => {
                               setSelectedCategory(cat);
-                              setCategoryHasSelection(true);
                               setShowCategoryMenu(false);
                             }}
                             style={[styles.mobileCategoryOption, selected && styles.mobileCategoryOptionSelected]}
@@ -306,57 +294,6 @@ export default function HomeScreen() {
                     </ScrollView>
                   </Animated.View>
                 </View>
-              ) : (
-              <View style={styles.quickCatSection}>
-                <View style={styles.quickCatWrapper}>
-                  <Text style={styles.quickCatLabel}>Categories:</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Filter by All Items"
-                    onPress={() => setSelectedCategory("All items")}
-                    style={[
-                      styles.quickCatPill,
-                      (selectedCategory === "All items" || selectedCategory === "All Items") &&
-                        styles.quickCatPillActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.quickCatText,
-                        (selectedCategory === "All items" || selectedCategory === "All Items") &&
-                          styles.quickCatTextActive,
-                      ]}
-                    >
-                      All Items
-                    </Text>
-                  </Pressable>
-                  {MAIN_CATEGORIES.map((cat) => {
-                    const isSelected = selectedCategory === cat;
-                    return (
-                      <Pressable
-                        key={cat}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Filter by ${cat}`}
-                        onPress={() => handleCategoryClick(cat)}
-                        style={[
-                          styles.quickCatPill,
-                          isSelected && styles.quickCatPillActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.quickCatText,
-                            isSelected && styles.quickCatTextActive,
-                          ]}
-                        >
-                          {cat}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-              )}
             </View>
 
             {/* Floating Sample Cards (Shown on Desktop, Canva Page 2) */}
@@ -650,10 +587,8 @@ const styles = StyleSheet.create({
     color: colors.navy,
     fontWeight: "500",
   },
-  quickCatSection: {
-    marginTop: 8,
-  },
   mobileCategorySection: { marginTop: 2, gap: 5 },
+  desktopCategorySection: { width: 280, marginTop: 8 },
   mobileCategoryButton: {
     minHeight: 43,
     paddingHorizontal: 14,
@@ -661,6 +596,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.white,
+    shadowColor: colors.navy,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -671,6 +610,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderRadius: 11,
     backgroundColor: colors.white,
+    borderColor: colors.border,
+    shadowColor: colors.navy,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   mobileCategoryOption: {
     minHeight: 40,
@@ -684,40 +628,6 @@ const styles = StyleSheet.create({
   mobileCategoryOptionSelected: { backgroundColor: colors.paleBlue },
   mobileCategoryOptionText: { color: colors.navy, fontSize: 13 },
   mobileCategoryOptionTextSelected: { color: colors.blue, fontWeight: "700" },
-  quickCatWrapper: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 8,
-  },
-  quickCatLabel: {
-    fontSize: 12,
-    color: "#8FA3BF",
-    fontWeight: "600",
-    marginRight: 2,
-    paddingVertical: 4,
-  },
-  quickCatPill: {
-    backgroundColor: colors.navy,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  quickCatPillActive: {
-    backgroundColor: colors.blue,
-    borderColor: "white",
-  },
-  quickCatText: {
-    color: colors.softBlue,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  quickCatTextActive: {
-    color: "white",
-    fontWeight: "800",
-  },
   // Floating Hero Showcase
   heroShowcase: {
     width: "35%",

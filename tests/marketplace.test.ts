@@ -21,6 +21,7 @@ import {
   isCancellationEligible,
   parseMalaysiaTimestamp,
   quoteFor,
+  rentalTabForBooking,
   rentalDays,
   riskFor,
   toMalaysiaUtcTimestamp,
@@ -47,6 +48,20 @@ import {
   saveDemoWorkspaceSession,
   startDemoWorkspaceSession,
 } from "../services/demoWorkspaceSessions";
+
+test("message rental links select the tab for each booking condition", () => {
+  const booking = createSeed("admin_demo").bookings[0];
+  const now = parseMalaysiaTimestamp("2026-10-16T12:00:00+08:00");
+  const withStatus = (status: typeof booking.status) => ({ ...booking, status, payment: "paid" as const });
+  assert.equal(rentalTabForBooking({ ...withStatus("upcoming"), start: "2026-10-17", end: "2026-10-19" }, now), "Upcoming");
+  assert.equal(rentalTabForBooking({ ...withStatus("active"), end: "2026-10-17" }, now), "Active");
+  assert.equal(rentalTabForBooking({ ...withStatus("active"), end: "2026-10-15", renterReturnConfirmedAt: null }, now), "Return Due");
+  assert.equal(rentalTabForBooking(withStatus("return_pending"), now), "Active");
+  assert.equal(rentalTabForBooking(withStatus("completed"), now), "Completed");
+  assert.equal(rentalTabForBooking(withStatus("cancelled"), now), "Cancelled");
+  assert.equal(rentalTabForBooking(withStatus("disputed"), now), "Disputed");
+  assert.equal(rentalTabForBooking(withStatus("payment_required"), now), "Payment & Transaction History");
+});
 
 test("removed seed listings stay out of saved catalogues without hiding user listings", () => {
   const state = createSeed("normal");

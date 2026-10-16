@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { Redirect, router } from "expo-router";
+import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge, Chips, Empty, Screen, s } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
@@ -13,9 +13,14 @@ import { colors } from "../../constants/theme";
 import { GuestAuthGate } from "../../components/GuestAuth";
 
 export default function RentalsScreen() {
+  const { tab, bookingId } = useLocalSearchParams<{ tab?: string; bookingId?: string }>();
   const { state, user } = useMarketplace();
   const [activeTab, setActiveTab] = useState("Upcoming");
   const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (typeof tab === "string" && ["Upcoming", "Active", "Return Due", "Completed", "Cancelled", "Disputed", "Payment & Transaction History"].includes(tab)) setActiveTab(tab);
+  }, [tab]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -66,7 +71,7 @@ export default function RentalsScreen() {
       default:
         return false;
     }
-  });
+  }).sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId));
 
   // Helper to build transaction ledger
   function renderPaymentHistory() {
@@ -92,7 +97,8 @@ export default function RentalsScreen() {
       isCredit?: boolean;
     }[] = [];
 
-    userBookings.forEach((b) => {
+    [...userBookings].sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId)).forEach((b) => {
+      const paymentStatus = b.payment === "paid" ? "Paid" : b.payment === "refunded" ? "Refunded" : b.payment === "processing" ? "Processing" : b.payment === "failed" ? "Failed" : "Payment Required";
       // 1. Rental fee paid
       transactions.push({
         id: `${b.id}-rent`,
@@ -101,7 +107,7 @@ export default function RentalsScreen() {
         type: "Rental Fee",
         amount: b.quote.rentalFee,
         method: b.paymentMethod || "FPX",
-        status: b.payment === "refunded" ? "Refunded" : "Paid",
+        status: paymentStatus,
       });
 
       // 2. Platform service fee
@@ -112,7 +118,7 @@ export default function RentalsScreen() {
         type: "CurRENT Service Fee",
         amount: b.quote.serviceFee,
         method: b.paymentMethod || "FPX",
-        status: b.payment === "refunded" ? "Refunded" : "Paid",
+        status: paymentStatus,
       });
 
       // 3. Security deposit
@@ -130,7 +136,11 @@ export default function RentalsScreen() {
             ? "Held Securely"
             : b.deposit === "disputed"
             ? "Held for Dispute Review"
-            : "Processed",
+            : b.deposit === "required"
+            ? "Deposit Required"
+            : b.deposit === "release_pending"
+            ? "Release Pending"
+            : "Secured",
         isCredit: b.deposit === "released",
       });
     });

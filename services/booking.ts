@@ -101,6 +101,17 @@ export function getEffectiveBookingStatus(
   return booking.status;
 }
 
+export function rentalTabForBooking(booking: Booking, now = Date.now()) {
+  const status = getEffectiveBookingStatus(booking, now);
+  if (status === "disputed") return "Disputed";
+  if (status === "completed") return "Completed";
+  if (status === "cancelled" || status === "rejected") return "Cancelled";
+  if (status === "active" && !booking.renterReturnConfirmedAt && parseMalaysiaTimestamp(booking.end) <= now) return "Return Due";
+  if (status === "active" || status === "return_pending") return "Active";
+  if (status === "upcoming") return "Upcoming";
+  return "Payment & Transaction History";
+}
+
 /**
  * Converts a Malaysian local calendar date (YYYY-MM-DD) and optional time (HH:mm)
  * to a canonical UTC ISO timestamp string (e.g. 2026-10-23T03:00:00.000Z).

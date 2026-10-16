@@ -6,7 +6,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Button, Empty, Notice, Screen, s } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
 import { colors } from "../../constants/theme";
-import { formatMalaysiaDateTime, money } from "../../services/booking";
+import { formatMalaysiaDateTime, money, rentalTabForBooking } from "../../services/booking";
 import { newId } from "../../services/marketplace";
 import { supabase } from "../../lib/supabase";
 import { fetchChatInbox, markSharedChatRead, openBookingConversation, openSharedConversation, sendSharedMessage, signedChatImage, uploadChatImage, type SharedConversation, type SharedMessage } from "../../services/chat";
@@ -185,6 +185,19 @@ export default function MessagesScreen() {
     finally { setBusy(false); }
   }
 
+
+  function viewRentalItem() {
+    if (!active?.booking) {
+      if (active) router.push(`/listing/${active.listing.id}`);
+      return;
+    }
+    if (active.booking.renterId === user!.id) {
+      router.push({ pathname: "/(tabs)/rentals", params: { tab: rentalTabForBooking(active.booking), bookingId: active.booking.id } });
+    } else {
+      router.push({ pathname: "/owner", params: { section: "Rentals", bookingId: active.booking.id } });
+    }
+  }
+
   return <Screen bounded contentStyle={styles.pageContent} title="Messages" subtitle="Chat with renters and owners about their listings.">
     {!!error && <Notice text={error} error />}
     <KeyboardAvoidingView style={styles.keyboardArea} behavior={mobile && Platform.OS === "ios" ? "padding" : undefined}>
@@ -204,11 +217,11 @@ export default function MessagesScreen() {
         {active ? <>
           <View style={styles.header}>{mobile && <Pressable accessibilityRole="button" accessibilityLabel="Back to conversations" onPress={() => setSelected(null)}><Ionicons name="arrow-back" size={24} color={colors.navy} /></Pressable>}
             <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View><View><Text style={styles.name}>{active.other}</Text><Text style={s.caption}>{active.booking?.status || "Listing enquiry"}</Text></View></View>
-          <Pressable accessibilityRole="button" onPress={() => router.push(`/listing/${active.listing.id}`)} style={styles.listing}>
+          <Pressable accessibilityRole="button" onPress={viewRentalItem} style={styles.listing}>
             {!!active.listing.imageUrl && <Image source={{ uri: active.listing.imageUrl }} style={styles.listingImage} />}
             <View style={{ flex: 1 }}><Text style={styles.itemName}>{active.listing.title}</Text><Text style={s.caption}>{money(active.listing.dailyPrice)} / day · Owner: {active.listing.ownerId === user.id ? user.name : active.other}</Text></View>
             <Ionicons name="chevron-forward" size={18} color={colors.blue} /></Pressable>
-          {!!active.booking && <Button secondary onPress={() => router.push(`/rental/${active.booking!.id}`)}>View Rental Details</Button>}
+          {!!active.booking && <Button secondary onPress={viewRentalItem}>View Rental Details</Button>}
           {active.listing.ownerId !== user.id && <Button secondary onPress={() => router.push(`/listing/${active.listing.id}`)}>Book This Item</Button>}
           <ScrollView ref={scroll} style={styles.messages} keyboardShouldPersistTaps="handled" onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}>
             {!messages.length && <Text style={styles.emptyChat}>No messages yet. Send the first message.</Text>}

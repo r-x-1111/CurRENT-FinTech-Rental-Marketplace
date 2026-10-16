@@ -30,7 +30,7 @@ export default function OwnerDashboard() {
     if (!user || !supabase) return;
     void supabase.auth.getUser().then(({ data }) => setIsAdmin(data.user?.app_metadata.current_admin === true));
   }, [user?.id]);
-  const { published } = useLocalSearchParams<{ published?: string }>();
+  const { published, section, bookingId } = useLocalSearchParams<{ published?: string; section?: string; bookingId?: string }>();
   const [tab, setTab] = useState("Listings");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -49,6 +49,10 @@ export default function OwnerDashboard() {
     setScrollToY(Math.max(0, contentY.current - 20));
     setScrollRequestId((request) => request + 1);
   }
+
+  useEffect(() => {
+    if (section === "Rentals") openSummarySection("Rentals");
+  }, [section]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -88,7 +92,7 @@ export default function OwnerDashboard() {
   const transactions = (state.boostTransactions || []).filter((record) => record.ownerId === user.id);
   const receipt = transactions.find((record) => record.id === receiptId);
   const boostListing = listings.find((listing) => listing.id === pendingBoost);
-  const bookings = state.bookings.filter((b) => b.ownerId === user.id);
+  const bookings = state.bookings.filter((b) => b.ownerId === user.id).sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId));
   const complete = bookings.filter((b) => b.status === "completed");
   const earnings = complete.reduce(
     (n, b) => n + calculateOwnerPayout(b.quote.rentalFee, b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE).payout,
