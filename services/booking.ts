@@ -199,6 +199,16 @@ export function riskFor(state: Marketplace, profile: Profile) {
   };
 }
 
+/**
+ * Shopee-inspired optional Rental Protection premium (demo pricing assumption, not an insurer quotation).
+ * Insurance Premium = MAX(RM5, Item Replacement Value x 0.003 x CEILING(Rental Days / 7)).
+ */
+export function calculateInsurancePremium(replacementValue: number, days: number): number {
+  if (!Number.isFinite(replacementValue) || replacementValue <= 0 || !Number.isFinite(days) || days <= 0) return 0;
+  const periods = Math.ceil(days / 7);
+  return Math.round(Math.max(5, replacementValue * 0.003 * periods) * 100) / 100;
+}
+
 export function quoteFor(
   state: Marketplace,
   profile: Profile,
@@ -225,7 +235,8 @@ export function quoteFor(
     estimatedValue,
     risk.level,
   );
-  const protection = 0; // V1.8: No optional protection fee in renter cart
+  // Optional Rental Protection (Shopee-inspired, demo only). Never factored into the security deposit.
+  const protection = protectedItem ? calculateInsurancePremium(estimatedValue, days) : 0;
   return {
     days,
     rentalFee,

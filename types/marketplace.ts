@@ -110,11 +110,22 @@ export interface Booking {
   quote: Quote;
   /** Stored at checkout so later rate changes never rewrite historical payouts. */
   commissionRate?: number;
+  /** Optional Shopee-inspired Rental Protection (demo), chosen and priced at CurRENT rental payment time. */
+  insurance?: { selected: true; premium: number; referralIncome: number } | null;
   deliveryDemo?: {
     provider: "GrabExpress (Simulation)";
     origin: string;
     destination: string;
     fee: number;
+    area?: string;
+    distanceKm?: number;
+    vehicle?: "Motorcycle" | "Car" | "MPV";
+    weightKg?: number;
+    dimensionsCm?: { length: number; width: number; height: number };
+    baseFare?: number;
+    distanceCharge?: number;
+    minimumFare?: number;
+    pricingReference?: string;
     status: "required" | "paid_demo";
     receiptReference?: string;
     paidAt?: string;
@@ -157,6 +168,28 @@ export interface Booking {
     depositRetained: number;
   } | null;
   contextMode?: "normal" | "admin_demo";
+}
+
+export interface DeliveryTransaction {
+  id: string;
+  renterId: string;
+  bookingId?: string;
+  itemTitle: string;
+  origin: string;
+  destination: string;
+  area: string;
+  distanceKm: number;
+  vehicle?: "Motorcycle" | "Car" | "MPV";
+  weightKg?: number;
+  dimensionsCm?: { length: number; width: number; height: number };
+  baseFare: number;
+  distanceCharge: number;
+  minimumFare: number;
+  fee: number;
+  pricingReference: string;
+  paidAt: string;
+  sample: boolean;
+  status: "paid_demo";
 }
 
 export interface Evidence {
@@ -254,6 +287,7 @@ export interface Marketplace {
   profiles: Profile[];
   listings: Listing[];
   bookings: Booking[];
+  deliveryHistory?: DeliveryTransaction[];
   boostTransactions?: {
     id: string;
     ownerId: string;

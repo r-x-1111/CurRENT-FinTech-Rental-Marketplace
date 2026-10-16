@@ -17,6 +17,7 @@ import {
   dateAfter,
   demoSlotAvailable,
   formatMalaysiaDateTime,
+  calculateInsurancePremium,
   getEffectiveBookingStatus,
   isCancellationEligible,
   parseMalaysiaTimestamp,
@@ -27,6 +28,8 @@ import {
   toMalaysiaUtcTimestamp,
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
+import { deriveDisplayDelivery, eligibleDeliveryVehicles, quoteDemoDelivery } from "../services/delivery";
+import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../services/geo";
 import { evaluateRentalOutcome } from "../services/riskScore";
 import {
   authenticateWithPassword,
@@ -301,22 +304,117 @@ function journey() {
   };
 }
 
+test("historical delivery brackets and parcel limits drive demo quotes, scoped to Klang Valley and Penang", () => {
+  assert.equal(quoteDemoDelivery("Klang Valley", "Motorcycle", 5)?.fee, 5);
+  assert.equal(quoteDemoDelivery("Klang Valley", "Motorcycle", 8)?.fee, 8);
+  assert.equal(quoteDemoDelivery("Penang", "Motorcycle", 6)?.fee, 5.8);
+  assert.equal(quoteDemoDelivery("Penang", "Motorcycle", 12)?.fee, 10.4);
+  assert.equal(quoteDemoDelivery("Klang Valley", "Car", 16)?.fee, 19.5);
+  assert.equal(quoteDemoDelivery("Penang", "MPV", 8), null, "Penang has no MPV pricing bracket");
+  assert.deepEqual(eligibleDeliveryVehicles(1, { length: 20, width: 20, height: 20 }), ["Motorcycle", "Car", "MPV"]);
+  assert.deepEqual(eligibleDeliveryVehicles(60, { length: 70, width: 70, height: 70 }), ["MPV"]);
+
+  const seed = createSeed("admin_demo");
+  // 6 delivery records linked to bookings carrying their own paid deliveryDemo (the 4 preserved completed
+  // rentals + 2 Rental Protection demo completions), plus 4 standalone demo samples (2 Klang Valley, 2 Penang)
+  assert.equal(seed.deliveryHistory?.length, 10);
+  const linked = seed.deliveryHistory?.filter((entry) => !entry.sample) || [];
+  assert.equal(linked.length, 6, "Expected exactly 6 delivery records linked to bookings with their own paid deliveryDemo");
+  for (const entry of linked) {
+    const booking = seed.bookings.find((b) => b.id === entry.bookingId);
+    assert.ok(booking, `Delivery record ${entry.id} must link to an existing booking`);
+    assert.equal(booking!.deliveryDemo?.status, "paid_demo");
+    assert.equal(booking!.deliveryDemo?.fee, entry.fee, "Linked delivery record must match its booking's own deliveryDemo fee");
+  }
+  const penangSamples = (seed.deliveryHistory || []).filter((entry) => entry.sample && entry.area === "Penang");
+  assert.ok(penangSamples.length >= 2, "Expected at least 2 fictional Penang demo delivery samples");
+});
+
+test("deriveDisplayDelivery connects Transaction Details / Rental Details to each booking's own saved delivery record", () => {
+  const seed = createSeed("admin_demo");
+  const byId = (id: string) => seed.bookings.find((b) => b.id === id)!;
+  const listingFor = (b: ReturnType<typeof byId>) => seed.listings.find((l) => l.id === b.listingId);
+
+  // A booking with a saved, paid deliveryDemo must surface that exact record (not a derived guess).
+  const paid = byId("demo-booking-completed-1");
+  const paidDisplay = deriveDisplayDelivery({
+    collectionMethod: paid.collectionMethod, deliveryDemo: paid.deliveryDemo || null,
+    pickupLocation: listingFor(paid)?.location || "", deliveryAddress: paid.deliveryAddress,
+  });
+  assert.equal(paidDisplay.status, "paid_demo");
+  assert.equal(paidDisplay.fee, paid.deliveryDemo!.fee);
+  assert.equal(paidDisplay.destination, paid.deliveryAddress);
+  assert.equal(paidDisplay.receiptReference, paid.deliveryDemo!.receiptReference);
+  // That receipt must actually resolve in deliveryHistory, so "View Receipt" always opens a real record.
+  assert.ok(seed.deliveryHistory?.some((entry) => entry.id === paidDisplay.receiptReference));
+
+  // A booking with no saved deliveryDemo and no delivery address must never claim a completed payment.
+  const noAddress = byId("demo-booking-protection-active");
+  const noAddressDisplay = deriveDisplayDelivery({
+    collectionMethod: noAddress.collectionMethod, deliveryDemo: noAddress.deliveryDemo || null,
+    pickupLocation: listingFor(noAddress)?.location || "", deliveryAddress: noAddress.deliveryAddress,
+  });
+  assert.notEqual(noAddressDisplay.status, "paid_demo");
+  assert.equal(noAddressDisplay.fee, null, "Must never fabricate a delivery fee");
+
+  // Self-Pickup bookings must short-circuit to the dedicated no-fee state.
+  const selfPickupDisplay = deriveDisplayDelivery({
+    collectionMethod: "Self-Pickup", deliveryDemo: null, pickupLocation: "Petaling Jaya",
+  });
+  assert.equal(selfPickupDisplay.status, "self_pickup");
+  assert.equal(selfPickupDisplay.fee, null);
+});
+
+test("automatic postcode-based delivery estimate: Haversine x road factor, MAX(RM5, RM4 + distance) fee, no API and no manual distance", () => {
+  // Exact-postcode lookup resolves without hitting the prefix fallback.
+  assert.ok(resolvePostcodeCoordinate("50480"));
+  // A clearly invalid postcode must never resolve to a fabricated coordinate.
+  assert.equal(resolvePostcodeCoordinate("abcde"), null);
+  assert.equal(resolvePostcodeCoordinate("123"), null);
+  // A postcode outside the exact dataset still resolves via the maintained prefix fallback —
+  // this exercises states well outside Klang Valley (Penang here), so delivery is not assumed
+  // to always be within Klang Valley.
+  assert.ok(resolvePostcodeCoordinate("10050")); // Penang-area prefix "10"
+
+  const estimate = estimateAutomaticDelivery("46200", "50480")!;
+  assert.ok(estimate);
+  assert.ok(estimate.distanceKm > 0);
+  assert.equal(Math.round(estimate.distanceKm * 10) / 10, estimate.distanceKm, "Distance must be rounded to 1 decimal place");
+  assert.equal(estimate.baseFee, 4);
+  assert.equal(estimate.distanceCharge, Math.round(estimate.distanceKm * 100) / 100);
+  assert.equal(estimate.fee, Math.round(Math.max(5, 4 + estimate.distanceCharge) * 100) / 100);
+  assert.equal(Math.round(estimate.fee * 100) / 100, estimate.fee, "Fee must be rounded to 2 decimal places");
+
+  // A very short hop must still fall back to the RM5 minimum, never below it.
+  const shortHop = estimateAutomaticDelivery("46200", "46200")!;
+  assert.equal(shortHop.fee, 5);
+
+  // Missing/unrecognisable postcodes must never invent a distance or fee.
+  assert.equal(estimateAutomaticDelivery("00000", "50480"), null);
+  assert.equal(estimateAutomaticDelivery("46200", ""), null);
+  assert.equal(estimateAutomaticDelivery(undefined, "50480"), null);
+});
+
 test("delivery demo receipt is stored separately before rental payment", () => {
   const j = journey();
   const start = `${dateAfter(2)}T11:00:00+08:00`;
   const end = `${dateAfter(4)}T11:00:00+08:00`;
+  const listing = createSeed().listings.find((l) => l.id === "sony-a7iii")!;
+  const expected = estimateAutomaticDelivery(listing.pickupPostcode, "50480")!;
   j.act({ type: "startDeliveryCheckout", id: "delivery-booking", listingId: "sony-a7iii",
-    start, end, deliveryAddress: "12 Jalan Example, Kuala Lumpur" });
+    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480" });
   const pending = j.state.bookings.find((booking) => booking.id === "delivery-booking")!;
   assert.equal(pending.payment, "required");
   assert.equal(pending.status, "payment_required");
-  assert.equal(pending.deliveryDemo?.fee, 10);
+  assert.equal(pending.deliveryDemo?.fee, expected.fee);
+  assert.equal(pending.deliveryDemo?.distanceKm, expected.distanceKm);
   assert.equal(pending.commissionRate, 0.13);
   assert.equal(pending.quote.total, pending.quote.rentalFee + pending.quote.serviceFee + pending.quote.deposit);
   assert.throws(() => j.act({ type: "completeRentalCheckout", bookingId: pending.id, paymentMethod: "Demo FPX" }), /delivery demo payment/);
   j.act({ type: "payDeliveryDemo", bookingId: pending.id, receiptReference: "DEMO-GE-123" });
   j.act({ type: "payDeliveryDemo", bookingId: pending.id, receiptReference: "DEMO-GE-DUPLICATE" });
   assert.equal(j.state.bookings.find((booking) => booking.id === pending.id)?.deliveryDemo?.receiptReference, "DEMO-GE-123");
+  assert.equal(j.state.deliveryHistory?.filter((record) => record.bookingId === pending.id).length, 1);
   j.act({ type: "completeRentalCheckout", bookingId: pending.id, paymentMethod: "Demo FPX" });
   assert.equal(j.state.bookings.find((booking) => booking.id === pending.id)?.payment, "paid");
   assert.throws(() => j.act({ type: "completeRentalCheckout", bookingId: pending.id, paymentMethod: "Demo FPX" }), /already completed/);
@@ -477,8 +575,8 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
     rentalFee: 90,
     serviceFee: 5,
     deposit: 200,
-    protection: 0,
-    total: 295,
+    protection: 12,
+    total: 307,
   });
   assert.deepEqual(calculateOwnerPayout(90), {
     commission: 11.7,
@@ -509,6 +607,19 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
   assert.throws(() => rentalDays("2027-02-30", "2027-03-04"), /valid calendar/);
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(1)), /1 to 90/);
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(92)), /1 to 90/);
+});
+test("optional Rental Protection premium follows the Shopee-inspired demo formula and stays out of the security deposit", () => {
+  assert.equal(calculateInsurancePremium(500, 2), 5);
+  assert.equal(calculateInsurancePremium(2500, 3), 7.5);
+  assert.equal(calculateInsurancePremium(2500, 8), 15);
+  const state = createSeed();
+  const unselected = quoteFor(state, state.profiles[0], state.listings[0], dateAfter(1), dateAfter(3), false);
+  assert.equal(unselected.protection, 0);
+  assert.equal(unselected.total, unselected.rentalFee + unselected.serviceFee + unselected.deposit);
+  const selected = quoteFor(state, state.profiles[0], state.listings[0], dateAfter(1), dateAfter(3), true);
+  assert.ok(selected.protection > 0);
+  assert.equal(selected.deposit, unselected.deposit, "Insurance must never change the risk-based security deposit.");
+  assert.equal(selected.total, unselected.total + selected.protection);
 });
 test("the final available date can be rented with an exclusive next-day return", () => {
   const state = createSeed();
@@ -2019,12 +2130,18 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
     `Expected >= 3 disputed rentals, got ${disputed.length}`,
   );
 
-  // 7. Exactly 4 Completed rentals matching 4 linked risk adjustments (+2, +2, 0, 0)
+  // 7. At least 4 Completed rentals, exactly 4 of which carry the linked risk adjustments (+2, +2, 0, 0)
   const completed = userBookings.filter((b) => b.status === "completed");
+  assert.ok(
+    completed.length >= 4,
+    `Expected >= 4 completed rentals, got ${completed.length}`,
+  );
+  const riskLinkedBookingIds = new Set((demoProfile.riskHistory || []).map((h) => h.bookingId));
+  const riskLinkedCompleted = completed.filter((b) => riskLinkedBookingIds.has(b.id));
   assert.equal(
-    completed.length,
+    riskLinkedCompleted.length,
     4,
-    `Expected exactly 4 completed rentals, got ${completed.length}`,
+    `Expected exactly 4 completed rentals linked to the fixed risk history, got ${riskLinkedCompleted.length}`,
   );
   assert.equal(demoProfile.riskScore, 84, "Expected risk score 84");
   assert.equal(demoProfile.riskLevel, "low", "Expected low risk tier");
@@ -2109,6 +2226,102 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
     0,
     "No fabricated marketplace reviews in seed",
   );
+});
+
+test("Demo renter account carries 7 Rental Protection demo scenarios, one per status tab", () => {
+  const seed = createSeed("admin_demo");
+  const byId = (id: string) => seed.bookings.find((b) => b.id === id)!;
+
+  // 1. Upcoming — DJI Mini 4 Pro Drone, insured, delivery pending
+  const upcoming = byId("demo-booking-protection-upcoming");
+  assert.equal(upcoming.title, "DJI Mini 4 Pro Drone");
+  assert.equal(upcoming.status, "upcoming");
+  assert.equal(upcoming.payment, "paid");
+  assert.equal(upcoming.deposit, "held");
+  assert.equal(upcoming.insurance?.selected, true);
+  assert.equal(upcoming.deliveryDemo?.status, "required");
+
+  // 2. Active — Sony ZV-E10 Camera, no insurance
+  const active = byId("demo-booking-protection-active");
+  assert.equal(active.title, "Sony ZV-E10 Camera");
+  assert.equal(active.status, "active");
+  assert.equal(active.insurance, null);
+
+  // 3. Return Due — Epson Portable Projector, insured, awaiting two-sided return confirmation
+  const returnDue = byId("demo-booking-protection-return-due");
+  assert.equal(returnDue.title, "Epson Portable Projector");
+  assert.equal(returnDue.status, "active");
+  assert.ok(!returnDue.renterReturnConfirmedAt, "Return must not be pre-confirmed");
+  assert.equal(returnDue.deposit, "held", "Deposit must stay held until both sides confirm a clean return");
+  assert.equal(returnDue.insurance?.selected, true);
+
+  // 4. Completed, insured — Sony A7 III Mirrorless Camera, exact figures from the spec
+  const completedInsured = byId("demo-booking-protection-completed-insured");
+  assert.equal(completedInsured.title, "Sony A7 III Mirrorless Camera");
+  assert.equal(completedInsured.status, "completed");
+  assert.deepEqual(completedInsured.quote, {
+    days: 3, rentalFee: 200, serviceFee: 10, deposit: 125, protection: 7.5, total: 342.5,
+  });
+  assert.equal(completedInsured.insurance?.selected, true);
+  assert.equal(completedInsured.insurance?.premium, 7.5);
+  assert.equal(completedInsured.insurance?.referralIncome, 2);
+  assert.equal(completedInsured.deposit, "released");
+  assert.equal(calculateInsurancePremium(2500, 3), completedInsured.insurance!.premium);
+
+  // 5. Completed, uninsured — Portable Projector, exact figures from the spec
+  const completedUninsured = byId("demo-booking-protection-completed-uninsured");
+  assert.equal(completedUninsured.title, "Portable Projector");
+  assert.equal(completedUninsured.status, "completed");
+  assert.deepEqual(completedUninsured.quote, {
+    days: 2, rentalFee: 90, serviceFee: 5, deposit: 40, protection: 0, total: 135,
+  });
+  assert.equal(completedUninsured.insurance, null);
+  assert.equal(completedUninsured.deposit, "released");
+
+  // Completed tab must contain exactly one insured and one (at least) uninsured Rental Protection scenario
+  assert.equal(completedInsured.status, "completed");
+  assert.equal(completedUninsured.status, "completed");
+
+  // 6. Cancelled — GoPro HERO12 Black, full refund, matching deposit release
+  const cancelled = byId("demo-booking-protection-cancelled");
+  assert.equal(cancelled.title, "GoPro HERO12 Black");
+  assert.equal(cancelled.status, "cancelled");
+  assert.equal(cancelled.payment, "refunded");
+  assert.equal(cancelled.deposit, "released");
+  assert.equal(cancelled.insurance, null);
+  assert.ok(cancelled.cancelledAt);
+  assert.equal(cancelled.cancelledById, "demo-renter");
+  assert.ok(
+    seed.messages.some((m) => m.bookingId === cancelled.id && m.authorId === "demo-renter"),
+    "Cancellation reason must be recorded as a message on the booking thread",
+  );
+
+  // 7. Disputed — Canon RF Camera Lens, insured, unresolved, no automatic refund
+  const disputed = byId("demo-booking-protection-disputed");
+  assert.equal(disputed.title, "Canon RF Camera Lens");
+  assert.equal(disputed.status, "disputed");
+  assert.equal(disputed.deposit, "disputed", "Deposit must stay held pending review, never auto-refunded");
+  assert.ok(!disputed.lenderReturnConfirmedAt, "An unresolved dispute must not carry a clean-return confirmation");
+  assert.equal(disputed.insurance?.selected, true);
+  const dispute = seed.disputes.find((d) => d.bookingId === disputed.id);
+  assert.ok(dispute, "Expected a linked dispute record");
+  assert.equal(dispute!.status, "under_review");
+  assert.ok(
+    seed.messages.some((m) => m.bookingId === disputed.id && m.authorId === "demo-renter"),
+    "Renter's dispute response must be recorded",
+  );
+
+  // Running the seed twice must not duplicate any of the 7 scenario bookings or the linked dispute
+  const seedAgain = createSeed("admin_demo");
+  const ids = [
+    "demo-booking-protection-upcoming", "demo-booking-protection-active", "demo-booking-protection-return-due",
+    "demo-booking-protection-completed-insured", "demo-booking-protection-completed-uninsured",
+    "demo-booking-protection-cancelled", "demo-booking-protection-disputed",
+  ];
+  for (const bid of ids) {
+    assert.equal(seedAgain.bookings.filter((b) => b.id === bid).length, 1, `${bid} must not be duplicated`);
+  }
+  assert.equal(seedAgain.disputes.filter((d) => d.id === "disp-canon-lens").length, 1);
 });
 
 test("Demo lender listings use fixed view counts consistent with saves and completed rentals", () => {
@@ -2249,7 +2462,7 @@ test("V3.23 fresh demo sign-in restores baseline while refresh preserves session
     state.bookings.filter(
       (b) => b.renterId === "demo-renter" && b.status === "upcoming",
     ).length,
-    3,
+    4,
   );
 
   // User alters data during session (e.g. cancels one booking)

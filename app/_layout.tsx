@@ -2,8 +2,17 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { MarketplaceProvider } from "../context/Marketplace";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useFonts } from "expo-font";
+import { Ionicons } from "@expo/vector-icons";
+import { Text, View } from "react-native";
 
 export default function RootLayout() {
+  const [iconsLoaded, iconError] = useFonts(Ionicons.font);
+  if (!iconsLoaded && !iconError) {
+    return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F7F7F4" }}>
+      <Text style={{ color: "#0B1F3A", fontSize: 24, fontWeight: "800" }}>CurRENT</Text>
+    </View>;
+  }
   return (
     <SafeAreaProvider>
       <MarketplaceProvider>
@@ -12,6 +21,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="listing/[id]" />
           <Stack.Screen name="delivery-demo/[id]" />
+          <Stack.Screen name="delivery-receipt/[id]" />
+          <Stack.Screen name="delivery-history" />
           <Stack.Screen name="dispute/[id]" />
           <Stack.Screen name="owner/index" />
           <Stack.Screen name="admin/listings" />

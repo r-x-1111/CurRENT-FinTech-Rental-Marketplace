@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Image, Modal, Text, TouchableOpacity, View } from "react-native";
+import { Image, Modal, Pressable, Text, TouchableOpacity, View } from "react-native";
 import { Redirect, router, useLocalSearchParams, type Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -18,6 +18,7 @@ import {
 } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
 import { calculateOwnerPayout, LEGACY_LENDER_COMMISSION_RATE } from "../../services/deposit";
+import { deriveDisplayDelivery } from "../../services/delivery";
 import {
   formatMalaysiaDateTime,
   getEffectiveBookingStatus,
@@ -57,6 +58,7 @@ export default function RentalDetail() {
   const [checkOutOffset, setCheckOutOffset] = useState<number | null>(null);
   const [scrollToY, setScrollToY] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [showRentalFeeBreakdown, setShowRentalFeeBreakdown] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -111,6 +113,12 @@ export default function RentalDetail() {
   const renter = state.profiles.find((profile) => profile.id === b.renterId);
   const currentRisk = renter ? riskFor(state, renter) : null;
   const listing = state.listings.find((l) => l.id === b.listingId);
+  const displayDelivery = deriveDisplayDelivery({
+    collectionMethod: b.collectionMethod,
+    deliveryDemo: b.deliveryDemo || null,
+    pickupLocation: listing?.location || b.deliveryDemo?.origin || "",
+    deliveryAddress: b.deliveryAddress,
+  });
   const startMs = parseMalaysiaTimestamp(b.start);
   const endMs = parseMalaysiaTimestamp(b.end);
   const isStartReached = now >= startMs;
@@ -1096,6 +1104,10 @@ export default function RentalDetail() {
           value={money(b.quote.serviceFee)}
         />
         <Row
+          label="Rental Protection (Demo, Optional)"
+          value={b.insurance?.selected ? money(b.insurance.premium) : "Not Purchased"}
+        />
+        <Row
           label="Refundable security deposit"
           value={money(b.quote.deposit)}
         />
@@ -1121,6 +1133,105 @@ export default function RentalDetail() {
               strong
             />
           </>
+        )}
+      </Card>
+
+      {/* GRABEXPRESS DELIVERY (DEMO) — kept entirely separate from the CurRENT payment breakdown above */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 }}>
+        <Ionicons name="bicycle-outline" size={16} color={colors.navy} />
+        <Text style={s.h2}>GrabExpress Delivery (Demo)</Text>
+      </View>
+      <Card>
+        <Row label="Delivery method" value={displayDelivery.method} />
+        {displayDelivery.status === "self_pickup" ? (
+          <Badge text="Self-Pickup — No Delivery Fee" />
+        ) : (
+          <>
+            <Row label="Rental item" value={b.title} />
+            <Row label="Pickup" value={displayDelivery.origin || "Not provided"} />
+            <Row label="Delivery address" value={displayDelivery.destination || "Not provided"} />
+            {!!displayDelivery.area && <Row label="Service area" value={displayDelivery.area} />}
+            {!!displayDelivery.distanceKm && <Row label="Distance" value={`${displayDelivery.distanceKm} km (Demo Route)`} />}
+            {!!displayDelivery.vehicle && <Row label="Vehicle" value={displayDelivery.vehicle} />}
+            {displayDelivery.fee != null ? (
+              <Row label="Delivery Fee" value={money(displayDelivery.fee)} strong />
+            ) : (
+              <Notice text="Delivery Estimate Unavailable" />
+            )}
+            <Row
+              label="Demo delivery payment status"
+              value={
+                displayDelivery.status === "paid_demo" ? "Demo Payment Completed"
+                  : displayDelivery.status === "required" ? "Required"
+                  : "No Delivery Record"
+              }
+            />
+            {displayDelivery.fee != null && (
+              <Pressable accessibilityRole="button" onPress={() => setShowRentalFeeBreakdown((v) => !v)}>
+                <Text style={{ color: colors.blue, fontWeight: "700" }}>
+                  {showRentalFeeBreakdown ? "Hide Fee Breakdown" : "View Fee Breakdown"}
+                </Text>
+              </Pressable>
+            )}
+            {showRentalFeeBreakdown && displayDelivery.fee != null && (
+              <>
+                <Row label="Base Fare" value={money(displayDelivery.baseFare || 0)} />
+                <Row label="Additional Distance Charge" value={money(displayDelivery.distanceCharge || 0)} />
+                <Row label="Delivery Fee" value={money(displayDelivery.fee)} strong />
+              </>
+            )}
+            {displayDelivery.status === "paid_demo" && displayDelivery.receiptReference && (
+              <Button secondary onPress={() => router.push({ pathname: "/delivery-receipt/[id]", params: { id: displayDelivery.receiptReference! } })}>
+                View Delivery Receipt
+              </Button>
+            )}
+            <Text style={s.caption}>GrabExpress delivery fees are separate from CurRENT's rental fee, service fee, security deposit and total paid above.</Text>
+          </>
+        )}
+      </Card>
+
+      {/* ACTIVITY TIMELINE — derived from existing booking/dispute timestamps, no new storage */}
+      <Section title="Activity Timeline" />
+      <Card>
+        {(() => {
+          const events: { label: string; at: string }[] = [];
+          events.push({ label: "Booking confirmed", at: b.createdAt });
+          if (b.payment === "paid" || b.payment === "refunded") events.push({ label: "Payment completed (Demo)", at: b.createdAt });
+          if (b.lenderHandoverAt) events.push({ label: "Item collected", at: b.lenderHandoverAt });
+          if (b.activationTimestamp) events.push({ label: "Rental started", at: b.activationTimestamp });
+          if (b.actualReturnTimestamp) events.push({ label: "Item returned", at: b.actualReturnTimestamp });
+          if (b.renterReturnConfirmedAt) events.push({ label: "Renter confirmed return", at: b.renterReturnConfirmedAt });
+          if (existingDispute) {
+            events.push({ label: "Lender reported an issue", at: existingDispute.createdAt });
+            events.push({ label: "Renter submitted a response", at: existingDispute.createdAt });
+            events.push({ label: "Case under review (Demo)", at: existingDispute.createdAt });
+          } else if (b.lenderReturnConfirmedAt) {
+            events.push({ label: "Lender confirmed clean return", at: b.lenderReturnConfirmedAt });
+          }
+          if (!existingDispute && b.deposit === "released") events.push({ label: "Security deposit released", at: b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.end });
+          if (b.status === "completed") events.push({ label: "Rental completed", at: b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.end });
+          if (b.status === "cancelled") events.push({ label: `Booking cancelled${b.cancelledById === b.renterId ? " by renter" : " by lender"}`, at: b.cancelledAt || b.createdAt });
+          if (b.payment === "refunded") events.push({ label: "Payment refunded (Demo)", at: b.cancelledAt || b.createdAt });
+          events.sort((x, y) => x.at.localeCompare(y.at));
+          return events.map((event, index) => (
+            <View key={`${event.label}-${index}`} style={styles.timelineRow}>
+              <View style={styles.timelineDot} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.bold}>{event.label}</Text>
+                <Text style={s.caption}>{formatMalaysiaDateTime(event.at)}</Text>
+              </View>
+            </View>
+          ));
+        })()}
+        {existingDispute && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="View Dispute Details"
+            onPress={() => router.push(`/dispute/${b.id}` as Href)}
+            style={{ marginTop: 10 }}
+          >
+            <Text style={{ color: colors.blue, fontWeight: "700" }}>View Dispute Details</Text>
+          </Pressable>
         )}
       </Card>
 
@@ -1320,5 +1431,17 @@ const styles = {
     padding: 20,
     borderRadius: 18,
     backgroundColor: "#FFFFFF",
+  },
+  timelineRow: {
+    flexDirection: "row" as const,
+    gap: 10,
+    paddingVertical: 6,
+  },
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.blue,
+    marginTop: 6,
   },
 };

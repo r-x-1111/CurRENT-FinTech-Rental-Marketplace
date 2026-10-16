@@ -1,22 +1,28 @@
 import { useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Badge, Chips, Empty, Screen, s } from "../../components/ui";
+import { Badge, Button, Chips, Empty, Screen, s } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
 import {
+  formatMalaysiaDateTime,
   getEffectiveBookingStatus,
+  money,
   parseMalaysiaTimestamp,
 } from "../../services/booking";
+import { deriveDisplayDelivery } from "../../services/delivery";
 import { colors } from "../../constants/theme";
 import { GuestAuthGate } from "../../components/GuestAuth";
 
 export default function RentalsScreen() {
   const { tab, bookingId } = useLocalSearchParams<{ tab?: string; bookingId?: string }>();
   const { state, user } = useMarketplace();
+  const mobile = useWindowDimensions().width < 768;
   const [activeTab, setActiveTab] = useState("Upcoming");
   const [now, setNow] = useState(() => Date.now());
+  const [detailsBookingId, setDetailsBookingId] = useState<string | null>(null);
+  const [showFeeBreakdown, setShowFeeBreakdown] = useState(false);
 
   useEffect(() => {
     if (typeof tab === "string" && ["Upcoming", "Active", "Return Due", "Completed", "Cancelled", "Disputed", "Payment & Transaction History"].includes(tab)) setActiveTab(tab);
@@ -75,7 +81,9 @@ export default function RentalsScreen() {
 
   // Helper to build transaction ledger
   function renderPaymentHistory() {
-    if (!userBookings.length) {
+    const deliveryRecords = (state.deliveryHistory || []).filter((record) => record.renterId === user!.id)
+      .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+    if (!userBookings.length && !deliveryRecords.length) {
       return (
         <Empty
           title="No transaction history yet"
@@ -88,6 +96,7 @@ export default function RentalsScreen() {
 
     const transactions: {
       id: string;
+      bookingId: string;
       date: string;
       itemTitle: string;
       type: string;
@@ -101,7 +110,7 @@ export default function RentalsScreen() {
       const paymentStatus = b.payment === "paid" ? "Paid" : b.payment === "refunded" ? "Refunded" : b.payment === "processing" ? "Processing" : b.payment === "failed" ? "Failed" : "Payment Required";
       // 1. Rental fee paid
       transactions.push({
-        id: `${b.id}-rent`,
+        id: `${b.id}-rent`, bookingId: b.id,
         date: b.createdAt.slice(0, 10),
         itemTitle: b.title,
         type: "Rental Fee",
@@ -112,7 +121,7 @@ export default function RentalsScreen() {
 
       // 2. Platform service fee
       transactions.push({
-        id: `${b.id}-svc`,
+        id: `${b.id}-svc`, bookingId: b.id,
         date: b.createdAt.slice(0, 10),
         itemTitle: b.title,
         type: "CurRENT Service Fee",
@@ -121,9 +130,22 @@ export default function RentalsScreen() {
         status: paymentStatus,
       });
 
-      // 3. Security deposit
+      // 3. Optional Rental Protection premium (only when the renter selected it at checkout)
+      if (b.insurance?.selected) {
+        transactions.push({
+          id: `${b.id}-ins`, bookingId: b.id,
+          date: b.createdAt.slice(0, 10),
+          itemTitle: b.title,
+          type: "Rental Protection (Optional, Demo)",
+          amount: b.insurance.premium,
+          method: b.paymentMethod || "FPX",
+          status: paymentStatus,
+        });
+      }
+
+      // 4. Security deposit hold
       transactions.push({
-        id: `${b.id}-dep`,
+        id: `${b.id}-dep`, bookingId: b.id,
         date: b.createdAt.slice(0, 10),
         itemTitle: b.title,
         type: "Security Deposit (Refundable)",
@@ -141,8 +163,35 @@ export default function RentalsScreen() {
             : b.deposit === "release_pending"
             ? "Release Pending"
             : "Secured",
-        isCredit: b.deposit === "released",
       });
+
+      // 5. Security deposit refund — recorded as its own credit once released, separate from the original hold above
+      if (b.deposit === "released") {
+        transactions.push({
+          id: `${b.id}-dep-refund`, bookingId: b.id,
+          date: (b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.cancelledAt || b.createdAt).slice(0, 10),
+          itemTitle: b.title,
+          type: "Security Deposit Refund",
+          amount: b.quote.deposit,
+          method: b.paymentMethod || "FPX",
+          status: "Completed",
+          isCredit: true,
+        });
+      }
+
+      // 6. Cancellation refund — the original rental fee, service fee and (if any) insurance premium returned in full
+      if (b.status === "cancelled" && b.payment === "refunded") {
+        transactions.push({
+          id: `${b.id}-cancel-refund`, bookingId: b.id,
+          date: (b.cancelledAt || b.createdAt).slice(0, 10),
+          itemTitle: b.title,
+          type: "Cancellation Refund (Demo, Full Refund)",
+          amount: Math.round((b.quote.rentalFee + b.quote.serviceFee + b.quote.protection) * 100) / 100,
+          method: b.paymentMethod || "FPX",
+          status: "Completed",
+          isCredit: true,
+        });
+      }
     });
 
     return (
@@ -155,7 +204,13 @@ export default function RentalsScreen() {
         </View>
 
         {transactions.map((tx) => (
-          <View key={tx.id} style={styles.txCard}>
+          <Pressable
+            key={tx.id}
+            accessibilityRole="button"
+            accessibilityLabel={`View transaction details for ${tx.type}, ${tx.itemTitle}`}
+            onPress={() => { setDetailsBookingId(tx.bookingId); setShowFeeBreakdown(false); }}
+            style={styles.txCard}
+          >
             <View style={s.row}>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={styles.txType}>{tx.type}</Text>
@@ -174,9 +229,120 @@ export default function RentalsScreen() {
                 />
               </View>
             </View>
-          </View>
+          </Pressable>
         ))}
       </View>
+    );
+  }
+
+  const detailsBooking = detailsBookingId ? userBookings.find((b) => b.id === detailsBookingId) : null;
+  const detailsListing = detailsBooking ? state.listings.find((l) => l.id === detailsBooking.listingId) : null;
+  const detailsLender = detailsBooking ? state.profiles.find((p) => p.id === detailsBooking.ownerId) : null;
+  const detailsDelivery = detailsBooking
+    ? deriveDisplayDelivery({
+        collectionMethod: detailsBooking.collectionMethod,
+        deliveryDemo: detailsBooking.deliveryDemo || null,
+        pickupLocation: detailsListing?.location || detailsBooking.deliveryDemo?.origin || "",
+        deliveryAddress: detailsBooking.deliveryAddress,
+      })
+    : null;
+
+  function renderTransactionDetailsModal() {
+    return (
+      <Modal transparent visible={!!detailsBooking} animationType="fade" onRequestClose={() => setDetailsBookingId(null)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setDetailsBookingId(null)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            {detailsBooking && (
+              <ScrollView style={{ gap: 10 }} contentContainerStyle={{ gap: 10 }}>
+                <View style={s.row}>
+                  <Text style={s.h2}>Transaction Details</Text>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Close transaction details" onPress={() => setDetailsBookingId(null)}>
+                    <Ionicons name="close" size={22} color={colors.muted} />
+                  </Pressable>
+                </View>
+
+                <Text style={s.bold}>{detailsBooking.title}</Text>
+                <Text style={s.caption}>Booking Ref: {detailsBooking.id}</Text>
+                {detailsLender && <Text style={s.caption}>Lender: {detailsLender.name}</Text>}
+                <Text style={s.caption}>
+                  {formatMalaysiaDateTime(detailsBooking.start)} – {formatMalaysiaDateTime(detailsBooking.end)}
+                </Text>
+
+                <View style={styles.modalDivider} />
+                <Text style={styles.modalSectionTitle}>CurRENT Payment Breakdown</Text>
+                <View style={s.row}><Text style={s.caption}>Rental fee</Text><Text style={styles.txAmount}>{money(detailsBooking.quote.rentalFee)}</Text></View>
+                <View style={s.row}><Text style={s.caption}>CurRENT service fee</Text><Text style={styles.txAmount}>{money(detailsBooking.quote.serviceFee)}</Text></View>
+                {detailsBooking.insurance?.selected && (
+                  <View style={s.row}><Text style={s.caption}>Rental Protection (Optional, Demo)</Text><Text style={styles.txAmount}>{money(detailsBooking.insurance.premium)}</Text></View>
+                )}
+                <View style={s.row}><Text style={s.caption}>Refundable security deposit</Text><Text style={styles.txAmount}>{money(detailsBooking.quote.deposit)}</Text></View>
+                <View style={s.row}><Text style={s.bold}>CurRENT Total Paid</Text><Text style={[styles.txAmount, { fontSize: 16 }]}>{money(detailsBooking.quote.total)}</Text></View>
+                <Text style={s.caption}>Deposit status: {detailsBooking.deposit.replace("_", " ")}</Text>
+
+                <View style={styles.modalDivider} />
+                <View style={styles.deliverySectionHeader}>
+                  <Ionicons name="bicycle-outline" size={16} color={colors.navy} />
+                  <Text style={styles.modalSectionTitle}>GrabExpress Delivery (Demo)</Text>
+                </View>
+                {detailsDelivery && (
+                  <View style={{ gap: 4 }}>
+                    <View style={s.row}><Text style={s.caption}>Delivery method</Text><Text style={s.bold}>{detailsDelivery.method}</Text></View>
+                    {detailsDelivery.status === "self_pickup" ? (
+                      <Badge text="Self-Pickup — No Delivery Fee" />
+                    ) : (
+                      <>
+                        <View style={s.row}><Text style={s.caption}>Pickup</Text><Text style={[s.caption, { color: colors.navy, fontWeight: "600" }]}>{detailsDelivery.origin}</Text></View>
+                        <View style={s.row}><Text style={s.caption}>Delivery</Text><Text style={[s.caption, { color: colors.navy, fontWeight: "600" }]}>{detailsDelivery.destination}</Text></View>
+                        {detailsDelivery.area && <View style={s.row}><Text style={s.caption}>Service area</Text><Text style={s.caption}>{detailsDelivery.area}</Text></View>}
+                        {!!detailsDelivery.distanceKm && <View style={s.row}><Text style={s.caption}>Distance</Text><Text style={s.caption}>{detailsDelivery.distanceKm} km (Demo Route)</Text></View>}
+                        {detailsDelivery.vehicle && <View style={s.row}><Text style={s.caption}>Vehicle</Text><Text style={s.caption}>{detailsDelivery.vehicle}</Text></View>}
+                        {detailsDelivery.fee != null ? (
+                          <View style={s.row}><Text style={s.bold}>Delivery Fee</Text><Text style={styles.txAmount}>{money(detailsDelivery.fee)}</Text></View>
+                        ) : (
+                          <Text style={[s.caption, { color: colors.danger }]}>Delivery Estimate Unavailable</Text>
+                        )}
+                        <Badge
+                          text={detailsDelivery.status === "paid_demo" ? "Demo Payment Completed" : detailsDelivery.status === "required" ? "Delivery Payment Required (Demo)" : "No Delivery Record"}
+                          green={detailsDelivery.status === "paid_demo"}
+                        />
+                        {detailsDelivery.fee != null && (
+                          <Pressable accessibilityRole="button" onPress={() => setShowFeeBreakdown((v) => !v)}>
+                            <Text style={{ color: colors.blue, fontWeight: "700", marginTop: 4 }}>
+                              {showFeeBreakdown ? "Hide Fee Breakdown" : "View Fee Breakdown"}
+                            </Text>
+                          </Pressable>
+                        )}
+                        {showFeeBreakdown && detailsDelivery.fee != null && (
+                          <View style={styles.feeBreakdownBox}>
+                            <View style={s.row}><Text style={s.caption}>Base Fare</Text><Text style={s.caption}>{money(detailsDelivery.baseFare || 0)}</Text></View>
+                            <View style={s.row}>
+                              <Text style={s.caption}>Additional Distance Charge</Text>
+                              <Text style={s.caption}>{money(detailsDelivery.distanceCharge || 0)}</Text>
+                            </View>
+                            <View style={s.row}><Text style={s.bold}>Delivery Fee</Text><Text style={s.bold}>{money(detailsDelivery.fee)}</Text></View>
+                          </View>
+                        )}
+                        {detailsDelivery.status === "paid_demo" && detailsDelivery.receiptReference && (
+                          <Button secondary onPress={() => {
+                            const receiptId = detailsDelivery.receiptReference!;
+                            setDetailsBookingId(null);
+                            router.push({ pathname: "/delivery-receipt/[id]", params: { id: receiptId } });
+                          }}>
+                            View Delivery Receipt
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    <Text style={[s.caption, { marginTop: 4 }]}>
+                      GrabExpress delivery fees are separate from CurRENT's rental fee, service fee, security deposit and total paid above.
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     );
   }
 
@@ -255,28 +421,33 @@ export default function RentalsScreen() {
     );
   }
 
+  const protectionBanner = <View style={[styles.headerBanner, mobile && styles.mobileHeaderBanner]}>
+    <View style={styles.headerBannerIcon}>
+      <Ionicons name="shield-checkmark" size={20} color={colors.blue} />
+    </View>
+    <View style={{ flex: 1, gap: 2 }}>
+      <Text style={styles.headerBannerTitle}>Rental Protection & Escrow</Text>
+      <Text style={styles.headerBannerSubtitle}>
+        Security deposits held in simulated escrow · Released automatically upon clean two-sided return confirmation
+      </Text>
+    </View>
+  </View>;
+
   return (
     <Screen
-      title="Your rentals"
-      subtitle="From your first request to your next adventure."
+      title={mobile ? "My Rentals" : "Your rentals"}
+      subtitle={mobile ? undefined : "From your first request to your next adventure."}
+      contentStyle={mobile && styles.mobileContent}
     >
-      <View style={styles.headerBanner}>
-        <View style={styles.headerBannerIcon}>
-          <Ionicons name="shield-checkmark" size={20} color={colors.blue} />
-        </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={styles.headerBannerTitle}>Rental Protection & Escrow</Text>
-          <Text style={styles.headerBannerSubtitle}>
-            Security deposits held in simulated escrow · Released automatically upon clean two-sided return confirmation
-          </Text>
-        </View>
-      </View>
+      {!mobile && protectionBanner}
 
       <Chips
         options={tabs}
         selected={activeTab}
         onSelect={setActiveTab}
+        segmented={mobile}
       />
+      {mobile && protectionBanner}
 
       {activeTab === "Payment & Transaction History" && renderPaymentHistory()}
 
@@ -297,11 +468,34 @@ export default function RentalsScreen() {
             )}
           </View>
         )}
+      {renderTransactionDetailsModal()}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  mobileContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 100 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.55)", justifyContent: "center", padding: 18 },
+  modalCard: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 480,
+    maxHeight: "86%",
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+  },
+  modalDivider: { height: 1, backgroundColor: colors.border, marginVertical: 6 },
+  modalSectionTitle: { fontSize: 13, fontWeight: "800", color: colors.navy },
+  deliverySectionHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  feeBreakdownBox: {
+    backgroundColor: colors.paleBlue,
+    borderRadius: 10,
+    padding: 10,
+    gap: 4,
+    marginTop: 4,
+  },
+  mobileHeaderBanner: { padding: 10, borderLeftWidth: 0, borderRadius: 16, marginBottom: 12 },
   headerBanner: {
     backgroundColor: colors.paleBlue,
     borderRadius: 14,

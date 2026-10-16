@@ -28,6 +28,7 @@ import { useMarketplace } from "../../context/Marketplace";
 import {
   availability,
   availabilityCalendar,
+  calculateInsurancePremium,
   demoSlotAvailable,
   isDemoSeededListing,
   dateAfter,
@@ -46,6 +47,7 @@ import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
+import { estimateAutomaticDelivery } from "../../services/geo";
 
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
@@ -132,7 +134,10 @@ export default function ListingDetailScreen() {
   const [collectionMethod, setCollectionMethod] =
     useState<CollectionMethod>("Delivery");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
-  const [showCheckout, setShowCheckout] = useState(Boolean(checkoutBooking));
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [showDeliveryDetails, setShowDeliveryDetails] = useState(false);
+  const [insuranceSelected, setInsuranceSelected] = useState(false);
+  const [showInsuranceDetails, setShowInsuranceDetails] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
   const payInProgress = useRef(false);
   const [error, setError] = useState("");
@@ -172,6 +177,17 @@ export default function ListingDetailScreen() {
   }
 
   const owner = state.profiles.find((p) => p.id === listing.ownerId);
+  const currentDeliveryAddress = formatDeliveryAddress(getDeliveryAddress());
+  // Fully automatic: no vehicle, parcel or manual distance input — distance and fee come from the
+  // lender's listing pickup postcode and the renter's own delivery postcode (no maps API).
+  const deliveryEstimate = deliveryAddressIsComplete() ? estimateAutomaticDelivery(listing.pickupPostcode, postcode) : null;
+  const deliveryIssue = !deliveryAddressIsComplete()
+    ? { message: "Add your delivery address above to automatically estimate the delivery fee.", action: "" }
+    : { message: "Delivery Estimate Unavailable. Check the delivery postcode is correct.", action: "View Delivery Details" };
+  const deliveryDetailsChanged = !!checkoutBooking?.deliveryDemo && (
+    checkoutBooking.deliveryDemo.origin !== listing.location ||
+    checkoutBooking.deliveryDemo.destination !== currentDeliveryAddress ||
+    (checkoutBooking.deliveryDemo.distanceKm != null && deliveryEstimate != null && checkoutBooking.deliveryDemo.distanceKm !== deliveryEstimate.distanceKm));
   const calendarYear = calendarMonth.getUTCFullYear();
   const calendarMonthIndex = calendarMonth.getUTCMonth();
   const calendarMonthName = calendarMonth.toLocaleString("en-GB", {
@@ -239,6 +255,7 @@ export default function ListingDetailScreen() {
         listing,
         startTimestamp,
         endTimestamp,
+        insuranceSelected,
       );
       availability(state, listing, startTimestamp, endTimestamp, checkoutBooking?.id);
     } catch (e) {
@@ -324,11 +341,13 @@ export default function ListingDetailScreen() {
   // Handle Instant Booking checkout confirmation
   async function handleDeliveryDemo() {
     if (!user || payInProgress.current) return;
+    if (!deliveryEstimate) { setError("Delivery Estimate Unavailable. Enter a complete delivery address with a valid Malaysian postcode."); return; }
     if (!checkoutBooking && !deliveryAddressIsComplete()) {
       setError("Complete the required delivery address before continuing.");
       return;
     }
     if (checkoutBooking) {
+      if (deliveryDetailsChanged) { setError("Delivery details changed. Cancel this checkout and calculate a new demo delivery payment."); return; }
       router.push(`/delivery-demo/${checkoutBooking.id}` as never);
       return;
     }
@@ -336,6 +355,10 @@ export default function ListingDetailScreen() {
       booking.listingId === id && booking.start === startTimestamp && booking.end === endTimestamp &&
       booking.status === "payment_required");
     if (existing) {
+      if (existing.deliveryDemo?.destination !== currentDeliveryAddress || existing.deliveryDemo?.distanceKm !== deliveryEstimate.distanceKm) {
+        setError("An unfinished checkout already exists for these dates. Reopen or cancel it before calculating a new delivery quote.");
+        return;
+      }
       router.push(`/delivery-demo/${existing.id}` as never);
       return;
     }
@@ -345,7 +368,8 @@ export default function ListingDetailScreen() {
       const address = getDeliveryAddress();
       const bookingId = newId();
       await actAndPersist({ type: "startDeliveryCheckout", id: bookingId, listingId: id,
-        start: startTimestamp, end: endTimestamp, deliveryAddress: formatDeliveryAddress(address) });
+        start: startTimestamp, end: endTimestamp, deliveryAddress: formatDeliveryAddress(address),
+        deliveryPostcode: postcode });
       act({ type: "saveDeliveryAddress", address });
       router.push(`/delivery-demo/${bookingId}` as never);
     } catch (e) {
@@ -369,7 +393,7 @@ export default function ListingDetailScreen() {
       return;
     }
     try {
-      if (!checkoutBooking || checkoutBooking.deliveryDemo?.status !== "paid_demo") {
+      if (!checkoutBooking || checkoutBooking.deliveryDemo?.status !== "paid_demo" || deliveryDetailsChanged) {
         throw new Error("Complete the separate delivery demo payment first.");
       }
       payInProgress.current = true;
@@ -379,6 +403,7 @@ export default function ListingDetailScreen() {
         type: "completeRentalCheckout",
         bookingId: checkoutBooking.id,
         paymentMethod: selectedPaymentMethod,
+        insuranceSelected,
       });
       router.push(`/rental/${checkoutBooking.id}`);
     } catch (e) {
@@ -900,11 +925,11 @@ export default function ListingDetailScreen() {
 
               {/* Scheduled Delivery Time Slots */}
               <View style={{ marginTop: 8 }}>
-                <View style={styles.fieldLabelRow}>
-                  <Text style={styles.fieldLabel}>Scheduled Delivery Arrival Time</Text>
-                  <Text style={styles.fieldSubtext}>Available delivery time slots</Text>
-                </View>
-                <Text style={styles.fieldSubtext}>Select the time when the item should arrive at your delivery address.</Text>
+                <Text style={styles.slotSectionTitle}>Scheduled Delivery Arrival Time</Text>
+                <Text style={styles.slotSectionDescription}>
+                  Select the time when the item should arrive at your delivery address.
+                </Text>
+                <Text style={styles.slotListLabel}>Available delivery time slots</Text>
                 <View style={styles.timeSlotsRow}>
                   {FIXED_DELIVERY_SLOTS.map((opt) => {
                     const isSelected = effectivePickupTime === opt.value;
@@ -1132,6 +1157,72 @@ export default function ListingDetailScreen() {
               </View>
             )}
 
+            {/* Rental Protection (Optional) — Shopee-inspired checkout insurance, demo only */}
+            {renterRisk?.level !== "very_high" && quote && (
+              <View style={[styles.insuranceCard, insuranceSelected && styles.insuranceCardSelected]}>
+                <View style={styles.insuranceHeaderRow}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={colors.blue} />
+                  <Text style={styles.insuranceTitle}>Rental Protection</Text>
+                </View>
+                <Text style={styles.insuranceDescription}>Protect your rented item against eligible accidental damage.</Text>
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: insuranceSelected }}
+                  accessibilityLabel="Add Rental Protection"
+                  onPress={() => setInsuranceSelected((value) => !value)}
+                  style={styles.insuranceRow}
+                >
+                  <View style={[styles.checkbox, insuranceSelected && styles.checkboxChecked]}>
+                    {insuranceSelected && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                  </View>
+                  <Text style={styles.insuranceCheckboxLabel}>Add Rental Protection</Text>
+                  <Text style={styles.insurancePremium}>+{money(calculateInsurancePremium(listing.estimatedValue || 0, quote.days))}</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => setShowInsuranceDetails(true)}>
+                  <Text style={styles.insuranceLink}>View Details</Text>
+                </Pressable>
+              </View>
+            )}
+
+            <Modal
+              visible={showInsuranceDetails}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setShowInsuranceDetails(false)}
+            >
+              <Pressable style={styles.calendarModalOverlay} onPress={() => setShowInsuranceDetails(false)}>
+                <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
+                  <Text style={s.h2}>Rental Protection (Demo)</Text>
+                  {!!quote && (
+                    <>
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Insurance premium</Text>
+                        <Text style={styles.summaryValue}>{money(calculateInsurancePremium(listing.estimatedValue || 0, quote.days))}</Text>
+                      </View>
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Item replacement value</Text>
+                        <Text style={styles.summaryValue}>{money(listing.estimatedValue || 0)}</Text>
+                      </View>
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Rental duration</Text>
+                        <Text style={styles.summaryValue}>{quote.days} {quote.days === 1 ? "day" : "days"}</Text>
+                      </View>
+                    </>
+                  )}
+                  <Text style={[s.body, { marginTop: 10 }]}>
+                    Proposed protection of up to RM60,000 for eligible items, subject to the item's replacement value, against eligible accidental damage.
+                  </Text>
+                  <Text style={s.body}>
+                    Rental Protection and your refundable security deposit are separate: the deposit is returned after a clean return, while protection is a non-refundable premium that would cover eligible accidental damage.
+                  </Text>
+                  <Text style={s.caption}>
+                    This is a demonstration insurance feature. Premiums and protection terms are illustrative and subject to a future licensed insurance partner. No actual insurance policy is issued.
+                  </Text>
+                  <Button secondary onPress={() => setShowInsuranceDetails(false)}>Close</Button>
+                </Pressable>
+              </Pressable>
+            </Modal>
+
             {/* Concise Booking Summary for eligible direct renters */}
             {renterRisk?.level !== "very_high" && quote && (
               <View style={styles.summaryContainer}>
@@ -1153,6 +1244,16 @@ export default function ListingDetailScreen() {
                     {money(quote.serviceFee)}
                   </Text>
                 </View>
+                {insuranceSelected && (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>
+                      Rental Protection (Optional)
+                    </Text>
+                    <Text style={styles.summaryValue}>
+                      {money(quote.protection)}
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
                     Risk-based security deposit
@@ -1184,6 +1285,70 @@ export default function ListingDetailScreen() {
               </View>
             )}
 
+            {renterRisk?.level !== "very_high" && quote && (
+              <View style={styles.checkoutPanel}>
+                <View style={styles.deliveryHeaderRow}>
+                  <Ionicons name="bicycle-outline" size={16} color={colors.navy} />
+                  <Text style={styles.checkoutTitle}>GrabExpress Delivery (Demo)</Text>
+                </View>
+                <View style={styles.deliverySummaryRow}>
+                  <Text style={styles.deliverySummaryLabel}>Pickup</Text>
+                  <Text style={styles.deliverySummaryValue}>{listing.location}</Text>
+                </View>
+                <View style={styles.deliverySummaryRow}>
+                  <Text style={styles.deliverySummaryLabel}>Deliver to</Text>
+                  <Text style={styles.deliverySummaryValue}>{deliveryAddressIsComplete() ? `${city}, ${stateName}` : "Add address above"}</Text>
+                </View>
+                <View style={styles.deliverySummaryRow}>
+                  <Text style={styles.deliverySummaryLabel}>Estimated distance</Text>
+                  <Text style={styles.deliverySummaryValue}>{deliveryEstimate ? `${deliveryEstimate.distanceKm} km` : "—"}</Text>
+                </View>
+                <View style={styles.deliverySummaryRow}>
+                  <Text style={styles.deliverySummaryLabel}>Delivery Fee</Text>
+                  <Text style={styles.deliveryFeeValue}>{deliveryEstimate ? money(deliveryEstimate.fee) : "Not available yet"}</Text>
+                </View>
+                {!deliveryEstimate && (
+                  <View style={styles.deliveryIssue}>
+                    <Text style={styles.deliveryIssueText}>{deliveryIssue.message}</Text>
+                  </View>
+                )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showDeliveryDetails }}
+                  onPress={() => setShowDeliveryDetails((open) => !open)}
+                  style={styles.deliveryToggle}
+                >
+                  <Text style={styles.deliveryToggleText}>{showDeliveryDetails ? "Hide Delivery Details" : "View Delivery Details"}</Text>
+                  <Ionicons name={showDeliveryDetails ? "chevron-up" : "chevron-down"} size={16} color={colors.blue} />
+                </Pressable>
+                {showDeliveryDetails && (
+                  <View style={styles.deliveryDetails}>
+                    <Row label="Rental item" value={listing.title} />
+                    <Row label="Pickup address" value={listing.location} />
+                    <Row label="Delivery address" value={deliveryAddressIsComplete() ? currentDeliveryAddress : "Complete your delivery address above"} />
+                    {deliveryEstimate && <>
+                      <Row label="Distance used for calculation" value={`${deliveryEstimate.distanceKm} km (estimated, not a measured route)`} />
+                      <Row label="Base delivery fee" value={money(deliveryEstimate.baseFee)} />
+                      <Row label="Distance-based charges" value={money(deliveryEstimate.distanceCharge)} />
+                      <Row label="Total delivery fee" value={money(deliveryEstimate.fee)} strong />
+                      <Text style={s.caption}>Delivery Fee = MAX(RM5, RM4 base + estimated distance × RM1/km). Distance is automatically estimated from pickup and delivery postcodes — a straight-line estimate, not an actual road route.</Text>
+                    </>}
+                  </View>
+                )}
+                <Row label="Delivery payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Demo Payment Completed" : deliveryDetailsChanged ? "New calculation and payment required" : "Awaiting Payment"} />
+                {checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged
+                  ? <Button secondary onPress={() => router.push(`/delivery-demo/${checkoutBooking.id}` as never)}>View Receipt</Button>
+                  : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() || !deliveryEstimate || !!checkoutBooking} onPress={() => void handleDeliveryDemo()}>Pay Delivery Fee</Button>}
+                {checkoutBooking && <Button secondary onPress={async () => {
+                  try {
+                    await actAndPersist({ type: "cancelDeliveryCheckout", bookingId: checkoutBooking.id });
+                    router.replace({ pathname: "/listing/[id]", params: { id } });
+                  } catch (e) { setError((e as Error).message); }
+                }}>{deliveryDetailsChanged ? "Reset Delivery Checkout" : "Cancel Unfinished Checkout"}</Button>}
+                <Text style={s.caption}>Demo estimate only. Not a live Grab quotation. Delivery fee is separate from the rental total and is not CurRENT revenue.</Text>
+              </View>
+            )}
+
             {!!(error || dateError) && (
               <Notice text={error || dateError} error />
             )}
@@ -1193,27 +1358,6 @@ export default function ListingDetailScreen() {
             {/* Simulated Checkout Panel */}
             {showCheckout && quote && (
               <>
-                <View style={styles.checkoutPanel}>
-                  <Text style={styles.checkoutTitle}>Delivery Fee — Separate Demo Payment</Text>
-                  <Row label="Delivery provider" value="GrabExpress (Demo)" />
-                  <Row label="Delivery origin" value={listing.location} />
-                  <Row label="Delivery destination" value={checkoutBooking?.deliveryDemo?.destination || (deliveryAddressIsComplete() ? formatDeliveryAddress(getDeliveryAddress()) : "Complete your delivery address above")} />
-                  <Row label="Delivery fee" value="RM10.00 (simulated quote, not an official GrabExpress rate)" />
-                  <Row label="Delivery payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" ? "Demo Payment Completed" : "Required"} />
-                  <Notice text="GrabExpress-inspired simulation only. Coverage is unverified; no real Grab payment or official partnership is claimed. The RM10.00 is excluded from CurRENT rental charges and lender commission." />
-                  {checkoutBooking && <Text style={s.caption}>This checkout uses the booked dates and destination shown above. Cancel it to change them.</Text>}
-                  {checkoutBooking?.deliveryDemo?.status === "paid_demo" ? (
-                    <Button secondary onPress={() => router.push(`/delivery-demo/${checkoutBooking.id}` as never)}>View Demo Delivery Receipt</Button>
-                  ) : (
-                    <Button disabled={isPaying || (!checkoutBooking && !deliveryAddressIsComplete())} onPress={() => void handleDeliveryDemo()}>Pay Delivery Fee</Button>
-                  )}
-                  {checkoutBooking && <Button secondary onPress={async () => {
-                    try {
-                      await actAndPersist({ type: "cancelDeliveryCheckout", bookingId: checkoutBooking.id });
-                      router.replace({ pathname: "/listing/[id]", params: { id } });
-                    } catch (e) { setError((e as Error).message); }
-                  }}>Cancel Unfinished Checkout</Button>}
-                </View>
                 <Notice text="Demo payment only. No real funds or banking credentials are collected." />
                 <View style={styles.checkoutPanel}>
                   <Text style={styles.checkoutTitle}>CurRENT Rental Payment</Text>
@@ -1233,7 +1377,7 @@ export default function ListingDetailScreen() {
                       <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
                     )}
                   </Pressable>
-                  <Button disabled={isPaying || checkoutBooking?.deliveryDemo?.status !== "paid_demo"} onPress={handleConfirmInstantBook}>
+                  <Button disabled={isPaying || checkoutBooking?.deliveryDemo?.status !== "paid_demo" || deliveryDetailsChanged} onPress={handleConfirmInstantBook}>
                     {isPaying ? "Processing demo payment…" : "Pay"}
                   </Button>
                   <Button secondary onPress={() => setShowCheckout(false)}>
@@ -1267,6 +1411,8 @@ export default function ListingDetailScreen() {
                       !start ||
                       !end ||
                       !!dateError ||
+                      checkoutBooking?.deliveryDemo?.status !== "paid_demo" ||
+                      deliveryDetailsChanged ||
                       listing.ownerId === user?.id
                     }
                     onPress={() => setShowCheckout(true)}
@@ -1601,10 +1747,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.muted,
   },
+  slotSectionTitle: {
+    alignSelf: "stretch",
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.navy,
+    flexShrink: 1,
+  },
+  slotSectionDescription: {
+    alignSelf: "stretch",
+    marginTop: 8,
+    fontSize: 11,
+    lineHeight: 15,
+    color: colors.muted,
+    flexShrink: 1,
+  },
+  slotListLabel: {
+    alignSelf: "stretch",
+    marginTop: 10,
+    marginBottom: 8,
+    fontSize: 11,
+    fontWeight: "600",
+    color: colors.navy,
+  },
   timeSlotsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 5,
+    gap: 6,
+    alignSelf: "stretch",
   },
   timeSlotBtn: {
     paddingHorizontal: 8,
@@ -1690,6 +1860,46 @@ const styles = StyleSheet.create({
     color: colors.linkBlue,
     lineHeight: 15,
     fontWeight: "600",
+  },
+  insuranceCard: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+    gap: 6,
+  },
+  insuranceCardSelected: {
+    backgroundColor: colors.paleBlue,
+    borderColor: colors.blue,
+  },
+  insuranceHeaderRow: { flexDirection: "row", alignItems: "center", gap: 7 },
+  insuranceTitle: { fontSize: 14, fontWeight: "800", color: colors.navy },
+  insuranceDescription: { fontSize: 11, color: colors.muted, lineHeight: 15 },
+  insuranceRow: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 4 },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: { backgroundColor: colors.blue, borderColor: colors.blue },
+  insuranceCheckboxLabel: { flex: 1, fontSize: 12, fontWeight: "600", color: colors.navy },
+  insurancePremium: { fontSize: 13, fontWeight: "800", color: colors.navy },
+  insuranceLink: { fontSize: 11, fontWeight: "700", color: colors.blue, marginTop: 2 },
+  insuranceModalCard: {
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    padding: 18,
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
+    gap: 6,
   },
   summaryContainer: {
     backgroundColor: colors.paleBlue,
@@ -1794,6 +2004,39 @@ const styles = StyleSheet.create({
     marginTop: 14,
     gap: 10,
   },
+  deliveryInputs: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  deliveryInput: { minWidth: 65, flexGrow: 1, flexBasis: 70, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 8, color: colors.navy },
+  deliveryVehicles: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  deliveryVehicle: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.white },
+  deliveryVehicleSelected: { backgroundColor: colors.blue, borderColor: colors.blue },
+  deliveryHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
+  deliverySummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  deliverySummaryLabel: { fontSize: 12, color: colors.muted, flexShrink: 0 },
+  deliverySummaryValue: { fontSize: 12, fontWeight: "600", color: colors.navy, flexShrink: 1, textAlign: "right" },
+  deliveryFeeValue: { fontSize: 14, fontWeight: "800", color: colors.navy },
+  deliveryIssue: {
+    backgroundColor: colors.softBlue,
+    borderRadius: 8,
+    padding: 10,
+    gap: 4,
+  },
+  deliveryIssueText: { fontSize: 12, color: colors.navy },
+  deliveryIssueAction: { fontSize: 12, fontWeight: "700", color: colors.blue },
+  deliveryToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+  },
+  deliveryToggleText: { fontSize: 12, fontWeight: "700", color: colors.blue },
+  deliveryDetails: { gap: 8, paddingTop: 2 },
+  deliveryDetailLabel: { fontSize: 11, fontWeight: "600", color: colors.navy },
   checkoutTitle: {
     fontSize: 15,
     fontWeight: "800",

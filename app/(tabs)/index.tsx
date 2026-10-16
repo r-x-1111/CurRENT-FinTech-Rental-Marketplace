@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Animated,
   Image,
   Pressable,
   ScrollView,
@@ -14,10 +13,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { ListingGrid } from "../../components/ListingGrid";
 import { Empty } from "../../components/ui";
 import { colors } from "../../constants/theme";
-import { MAIN_CATEGORIES, locations, matchesMarketplaceLocation } from "../../constants/categories";
+import { MOBILE_BROWSE_CATEGORIES, MobileBrowseCategory, locations, matchesMarketplaceLocation, mobileBrowseCategoryFor, mobileBrowseCategoryForParam } from "../../constants/categories";
 import { useMarketplace } from "../../context/Marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
 
@@ -39,35 +39,24 @@ export default function HomeScreen() {
 
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState(params.q || "");
-  const [selectedCategory, setSelectedCategory] = useState(params.category === "All Items" ? "All items" : params.category || "All items");
+  const [mobileCategory, setMobileCategory] = useState<MobileBrowseCategory>(mobileBrowseCategoryForParam(params.category));
   const [selectedLocation, setSelectedLocation] = useState(params.location === "All Klang Valley" ? "All Malaysia" : params.location || "All Malaysia");
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [showCategoryMenu, setShowCategoryMenu] = useState(false);
-  const categoryMenuAnimation = useRef(new Animated.Value(0)).current;
   const [savedOnly, setSavedOnly] = useState(params.saved === "1");
   const [authPrompt, setAuthPrompt] = useState(false);
 
   useEffect(() => {
     if (params.q !== undefined) setSearchQuery(params.q);
     if (params.category !== undefined) {
-      setSelectedCategory(params.category === "All Items" ? "All items" : params.category);
+      setMobileCategory(mobileBrowseCategoryForParam(params.category));
     }
     if (params.saved !== undefined) setSavedOnly(params.saved === "1");
     if (params.location !== undefined) setSelectedLocation(params.location === "All Klang Valley" ? "All Malaysia" : params.location || "All Malaysia");
   }, [params.q, params.category, params.saved, params.location]);
 
-  useEffect(() => {
-    Animated.timing(categoryMenuAnimation, {
-      toValue: showCategoryMenu ? 1 : 0,
-      duration: 180,
-      useNativeDriver: false,
-    }).start();
-  }, [categoryMenuAnimation, showCategoryMenu]);
-
   function handleClearFilters() {
     setSearchQuery("");
-    setSelectedCategory("All items");
-    setShowCategoryMenu(false);
+    setMobileCategory("All Categories");
     setSelectedLocation("All Malaysia");
     setSavedOnly(false);
   }
@@ -76,7 +65,7 @@ export default function HomeScreen() {
   const filteredListings = state.listings
     .filter((l) => {
       if (l.status !== "published") return false;
-      if (selectedCategory !== "All items" && l.category !== selectedCategory) return false;
+      if (mobileCategory !== "All Categories" && mobileBrowseCategoryFor(l) !== mobileCategory) return false;
       if (savedOnly && !user?.favourites.includes(l.id)) return false;
       if (
         !matchesMarketplaceLocation(l.location, selectedLocation)
@@ -102,7 +91,7 @@ export default function HomeScreen() {
 
   const hasFilter =
     searchQuery.trim() !== "" ||
-    selectedCategory !== "All items" ||
+    mobileCategory !== "All Categories" ||
     selectedLocation !== "All Malaysia" ||
     savedOnly;
 
@@ -116,7 +105,11 @@ export default function HomeScreen() {
         {/* =========================================================================
             1. HERO SECTION (Canva Page 2 Dark Navy Anchor)
            ========================================================================= */}
-        <View style={[styles.heroWrapper, isMobile && styles.mobileHeroWrapper]}>
+        <LinearGradient colors={isMobile ? ["#061A38", colors.navy, "#2463FF"] : [colors.navy, colors.navy]} locations={[0, 0.55, 1]} style={[styles.heroWrapper, isMobile && styles.mobileHeroWrapper]}>
+          {isMobile && <View pointerEvents="none" style={styles.mobileHeroCurve} />}
+          {isMobile && width >= 375 && <View pointerEvents="none" style={styles.mobileHeroProduct}>
+            <Image source={{ uri: "/products/sony-a7iii.jpg" }} style={styles.mobileHeroProductImage} />
+          </View>}
           <View style={styles.heroContainer}>
             <View
               style={[
@@ -160,7 +153,7 @@ export default function HomeScreen() {
               </Text>
 
               {/* Subtitle */}
-              <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead]}>
+              <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead, isMobile && width >= 375 && styles.mobileHeroSubheadWithProduct]}>
                 Useful things, nearby. Discover trusted rentals across Malaysia
                 or turn your idle gear into extra income.
               </Text>
@@ -197,7 +190,7 @@ export default function HomeScreen() {
                   style={[styles.locationDropdownBtn, isMobile && styles.mobileLocationBtn]}
                 >
                   <Ionicons name="location-outline" size={15} color={colors.navy} />
-                  <Text style={styles.locationBtnText} numberOfLines={1}>
+                  <Text style={[styles.locationBtnText, isMobile && styles.mobileLocationText]} numberOfLines={isMobile ? 2 : 1}>
                     {selectedLocation}
                   </Text>
                   <Ionicons
@@ -252,48 +245,16 @@ export default function HomeScreen() {
                 </ScrollView>
               )}
 
-                <View style={[styles.mobileCategorySection, !isMobile && styles.desktopCategorySection]}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Choose category"
-                    accessibilityState={{ expanded: showCategoryMenu }}
-                    onPress={() => setShowCategoryMenu((open) => !open)}
-                    style={styles.mobileCategoryButton}
-                  >
-                    <Text style={styles.mobileCategoryButtonText}>
-                      {selectedCategory === "All items" ? "All Items" : selectedCategory}
-                    </Text>
-                    <Ionicons name={showCategoryMenu ? "chevron-up" : "chevron-down"} size={17} color={colors.blue} />
-                  </Pressable>
-                  <Animated.View style={[styles.mobileCategoryMenu, {
-                    height: categoryMenuAnimation.interpolate({ inputRange: [0, 1], outputRange: [0, 288] }),
-                    opacity: categoryMenuAnimation,
-                  }]}>
-                    <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
-                      {["All items", ...MAIN_CATEGORIES].map((cat) => {
-                        const selected = selectedCategory === cat;
-                        return (
-                          <Pressable
-                            key={cat}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Filter by ${cat === "All items" ? "All Items" : cat}`}
-                            accessibilityState={{ selected }}
-                            onPress={() => {
-                              setSelectedCategory(cat);
-                              setShowCategoryMenu(false);
-                            }}
-                            style={[styles.mobileCategoryOption, selected && styles.mobileCategoryOptionSelected]}
-                          >
-                            <Text style={[styles.mobileCategoryOptionText, selected && styles.mobileCategoryOptionTextSelected]}>
-                              {cat === "All items" ? "All Items" : cat}
-                            </Text>
-                            {selected && <Ionicons name="checkmark" size={17} color={colors.blue} />}
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-                  </Animated.View>
-                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.mobileCategoryScroll} contentContainerStyle={styles.categoryChips}>
+                  {MOBILE_BROWSE_CATEGORIES.map((category) => {
+                    const selected = mobileCategory === category;
+                    return (
+                      <Pressable key={category} accessibilityRole="button" accessibilityLabel={`Filter by ${category}`} accessibilityState={{ selected }} onPress={() => setMobileCategory(category)} style={[styles.categoryChip, selected && styles.categoryChipSelected]}>
+                        <Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]}>{category}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
             </View>
 
             {/* Floating Sample Cards (Shown on Desktop, Canva Page 2) */}
@@ -349,7 +310,7 @@ export default function HomeScreen() {
               </View>
             )}
           </View>
-        </View>
+        </LinearGradient>
 
         {/* =========================================================================
             2. DISCOVERY CATALOGUE SECTION (Merged Explore Functionality)
@@ -359,9 +320,7 @@ export default function HomeScreen() {
             {/* Left: Results count & active category indicator */}
             <View style={{ flex: 1 }}>
               <Text style={styles.resultsCount}>
-                {(selectedCategory === "All items" || selectedCategory === "All Items")
-                  ? "All Items"
-                  : selectedCategory}{" "}
+                {mobileCategory === "All Categories" ? "All Items" : mobileCategory}{" "}
                 <Text style={styles.resultsCountNum}>({filteredListings.length} available)</Text>
               </Text>
             </View>
@@ -428,7 +387,10 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 36,
   },
-  mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 18 },
+  mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 10, overflow: "hidden" },
+  mobileHeroCurve: { position: "absolute", right: -86, top: 10, width: 250, height: 310, borderRadius: 150, backgroundColor: "#2463FF", opacity: 0.28 },
+  mobileHeroProduct: { position: "absolute", right: 16, top: 150, width: 118, height: 92, borderRadius: 15, backgroundColor: colors.white, padding: 4, transform: [{ rotate: "7deg" }], shadowColor: "#061A38", shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
+  mobileHeroProductImage: { width: "100%", height: "100%", borderRadius: 11 },
   heroContainer: {
     maxWidth: 1180,
     width: "100%",
@@ -452,7 +414,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EAF3FF",
+    backgroundColor: colors.white,
     position: "relative",
   },
   notificationCount: {
@@ -501,6 +463,7 @@ const styles = StyleSheet.create({
     maxWidth: 520,
   },
   mobileHeroSubhead: { fontSize: 13, lineHeight: 19 },
+  mobileHeroSubheadWithProduct: { maxWidth: 210 },
   searchContainer: {
     backgroundColor: "white",
     borderRadius: 14,
@@ -541,6 +504,7 @@ const styles = StyleSheet.create({
     maxWidth: 140,
   },
   mobileLocationBtn: { flex: 1, maxWidth: undefined, minHeight: 42 },
+  mobileLocationText: { flexShrink: 1, fontSize: 11, lineHeight: 14 },
   locationBtnText: {
     fontSize: 12,
     fontWeight: "600",
@@ -588,47 +552,12 @@ const styles = StyleSheet.create({
     color: colors.navy,
     fontWeight: "500",
   },
-  mobileCategorySection: { marginTop: 2, gap: 5 },
-  desktopCategorySection: { width: 280, marginTop: 8 },
-  mobileCategoryButton: {
-    minHeight: 43,
-    paddingHorizontal: 14,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.white,
-    shadowColor: colors.navy,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    cursor: "pointer",
-  },
-  mobileCategoryButtonText: { color: colors.navy, fontSize: 13, fontWeight: "700" },
-  mobileCategoryMenu: {
-    overflow: "hidden",
-    borderRadius: 11,
-    backgroundColor: colors.white,
-    borderColor: colors.border,
-    shadowColor: colors.navy,
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  mobileCategoryOption: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  mobileCategoryOptionSelected: { backgroundColor: colors.paleBlue },
-  mobileCategoryOptionText: { color: colors.navy, fontSize: 13 },
-  mobileCategoryOptionTextSelected: { color: colors.blue, fontWeight: "700" },
+  mobileCategoryScroll: { marginTop: 4, flexGrow: 0 },
+  categoryChips: { alignItems: "center", gap: 8, paddingVertical: 3, paddingRight: 18 },
+  categoryChip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", cursor: "pointer" },
+  categoryChipSelected: { backgroundColor: colors.blue, borderColor: colors.blue },
+  categoryChipText: { color: colors.navy, fontSize: 12, fontWeight: "700" },
+  categoryChipTextSelected: { color: colors.white },
   // Floating Hero Showcase
   heroShowcase: {
     width: "35%",
@@ -688,7 +617,7 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     gap: 16,
   },
-  mobileCatalogueSection: { paddingHorizontal: 16, paddingTop: 15, gap: 12 },
+  mobileCatalogueSection: { paddingHorizontal: 16, paddingTop: 10, gap: 12 },
   catalogueControlsRow: {
     flexDirection: "row",
     alignItems: "center",

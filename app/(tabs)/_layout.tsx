@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useWindowDimensions } from "react-native";
 import { colors } from "../../constants/theme";
 import { useMarketplace } from "../../context/Marketplace";
 import { fetchChatInbox } from "../../services/chat";
@@ -13,6 +14,7 @@ const icons = {
   profile: "person-circle-outline",
 } as const;
 export default function TabsLayout() {
+  const mobile = useWindowDimensions().width < 768;
   const { user, state } = useMarketplace();
   const [sharedUnread, setSharedUnread] = useState(0);
   useEffect(() => {
@@ -29,12 +31,12 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: colors.blue,
-        tabBarInactiveTintColor: colors.muted,
+        tabBarActiveTintColor: mobile ? "#2463FF" : colors.blue,
+        tabBarInactiveTintColor: mobile ? "#64789A" : colors.muted,
         tabBarStyle: {
-          minHeight: 72,
-          paddingTop: 9,
-          paddingBottom: 12,
+          minHeight: mobile ? 76 : 72,
+          paddingTop: mobile ? 11 : 9,
+          paddingBottom: mobile ? 16 : 12,
           borderTopColor: colors.border,
           backgroundColor: "white",
         },
@@ -49,7 +51,7 @@ export default function TabsLayout() {
       })}
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
-      <Tabs.Screen name="rentals" options={{ title: "Rentals" }} />
+      <Tabs.Screen name="rentals" options={{ title: mobile ? "My Rentals" : "Rentals" }} />
       <Tabs.Screen name="messages" options={{ title: "Messages", tabBarBadge: unread || undefined }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
     </Tabs>

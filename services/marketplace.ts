@@ -24,6 +24,7 @@ import {
 } from "./deposit";
 import { evaluateRentalOutcome, tierForScore } from "./riskScore";
 import { createSeed } from "../data/seed";
+import { estimateAutomaticDelivery } from "./geo";
 
 export type Action =
   | { type: "login"; userId: string | null }
@@ -36,9 +37,10 @@ export type Action =
   | { type: "sendChat"; conversationId: string; id: string; text: string; imageUri?: string }
   | { type: "readChat"; conversationId: string }
   | { type: "saveListing"; listing: Listing }
-  | { type: "startDeliveryCheckout"; id: string; listingId: string; start: string; end: string; deliveryAddress: string }
+  | { type: "startDeliveryCheckout"; id: string; listingId: string; start: string; end: string; deliveryAddress: string;
+      deliveryPostcode: string }
   | { type: "payDeliveryDemo"; bookingId: string; receiptReference: string }
-  | { type: "completeRentalCheckout"; bookingId: string; paymentMethod: string }
+  | { type: "completeRentalCheckout"; bookingId: string; paymentMethod: string; insuranceSelected?: boolean }
   | { type: "cancelDeliveryCheckout"; bookingId: string }
   | { type: "deleteListing"; id: string }
   | { type: "boostListing"; listingId: string; transactionId: string }
@@ -695,6 +697,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Complete identity verification and resolve account restrictions before booking.");
       requireThat((riskFor(state, user).score ?? 0) >= 30, "This rental requires CurRENT platform review.");
       requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery destination.");
+      const deliveryEstimate = estimateAutomaticDelivery(listing.pickupPostcode, action.deliveryPostcode);
+      requireThat(deliveryEstimate, "Enter a valid Malaysian postcode to automatically estimate the delivery fee.");
       requireThat(!state.bookings.some((booking) => booking.id === action.id), "This checkout already exists.");
       requireThat(!state.bookings.some((booking) => booking.listingId === action.listingId &&
         booking.renterId === user.id && booking.start === action.start && booking.end === action.end &&
@@ -715,7 +719,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         contextMode: state.mode || "normal",
         deliveryDemo: {
           provider: "GrabExpress (Simulation)", origin: listing.location,
-          destination: action.deliveryAddress, fee: 10, status: "required",
+          destination: action.deliveryAddress, fee: deliveryEstimate.fee, status: "required",
+          distanceKm: deliveryEstimate.distanceKm, baseFare: deliveryEstimate.baseFee,
+          distanceCharge: deliveryEstimate.distanceCharge, minimumFare: 5,
+          pricingReference: "CurRENT demo formula: MAX(RM5, RM4 + distance x RM1/km)",
         },
       });
       break;
@@ -730,6 +737,20 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       booking.deliveryDemo.status = "paid_demo";
       booking.deliveryDemo.receiptReference = action.receiptReference;
       booking.deliveryDemo.paidAt = now;
+      const delivery = booking.deliveryDemo;
+      if (!state.deliveryHistory?.some((record) => record.bookingId === booking.id)) {
+        state.deliveryHistory = [{
+          id: action.receiptReference, renterId: user.id, bookingId: booking.id,
+          itemTitle: booking.title, origin: delivery.origin, destination: delivery.destination,
+          area: delivery.area || "Historical demo", distanceKm: delivery.distanceKm || 0,
+          vehicle: delivery.vehicle || "Motorcycle", weightKg: delivery.weightKg || 0,
+          dimensionsCm: delivery.dimensionsCm || { length: 0, width: 0, height: 0 },
+          baseFare: delivery.baseFare ?? delivery.fee, distanceCharge: delivery.distanceCharge ?? 0,
+          minimumFare: delivery.minimumFare ?? delivery.fee, fee: delivery.fee,
+          pricingReference: delivery.pricingReference || "Earlier CurRENT demo quote",
+          paidAt: now, sample: false, status: "paid_demo",
+        }, ...(state.deliveryHistory || [])];
+      }
       break;
     }
 
@@ -742,6 +763,13 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const listing = state.listings.find((item) => item.id === booking.listingId);
       requireThat(listing, "This listing is no longer available.");
       availability(state, listing, booking.start, booking.end, booking.id);
+      const insuranceSelected = !!action.insuranceSelected;
+      // Recompute the quote at payment time so the chosen Rental Protection premium (if any) is
+      // reflected in quote.protection/quote.total. The deposit and service fee calculations are untouched.
+      booking.quote = quoteFor(state, user, listing, booking.start, booking.end, insuranceSelected);
+      booking.insurance = insuranceSelected
+        ? { selected: true, premium: booking.quote.protection, referralIncome: 2 }
+        : null;
       booking.status = "upcoming";
       booking.payment = "paid";
       booking.deposit = "held";

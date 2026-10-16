@@ -1,4 +1,4 @@
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import type { Booking } from "../types/marketplace";
@@ -18,6 +18,7 @@ export function BookingCard({
   isLender?: boolean;
 }) {
   const { state, user } = useMarketplace();
+  const mobile = useWindowDimensions().width < 768;
 
   const counterpartyId = isLender ? booking.renterId : booking.ownerId;
   const counterparty = state.profiles.find((p) => p.id === counterpartyId);
@@ -101,33 +102,35 @@ export function BookingCard({
     depositStatusText = `${money(booking.quote.deposit)} held (Disputed)`;
   }
 
+  const statusBadge = <View style={[styles.tag, mobile && styles.mobileTag, { backgroundColor: tagBg, borderColor: tagBorder }]}>
+    <Text style={[styles.tagText, { color: tagColor }]}>{tagLabel}</Text>
+  </View>;
+
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, mobile && styles.mobileCard]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`View rental for ${booking.title}`}
         onPress={() => router.push(`/rental/${booking.id}`)}
-        style={{ gap: 14 }}
+        style={{ gap: mobile ? 10 : 14 }}
       >
-        <View style={styles.topRow}>
-          <Image source={{ uri: booking.image }} style={styles.thumb} />
+        <View style={[styles.topRow, mobile && styles.mobileTopRow]}>
+          <Image source={{ uri: booking.image }} style={[styles.thumb, mobile && styles.mobileThumb]} />
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={styles.subtext}>{headerSub}</Text>
+            <Text style={[styles.subtext, mobile && styles.mobileSubtext]}>{headerSub}</Text>
             <Text style={styles.title} numberOfLines={1}>
               {booking.title}
             </Text>
             <Text style={styles.dateText}>{dateInfo}</Text>
+            {!isLender && booking.insurance?.selected && (
+              <View style={styles.insuranceTag}>
+                <Ionicons name="shield-checkmark-outline" size={11} color={colors.blue} />
+                <Text style={styles.insuranceTagText}>Rental Protection (Demo) · {money(booking.insurance.premium)}</Text>
+              </View>
+            )}
+            {mobile && statusBadge}
           </View>
-          <View
-            style={[
-              styles.tag,
-              { backgroundColor: tagBg, borderColor: tagBorder },
-            ]}
-          >
-            <Text style={[styles.tagText, { color: tagColor }]}>
-              {tagLabel}
-            </Text>
-          </View>
+          {!mobile && statusBadge}
         </View>
 
         <View style={styles.divider} />
@@ -174,6 +177,11 @@ export function BookingCard({
 }
 
 const styles = StyleSheet.create({
+  mobileCard: { padding: 14, borderRadius: 19, gap: 10, shadowOpacity: 0.07, shadowRadius: 12 },
+  mobileTopRow: { alignItems: "flex-start", gap: 11 },
+  mobileThumb: { width: 72, height: 72, borderRadius: 12 },
+  mobileSubtext: { fontSize: 10, letterSpacing: 0.2 },
+  mobileTag: { alignSelf: "flex-start", paddingHorizontal: 9, paddingVertical: 4 },
   card: {
     backgroundColor: "white",
     borderRadius: 16,
@@ -214,6 +222,22 @@ const styles = StyleSheet.create({
   dateText: {
     fontSize: 13,
     color: colors.muted,
+  },
+  insuranceTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    alignSelf: "flex-start",
+    backgroundColor: "#EFF6FF",
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    marginTop: 2,
+  },
+  insuranceTagText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.blue,
   },
   tag: {
     paddingHorizontal: 10,

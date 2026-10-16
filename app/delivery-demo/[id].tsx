@@ -43,10 +43,14 @@ export default function DeliveryDemoCheckout() {
     </Card>
     <Card>
       <Row label="Delivery provider" value="GrabExpress (Simulation)" />
-      <Row label="Origin" value={delivery.origin} />
-      <Row label="Destination" value={delivery.destination} />
-      <Row label="Simulated delivery quote" value={money(delivery.fee)} />
-      <Text style={s.caption}>This is a demonstration quote, not an official GrabExpress rate. Delivery coverage has not been verified.</Text>
+      <Row label="Rental item" value={booking.title} />
+      <Row label="Pickup" value={delivery.origin} />
+      <Row label="Deliver to" value={delivery.destination} />
+      <Row label="Estimated distance" value={delivery.distanceKm ? `${delivery.distanceKm} km (estimated, not a measured route)` : "Unavailable"} />
+      <Row label="Base fee" value={money(delivery.baseFare ?? 4)} />
+      <Row label="Distance charge" value={money(delivery.distanceCharge ?? 0)} />
+      <Row label="Simulated delivery fee" value={money(delivery.fee)} />
+      <Text style={s.caption}>Demo estimate only, calculated automatically from postcodes. Not a live Grab quotation or verified road route.</Text>
       {!!error && <Notice text={error} error />}
       {delivery.status === "paid_demo" ? <>
         <Text style={s.h2}>Demo Delivery Receipt</Text>
@@ -54,11 +58,12 @@ export default function DeliveryDemoCheckout() {
         <Row label="Simulated payment date and time" value={delivery.paidAt ? formatMalaysiaDateTime(delivery.paidAt) : ""} />
         <Row label="Payment status" value="Demo Payment Completed" />
         <Notice text="No actual GrabExpress payment was processed and no funds were transferred." />
+        <Button secondary onPress={() => router.push({ pathname: "/delivery-receipt/[id]", params: { id: delivery.receiptReference || "" } })}>View Full Receipt</Button>
         <Button onPress={() => router.replace({ pathname: "/listing/[id]", params: { id: booking.listingId, checkoutId: booking.id } })}>
-          Return to CurRENT Rental Payment
+          Return to CurRENT
         </Button>
       </> : <Button disabled={busy} onPress={() => void pay()}>
-        {busy ? "Processing demo payment…" : `Pay ${money(delivery.fee)} (Demo)`}
+        {busy ? "Processing demo payment…" : `Pay Delivery Fee (${money(delivery.fee)} Demo)`}
       </Button>}
     </Card>
   </Screen>;

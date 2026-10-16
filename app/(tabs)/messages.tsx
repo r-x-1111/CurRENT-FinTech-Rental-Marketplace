@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { Button, Empty, Notice, Screen, s } from "../../components/ui";
@@ -52,7 +52,8 @@ export default function MessagesScreen() {
   }, [refresh, user?.id, state.mode]);
   useEffect(() => {
     const listingId = params.listingId;
-    if (!listingId || !user || opened.current === listingId) return;
+    if (!listingId) { opened.current = ""; return; }
+    if (!user || opened.current === listingId) return;
     const listing = state.listings.find((item) => item.id === listingId);
     if (!listing) { setError("Listing unavailable for messaging."); return; }
     if (listing.ownerId === user.id) { setError("You cannot message yourself."); return; }
@@ -85,6 +86,12 @@ export default function MessagesScreen() {
       .catch((failure) => setError((failure as Error).message));
   }, [params.bookingId, shared, state.bookings, state.chatConversations, state.mode, state.profiles, user?.id]);
   useEffect(() => {
+    if (params.chatId) setSelected(params.chatId);
+  }, [params.chatId]);
+  useEffect(() => {
+    if (!params.chatId && !params.bookingId && !params.listingId) setSelected(null);
+  }, [params.chatId, params.bookingId, params.listingId]);
+  useEffect(() => {
     if (!selected || !user) return;
     const selectedChat = shared.find((item) => item.id === selected);
     const demoChat = state.chatConversations?.find((item) => item.id === selected);
@@ -114,7 +121,9 @@ export default function MessagesScreen() {
   for (const chat of shared) {
     const listing = chat.chat_listings?.listing_data || state.listings.find((item) => item.id === chat.listing_id);
     if (!listing) continue;
-    const booking = state.bookings.find((item) => item.listingId === chat.listing_id && item.renterId === chat.renter_id && item.ownerId === chat.owner_id);
+    const booking = state.bookings.find((item) => item.id === params.bookingId && item.listingId === chat.listing_id && item.renterId === chat.renter_id && item.ownerId === chat.owner_id)
+      || state.bookings.find((item) => item.id === chat.booking_id && item.listingId === chat.listing_id && item.renterId === chat.renter_id && item.ownerId === chat.owner_id)
+      || state.bookings.find((item) => item.listingId === chat.listing_id && item.renterId === chat.renter_id && item.ownerId === chat.owner_id);
     const messages = remoteMessages.filter((message) => message.conversation_id === chat.id);
     const legacy = state.mode === "admin_demo" ? state.messages.filter((message) => message.bookingId === booking?.id) : [];
     const latest = messages.at(-1);
@@ -130,7 +139,8 @@ export default function MessagesScreen() {
     if (![chat.renterId, chat.ownerId].includes(user.id)) continue;
     const listing = state.listings.find((item) => item.id === chat.listingId);
     if (!listing) continue;
-    const booking = state.bookings.find((item) => item.listingId === chat.listingId && item.renterId === chat.renterId && item.ownerId === chat.ownerId);
+    const booking = state.bookings.find((item) => item.id === params.bookingId && item.listingId === chat.listingId && item.renterId === chat.renterId && item.ownerId === chat.ownerId)
+      || state.bookings.find((item) => item.listingId === chat.listingId && item.renterId === chat.renterId && item.ownerId === chat.ownerId);
     const messages = state.messages.filter((message) => message.conversationId === chat.id || message.bookingId === booking?.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const latest = messages.at(-1);
     const other = state.profiles.find((profile) => profile.id === (chat.ownerId === user.id ? chat.renterId : chat.ownerId));
@@ -149,7 +159,8 @@ export default function MessagesScreen() {
       unread: state.notifications.filter((notice) => notice.bookingId === booking.id && notice.userId === user.id && !notice.read && notice.title.includes("sent you a message")).length });
   }
   rows.sort((a, b) => b.latestAt.localeCompare(a.latestAt));
-  const visible = rows.filter((row) => `${row.other} ${row.listing.title}`.toLowerCase().includes(search.toLowerCase()));
+  const visible = rows.filter((row) =>
+    `${row.other} ${row.listing.title}`.toLowerCase().includes(search.toLowerCase()));
   const active = rows.find((row) => row.id === selected);
   const messages = [
     ...(active?.kind === "shared" ? remoteMessages.filter((message) => message.conversation_id === active.id)
@@ -198,19 +209,24 @@ export default function MessagesScreen() {
     }
   }
 
-  return <Screen bounded contentStyle={styles.pageContent} title="Messages" subtitle="Chat with renters and owners about their listings.">
+  return <Screen bounded contentStyle={[styles.pageContent, mobile && styles.mobilePageContent]} title="Messages" subtitle={mobile ? undefined : "Chat with renters and owners about their listings."}>
     {!!error && <Notice text={error} error />}
     <KeyboardAvoidingView style={styles.keyboardArea} behavior={mobile && Platform.OS === "ios" ? "padding" : undefined}>
     <View style={styles.shell}>
-      {(!mobile || !active) && <View style={[styles.sidebar, mobile && { width: "100%" }]}>
-        <TextInput accessibilityLabel="Search conversations" placeholder="Search conversations" value={search} onChangeText={setSearch} style={styles.search} />
+      {(!mobile || !active) && <View style={[styles.sidebar, mobile && styles.mobileSidebar]}>
+        <View style={mobile && styles.mobileSearchWrap}>{mobile && <Ionicons name="search-outline" size={18} color={colors.muted} />}<TextInput accessibilityLabel="Search conversations" placeholder="Search conversations" value={search} onChangeText={setSearch} style={[styles.search, mobile && styles.mobileSearch]} /></View>
         <ScrollView style={styles.conversationList} keyboardShouldPersistTaps="handled">{visible.length ? visible.map((row) => <Pressable key={row.id} accessibilityRole="button" accessibilityLabel={`Open conversation with ${row.other} about ${row.listing.title}`}
-          onPress={() => { setSelected(row.id); setDraft(""); setPhoto(null); }} style={[styles.row, selected === row.id && { backgroundColor: colors.paleBlue }]}>
-          <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View>
+          onPress={() => { setSelected(row.id); setDraft(""); setPhoto(null); }} style={[styles.row, mobile && styles.mobileRow, selected === row.id && { backgroundColor: colors.paleBlue }]}>
+          {row.listing.imageUrl
+            ? <Image source={{ uri: row.listing.imageUrl }} style={[styles.rowThumb, mobile && styles.mobileRowThumb]} />
+            : <View style={[styles.avatar, mobile && styles.mobileAvatar]}><Ionicons name="person-outline" size={21} color={colors.blue} /></View>}
           <View style={{ flex: 1 }}><View style={styles.rowTop}><Text style={styles.name} numberOfLines={1}>{row.other}</Text><Text style={s.caption}>{formatMalaysiaDateTime(row.latestAt).split(", ")[1]}</Text></View>
-            <View style={styles.itemRow}>{!!row.listing.imageUrl && <Image source={{ uri: row.listing.imageUrl }} style={styles.smallImage} />}<Text style={styles.itemName} numberOfLines={1}>{row.listing.title}</Text></View>
+            <Text style={styles.roleLabel} numberOfLines={1}>{row.listing.ownerId === user.id ? "My Listing" : "Renting"} · {row.listing.title}</Text>
             <Text style={s.caption} numberOfLines={1}>{row.preview}</Text></View>
-          {!!row.unread && <View style={styles.badge}><Text style={styles.badgeText}>{row.unread}</Text></View>}
+          <View style={styles.rowEnd}>
+            {!!row.unread && <View style={[styles.badge, mobile && styles.mobileBadge]}><Text style={styles.badgeText}>{row.unread}</Text></View>}
+            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+          </View>
         </Pressable>) : <Empty title="No messages yet" text="Open a listing and tap Chat with Owner to start." />}</ScrollView>
       </View>}
       {(!mobile || !!active) && <View style={styles.chat}>
@@ -246,13 +262,24 @@ export default function MessagesScreen() {
 
 const styles = StyleSheet.create({
   pageContent: { minHeight: 0 },
+  mobilePageContent: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 12 },
+  roleLabel: { alignSelf: "stretch", color: colors.blue, fontSize: 11, fontWeight: "700", marginTop: 2, marginBottom: 1 },
+  mobileSidebar: { width: "100%", backgroundColor: colors.white, borderRightWidth: 0 },
+  mobileSearchWrap: { flexDirection: "row", alignItems: "center", gap: 8, margin: 12, paddingHorizontal: 12, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 12 },
+  mobileSearch: { flex: 1, margin: 0, paddingHorizontal: 0, borderWidth: 0, minWidth: 0 },
+  mobileRow: { paddingHorizontal: 12, paddingVertical: 12, marginHorizontal: 10, marginVertical: 5, borderRadius: 16, borderBottomWidth: 0, shadowColor: colors.navy, shadowOpacity: 0.05, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  mobileAvatar: { width: 56, height: 56, borderRadius: 28 },
+  mobileRowThumb: { width: 56, height: 56, borderRadius: 14 },
+  mobileBadge: { backgroundColor: colors.danger },
   keyboardArea: { flex: 1, minHeight: 0 },
   shell: { flex: 1, minHeight: 0, flexDirection: "row", backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 18, overflow: "hidden", marginTop: 12, shadowColor: colors.navy, shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   sidebar: { width: "38%", minHeight: 0, minWidth: 0, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.paleBlue }, search: { margin: 14, padding: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, color: colors.navy, backgroundColor: colors.white },
   conversationList: { flex: 1, minHeight: 0 },
-  row: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border, cursor: "pointer" }, rowTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" }, name: { color: colors.navy, fontSize: 16, fontWeight: "700" },
-  itemRow: { flexDirection: "row", alignItems: "center", gap: 5, marginVertical: 3 }, smallImage: { width: 22, height: 22, borderRadius: 4 }, itemName: { color: colors.slate, fontSize: 13, fontWeight: "600", flexShrink: 1 },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderBottomWidth: 1, borderBottomColor: colors.border, cursor: "pointer" }, rowTop: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" }, name: { color: colors.navy, fontSize: 16, fontWeight: "700" },
+  rowThumb: { width: 48, height: 48, borderRadius: 12 },
+  rowEnd: { alignItems: "center", gap: 6 },
+  itemRow: { flexDirection: "row", alignItems: "center", gap: 7, marginVertical: 3 }, smallImage: { width: 30, height: 30, borderRadius: 6 }, itemName: { color: colors.slate, fontSize: 13, fontWeight: "600", flexShrink: 1 },
   badge: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" }, badgeText: { color: "white", fontSize: 11, fontWeight: "700" },
   chat: { flex: 1, minHeight: 0, padding: 14, minWidth: 0 }, header: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   listing: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.paleBlue, padding: 10, borderRadius: 12, marginBottom: 10 }, listingImage: { width: 48, height: 48, borderRadius: 8 },

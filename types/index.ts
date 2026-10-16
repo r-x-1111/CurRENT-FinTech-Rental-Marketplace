@@ -49,6 +49,8 @@ export interface Listing {
   location: string;
   publicArea?: string;
   privateMeetingVenue?: string;
+  /** Used to automatically estimate GrabExpress-inspired demo delivery distance (no maps API). */
+  pickupPostcode?: string;
   rating: number;
   completedRentalsCount?: number;
   demoViewCount?: number;

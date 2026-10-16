@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   Button,
   Card,
@@ -24,7 +25,6 @@ export default function ProfileScreen() {
   const { state, user, act, actAndPersist, closeAuthenticatedWorkspace } = useMarketplace();
   const width = useWindowDimensions().width;
   const isMobile = width <= 430;
-  const narrow = width < 350;
   const [ekycY, setEkycY] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -157,8 +157,9 @@ export default function ProfileScreen() {
       </Card>
 
       <Pressable accessibilityRole="button" onPress={() => router.push("/owner")} style={({ pressed }) => [styles.lenderButton, pressed && styles.supportNavPressed]}>
+        {isMobile && <LinearGradient pointerEvents="none" colors={["#0647CD", "#2463FF", "#3B82F6"]} locations={[0, 0.65, 1]} style={StyleSheet.absoluteFill} />}
         <View pointerEvents="none" style={styles.lenderAccent} />
-        <View style={styles.lenderIcon}><Ionicons name="briefcase" size={22} color={colors.white} /></View>
+        <View style={[styles.lenderIcon, isMobile && styles.mobileLenderIcon]}><Ionicons name="briefcase" size={22} color={colors.white} /></View>
         <View style={{ flex: 1 }}><Text style={styles.lenderTitle}>Lender Mode</Text><Text style={styles.lenderSubtitle}>Switch to manage your listings and earnings</Text></View>
         <Ionicons name="chevron-forward" size={19} color={colors.white} />
       </Pressable>
@@ -295,23 +296,23 @@ export default function ProfileScreen() {
       </View>
 
       {/* Rental Risk Score Section */}
-      <Card style={[styles.compactCard, styles.riskCard]}>
+      <Card style={[styles.compactCard, styles.riskCard, isMobile && styles.mobileRiskCard]}>
         <View style={styles.cardHeading}>
           <View style={styles.headingIcon}><Ionicons name="stats-chart" size={21} color={colors.blue} /></View>
           <Text style={[styles.cardTitle, { flex: 1 }]}>Rental Risk Score</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Learn more about the Rental Risk Score" onPress={() => router.push("/rental-risk-score")} style={styles.learnMore}><Text style={styles.learnMoreText}>Learn more</Text><Ionicons name="information-circle-outline" size={19} color={colors.blue} /></Pressable>
         </View>
-        <View style={[styles.riskBody, narrow && styles.riskBodyNarrow]}>
-          <View style={isMobile && !narrow ? styles.compactGauge : styles.fullGauge}>
-            <View style={isMobile && !narrow ? styles.scaledGauge : undefined}><RiskGauge score={risk.score} label={risk.label} /></View>
+        <View style={[styles.riskBody, isMobile && styles.riskBodyNarrow]}>
+          <View style={styles.fullGauge}>
+            <View><RiskGauge score={risk.score} label={risk.label} /></View>
           </View>
-          <View style={styles.riskDetails}>
-            <Text style={styles.riskExplanation}>
+          <View style={[styles.riskDetails, isMobile && styles.mobileRiskDetails]}>
+            <Text style={[styles.riskExplanation, isMobile && styles.mobileRiskExplanation]}>
               CurRENT Rental Risk Score is a platform reliability metric, NOT a consumer credit score. It transparently determines your refundable security deposit tier and booking permissions.
             </Text>
-            <View style={styles.riskMetricRow}><Ionicons name="star" size={11} color={colors.navy} /><Text style={styles.riskMetricLabel}>Initial verified score</Text><Text style={styles.riskMetricValue}>80 (Low Risk)</Text></View>
-            <View style={styles.riskMetricRow}><Ionicons name="wallet" size={11} color={colors.navy} /><Text style={styles.riskMetricLabel}>Deposit basis</Text><Text style={styles.riskMetricValue}>{risk.score === null ? "N/A" : risk.score >= 80 ? "5% (capped at RM500)" : risk.score >= 40 ? "10% (capped at RM1,000)" : risk.score >= 30 ? "15% (capped at RM1,500)" : "Platform assessment required"}</Text></View>
-            <View style={styles.riskMetricRow}><Ionicons name="calendar" size={11} color={colors.navy} /><Text style={styles.riskMetricLabel}>{completed} completed rentals</Text><Text style={styles.riskMetricValue}>+{netPoints} points</Text></View>
+            <View style={[styles.riskMetricRow, isMobile && styles.mobileRiskMetricRow]}><Ionicons name="star" size={11} color={colors.navy} /><Text style={[styles.riskMetricLabel, isMobile && styles.mobileRiskMetricLabel]}>Initial verified score</Text><Text style={[styles.riskMetricValue, isMobile && styles.mobileRiskMetricValue]}>80 (Low Risk)</Text></View>
+            <View style={[styles.riskMetricRow, isMobile && styles.mobileRiskMetricRow]}><Ionicons name="wallet" size={11} color={colors.navy} /><Text style={[styles.riskMetricLabel, isMobile && styles.mobileRiskMetricLabel]}>Deposit basis</Text><Text style={[styles.riskMetricValue, isMobile && styles.mobileRiskMetricValue]}>{risk.score === null ? "N/A" : risk.score >= 80 ? "5% (capped at RM500)" : risk.score >= 40 ? "10% (capped at RM1,000)" : risk.score >= 30 ? "15% (capped at RM1,500)" : "Platform assessment required"}</Text></View>
+            <View style={[styles.riskMetricRow, isMobile && styles.mobileRiskMetricRow]}><Ionicons name="calendar" size={11} color={colors.navy} /><Text style={[styles.riskMetricLabel, isMobile && styles.mobileRiskMetricLabel]}>{completed} completed rentals</Text><Text style={[styles.riskMetricValue, isMobile && styles.mobileRiskMetricValue]}>+{netPoints} points</Text></View>
           </View>
         </View>
       </Card>
@@ -443,10 +444,12 @@ const styles = StyleSheet.create({
   lenderButton: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.blue, borderRadius: 17, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 12, minHeight: 68, overflow: "hidden", cursor: "pointer" },
   lenderAccent: { position: "absolute", width: 240, height: 120, borderRadius: 120, right: -65, bottom: -82, backgroundColor: colors.softBlue, opacity: 0.13 },
   lenderIcon: { width: 43, height: 43, borderRadius: 12, backgroundColor: colors.mediumBlue, alignItems: "center", justifyContent: "center" },
+  mobileLenderIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#0746B8" },
   lenderTitle: { color: colors.white, fontSize: 17, fontWeight: "700" },
   lenderSubtitle: { color: colors.white, fontSize: 11, lineHeight: 15 },
   compactCard: { padding: 16, gap: 10, marginBottom: 12, borderRadius: 19 },
   riskCard: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue },
+  mobileRiskCard: { backgroundColor: colors.white, borderColor: colors.border },
   cardHeading: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 3 },
   headingIcon: { width: 41, height: 41, borderRadius: 12, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" },
   cardTitle: { color: colors.navy, fontSize: 16, fontWeight: "800" },
@@ -462,8 +465,13 @@ const styles = StyleSheet.create({
   scaledGauge: { width: 190, left: -23, top: -5, transform: [{ scale: 0.75 }] },
   fullGauge: { alignItems: "center" },
   riskDetails: { flex: 1, minWidth: 0, gap: 5 },
+  mobileRiskDetails: { flex: 0, width: "100%", flexDirection: "row", flexWrap: "wrap", gap: 6 },
   riskExplanation: { color: colors.slate, fontSize: 10, lineHeight: 14, marginBottom: 5 },
+  mobileRiskExplanation: { width: "100%", fontSize: 11, lineHeight: 16, marginBottom: 8 },
   riskMetricRow: { flexDirection: "row", alignItems: "center", gap: 4, borderTopWidth: 1, borderTopColor: colors.border, minHeight: 26 },
+  mobileRiskMetricRow: { width: "31%", minHeight: 82, flexDirection: "column", alignItems: "flex-start", justifyContent: "center", padding: 6, gap: 3, borderTopWidth: 0, backgroundColor: colors.paleBlue, borderRadius: 9 },
+  mobileRiskMetricLabel: { flex: 0, fontSize: 9, lineHeight: 11 },
+  mobileRiskMetricValue: { fontSize: 10, lineHeight: 12, textAlign: "left" },
   riskMetricLabel: { color: colors.navy, fontSize: 9, fontWeight: "600", flex: 1 },
   riskMetricValue: { color: colors.navy, fontSize: 9, fontWeight: "800", textAlign: "right", flexShrink: 1 },
   signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 46, backgroundColor: "#FFF0ED", borderWidth: 1, borderColor: colors.danger, borderRadius: 10, marginTop: 12, marginBottom: 16, cursor: "pointer" },

@@ -7,11 +7,13 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
   type TextInputProps,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -42,6 +44,7 @@ export function Screen({
   bounded?: boolean;
 }) {
   const { storageError } = useMarketplace();
+  const mobile = useWindowDimensions().width < 768;
   const scrollViewRef = useRef<ScrollView>(null);
   useEffect(() => {
     if (scrollToY !== undefined && scrollToY !== null) {
@@ -77,6 +80,10 @@ export function Screen({
       </>;
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={s.screen}>
+      {mobile && <>
+        <LinearGradient pointerEvents="none" colors={["#EAF3FF", colors.paleBlue, colors.offWhite]} locations={[0, 0.38, 1]} style={StyleSheet.absoluteFill} />
+        <View pointerEvents="none" style={s.mobileBackgroundCurve} />
+      </>}
       {bounded ? (
         <View style={[s.content, s.boundedContent, contentStyle]}>{content}</View>
       ) : (
@@ -277,16 +284,19 @@ export function Chips({
   options,
   selected,
   onSelect,
+  segmented = false,
 }: {
   options: readonly string[] | string[];
   selected: string;
   onSelect: (value: string) => void;
+  segmented?: boolean;
 }) {
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 8, paddingVertical: 4, paddingBottom: 14 }}
+      style={segmented && s.segmentedTrack}
+      contentContainerStyle={segmented ? s.segmentedContent : { gap: 8, paddingVertical: 4, paddingBottom: 14 }}
     >
       {options.map((option) => (
         <Pressable
@@ -296,13 +306,14 @@ export function Chips({
           onPress={() => onSelect(option)}
           style={[
             s.chip,
-            option === selected && {
+            segmented && s.segmentedChip,
+            segmented && option === selected ? s.segmentedChipSelected : option === selected && {
               backgroundColor: colors.softBlue,
               borderColor: colors.blue,
             },
           ]}
         >
-          <Text style={[s.label, option === selected && { color: colors.blue }]}>
+          <Text style={[s.label, segmented && s.segmentedLabel, option === selected && { color: segmented ? colors.white : colors.blue }]}>
             {option}
           </Text>
         </Pressable>
@@ -403,6 +414,7 @@ export function PhotoPicker({
 }
 export const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.offWhite },
+  mobileBackgroundCurve: { position: "absolute", top: 0, right: -80, width: 270, height: 220, borderBottomLeftRadius: 180, backgroundColor: colors.softBlue, opacity: 0.3 },
   content: {
     width: "100%",
     maxWidth: 1180,
@@ -536,6 +548,11 @@ export const s = StyleSheet.create({
     borderWidth: 1,
     backgroundColor: "white",
   },
+  segmentedTrack: { flexGrow: 0, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  segmentedContent: { gap: 5, padding: 5 },
+  segmentedChip: { backgroundColor: colors.paleBlue, borderColor: "transparent", borderRadius: 11, paddingHorizontal: 15, paddingVertical: 11 },
+  segmentedChipSelected: { backgroundColor: "#2463FF", borderColor: "#2463FF" },
+  segmentedLabel: { color: colors.slate, fontSize: 12 },
   split: { flexDirection: "row", flexWrap: "wrap", gap: 20 },
   divider: { height: 1, backgroundColor: colors.border, marginVertical: 9 },
 });
