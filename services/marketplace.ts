@@ -20,6 +20,7 @@ import {
 } from "./booking";
 import {
   calculateBorrowerServiceFee,
+  CURRENT_LENDER_COMMISSION_RATE,
 } from "./deposit";
 import { evaluateRentalOutcome, tierForScore } from "./riskScore";
 import { createSeed } from "../data/seed";
@@ -35,6 +36,10 @@ export type Action =
   | { type: "sendChat"; conversationId: string; id: string; text: string; imageUri?: string }
   | { type: "readChat"; conversationId: string }
   | { type: "saveListing"; listing: Listing }
+  | { type: "startDeliveryCheckout"; id: string; listingId: string; start: string; end: string; deliveryAddress: string }
+  | { type: "payDeliveryDemo"; bookingId: string; receiptReference: string }
+  | { type: "completeRentalCheckout"; bookingId: string; paymentMethod: string }
+  | { type: "cancelDeliveryCheckout"; bookingId: string }
   | { type: "deleteListing"; id: string }
   | { type: "boostListing"; listingId: string; transactionId: string }
   | {
@@ -252,7 +257,7 @@ export function resolveAutomatedSupportQuery(query: string): {
     return {
       answered: true,
       response:
-        "The lender receives their rental payout once the rental has been successfully settled. The platform releases the payout at the same settlement stage when the security deposit is settled.\n\nCurRENT deducts a 12% commission, so the lender receives 88% of the rental fee.",
+        "The lender receives their rental payout once the rental has been successfully settled. The platform releases the payout at the same settlement stage when the security deposit is settled.\n\nNew rentals use a 13% commission, so the lender receives 87% of the rental fee. Historical bookings retain their original rate.",
     };
   }
 
@@ -268,7 +273,7 @@ export function resolveAutomatedSupportQuery(query: string): {
     return {
       answered: true,
       responses: [
-        "Fees\n\nHere are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 12% of the rental fee, deducted when the rental is completed.\n- Lender payout: The lender receives the remaining 88% of the rental fee.",
+        "Fees\n\nHere are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 13% of the rental fee for new bookings, deducted when a rental is completed.\n- Lender payout: The lender receives the remaining 87% of the rental fee. Historical bookings keep their original rate.",
         "Security deposits\n\nYour refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through FPX.",
       ],
     };
@@ -278,7 +283,7 @@ export function resolveAutomatedSupportQuery(query: string): {
     return {
       answered: true,
       response:
-        "Here are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 12% of the rental fee, deducted when the rental is completed.\n- Lender payout: The lender receives the remaining 88% of the rental fee.",
+        "Here are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 13% of the rental fee for new bookings, deducted when a rental is completed.\n- Lender payout: The lender receives the remaining 87% of the rental fee. Historical bookings keep their original rate.",
     };
   }
 
@@ -528,6 +533,12 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Only the owner can edit this item.",
       );
       requireThat(
+        !["published", "paused"].includes(l.status) ||
+          state.mode === "admin_demo" ||
+          (existing && ["published", "paused"].includes(existing.status)),
+        "Submit this listing for CurRENT review before it can go live.",
+      );
+      requireThat(
         l.title.trim().length >= 3 &&
           l.description.trim().length >= 10 &&
           l.location.trim() &&
@@ -542,7 +553,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Daily rental price must be positive and any configured platform valuation must be valid.",
       );
       requireThat(
-        l.status !== "published" ||
+        !["published", "pending_review"].includes(l.status) ||
           (state.mode === "admin_demo"
             ? (l.id === "sony-a7iii" &&
                 l.images &&
@@ -569,7 +580,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Add at least 6 photos and 1 video before publishing.",
       );
       requireThat(
-        l.status !== "published" || user.verification === "verified",
+        !["published", "pending_review"].includes(l.status) || user.verification === "verified",
         "Complete demo identity verification before publishing.",
       );
       l.collectionMethods = ["Delivery Only"];
@@ -676,6 +687,80 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       break;
     }
 
+    case "startDeliveryCheckout": {
+      const listing = state.listings.find((item) => item.id === action.listingId);
+      requireThat(listing && listing.status === "published", "This listing is not available.");
+      requireThat(listing.ownerId !== user.id, "You cannot rent your own item.");
+      requireThat(user.verification === "verified" && !user.isBanned && !user.hasOverdueObligation,
+        "Complete identity verification and resolve account restrictions before booking.");
+      requireThat((riskFor(state, user).score ?? 0) >= 30, "This rental requires CurRENT platform review.");
+      requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery destination.");
+      requireThat(!state.bookings.some((booking) => booking.id === action.id), "This checkout already exists.");
+      requireThat(!state.bookings.some((booking) => booking.listingId === action.listingId &&
+        booking.renterId === user.id && booking.start === action.start && booking.end === action.end &&
+        booking.status === "payment_required"), "Resume your existing checkout for these dates.");
+      availability(state, listing, action.start, action.end);
+      const quote = quoteFor(state, user, listing, action.start, action.end);
+      state.bookings.unshift({
+        id: action.id, listingId: listing.id, title: listing.title, image: listing.imageUrl,
+        ownerId: listing.ownerId, renterId: user.id, start: action.start, end: action.end,
+        scheduledPickup: action.start, scheduledReturn: action.end,
+        durationMinutes: calculateDurationMinutes(action.start, action.end),
+        cancellationCutoff: calculateCancellationCutoff(action.start),
+        collectionMethod: "Delivery Only", deliveryAddress: action.deliveryAddress,
+        status: "payment_required", quote,
+        commissionRate: CURRENT_LENDER_COMMISSION_RATE,
+        riskScore: riskFor(state, user).score ?? 80,
+        payment: "required", deposit: "required", createdAt: now,
+        contextMode: state.mode || "normal",
+        deliveryDemo: {
+          provider: "GrabExpress (Simulation)", origin: listing.location,
+          destination: action.deliveryAddress, fee: 10, status: "required",
+        },
+      });
+      break;
+    }
+
+    case "payDeliveryDemo": {
+      const booking = bookingFor(action.bookingId);
+      requireThat(booking.renterId === user.id && booking.status === "payment_required",
+        "Only the renter can complete this delivery demo checkout.");
+      requireThat(booking.deliveryDemo, "This booking has no delivery checkout.");
+      if (booking.deliveryDemo.status === "paid_demo") break;
+      booking.deliveryDemo.status = "paid_demo";
+      booking.deliveryDemo.receiptReference = action.receiptReference;
+      booking.deliveryDemo.paidAt = now;
+      break;
+    }
+
+    case "completeRentalCheckout": {
+      const booking = bookingFor(action.bookingId);
+      requireThat(booking.renterId === user.id && booking.status === "payment_required" && booking.payment === "required",
+        "This rental checkout is unavailable or already completed.");
+      requireThat(booking.collectionMethod === "Self-Pickup" || booking.deliveryDemo?.status === "paid_demo",
+        "Complete the separate delivery demo payment before the rental payment.");
+      const listing = state.listings.find((item) => item.id === booking.listingId);
+      requireThat(listing, "This listing is no longer available.");
+      availability(state, listing, booking.start, booking.end, booking.id);
+      booking.status = "upcoming";
+      booking.payment = "paid";
+      booking.deposit = "held";
+      booking.paymentMethod = action.paymentMethod;
+      notify(booking.ownerId, `New booking confirmed: ${user.name} rented ${booking.title}.`, booking.id);
+      notify(user.id, `Booking confirmed (Demo) for ${booking.title}. Total: RM${booking.quote.total.toFixed(2)}.`, booking.id);
+      break;
+    }
+
+    case "cancelDeliveryCheckout": {
+      const booking = bookingFor(action.bookingId);
+      requireThat(booking.renterId === user.id && booking.status === "payment_required",
+        "Only the renter can cancel an unfinished checkout.");
+      booking.status = "cancelled";
+      booking.cancelledAt = now;
+      booking.cancelledById = user.id;
+      break;
+    }
+
     case "instantBook": {
       const listing = state.listings.find((l) => l.id === action.listingId);
       requireThat(listing, "Listing not found.");
@@ -724,6 +809,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         deliveryAddress: action.deliveryAddress,
         status: "upcoming",
         quote,
+        commissionRate: CURRENT_LENDER_COMMISSION_RATE,
         riskScore: risk.score ?? 80,
         payment: "paid",
         deposit: "held",

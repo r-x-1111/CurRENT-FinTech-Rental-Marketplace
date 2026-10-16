@@ -17,7 +17,7 @@ import {
   s,
 } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
-import { calculateOwnerPayout } from "../../services/deposit";
+import { calculateOwnerPayout, LEGACY_LENDER_COMMISSION_RATE } from "../../services/deposit";
 import {
   formatMalaysiaDateTime,
   getEffectiveBookingStatus,
@@ -83,6 +83,20 @@ export default function RentalDetail() {
       </Screen>
     );
 
+  if (b.status === "payment_required" && b.renterId === user.id) {
+    return <Screen back title="Finish Rental Checkout">
+      <Card>
+        <Text style={s.h2}>{b.title}</Text>
+        <Row label="Rental payment" value="Not completed" />
+        <Row label="Delivery demo payment" value={b.deliveryDemo?.status === "paid_demo" ? "Demo Payment Completed" : "Required"} />
+        <Notice text="The delivery simulation and CurRENT rental payment are separate. No real funds have been charged." />
+        <Button onPress={() => router.push({ pathname: "/listing/[id]", params: { id: b.listingId, checkoutId: b.id } })}>
+          Resume Checkout
+        </Button>
+      </Card>
+    </Screen>;
+  }
+
   const effectiveStatus = getEffectiveBookingStatus(b, now);
   const rental = { ...b, status: effectiveStatus };
   const owner = user.id === b.ownerId;
@@ -93,7 +107,7 @@ export default function RentalDetail() {
     state.profiles.find((p) => p.id === b.renterId)?.name || "Renter";
   const lenderName =
     state.profiles.find((p) => p.id === b.ownerId)?.name || "Lender";
-  const payout = calculateOwnerPayout(b.quote.rentalFee);
+  const payout = calculateOwnerPayout(b.quote.rentalFee, b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE);
   const renter = state.profiles.find((profile) => profile.id === b.renterId);
   const currentRisk = renter ? riskFor(state, renter) : null;
   const listing = state.listings.find((l) => l.id === b.listingId);
@@ -1094,14 +1108,14 @@ export default function RentalDetail() {
           <>
             <View style={s.divider} />
             <Row
-              label="Platform commission · 12%"
+              label={`Platform commission · ${Math.round((b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE) * 100)}%`}
               value={money(payout.commission)}
             />
             <Row
               label={
                 effectiveStatus === "completed"
                   ? "Net owner payout (Simulated)"
-                  : "Estimated net owner payout (88%)"
+                  : `Estimated net owner payout (${Math.round((1 - (b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE)) * 100)}%)`
               }
               value={money(payout.payout)}
               strong

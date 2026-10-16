@@ -11,8 +11,10 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="listing/[id]" />
+          <Stack.Screen name="delivery-demo/[id]" />
           <Stack.Screen name="dispute/[id]" />
           <Stack.Screen name="owner/index" />
+          <Stack.Screen name="admin/listings" />
           <Stack.Screen name="help" />
           <Stack.Screen name="what-you-should-know" />
           <Stack.Screen name="risk-score-history" />

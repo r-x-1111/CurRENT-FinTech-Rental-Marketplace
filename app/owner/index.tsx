@@ -16,13 +16,20 @@ import {
 } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
-import { calculateOwnerPayout } from "../../services/deposit";
+import { calculateOwnerPayout, CURRENT_LENDER_COMMISSION_RATE, LEGACY_LENDER_COMMISSION_RATE } from "../../services/deposit";
 import { formatMalaysiaDateTime, getEffectiveBookingStatus, money } from "../../services/booking";
 import { newId } from "../../services/marketplace";
 import { colors } from "../../constants/theme";
+import { supabase } from "../../lib/supabase";
 
 export default function OwnerDashboard() {
-  const { state, user, act, actAndPersist } = useMarketplace();
+  const { state, user, act, actAndPersist, refreshSharedListings } = useMarketplace();
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => { void refreshSharedListings().catch(() => {}); }, [user?.id]);
+  useEffect(() => {
+    if (!user || !supabase) return;
+    void supabase.auth.getUser().then(({ data }) => setIsAdmin(data.user?.app_metadata.current_admin === true));
+  }, [user?.id]);
   const { published } = useLocalSearchParams<{ published?: string }>();
   const [tab, setTab] = useState("Listings");
   const [error, setError] = useState("");
@@ -49,7 +56,7 @@ export default function OwnerDashboard() {
   }, []);
 
   useEffect(() => {
-    if (published === "1") setSuccess("Listing published successfully.");
+    if (published === "1") setSuccess("Your listing has been submitted successfully and is awaiting CurRENT approval. It will become visible to renters once approved.");
   }, [published]);
 
   if (!user) {
@@ -63,6 +70,7 @@ export default function OwnerDashboard() {
         title="Lender Mode"
         subtitle="Listing management is locked for this account."
       >
+        {isAdmin && <Button secondary onPress={() => router.push("/admin/listings" as never)}>Review Pending Listings</Button>}
         <Card>
           <Text style={s.h2}>
             Complete Identity Verification to manage listings.
@@ -83,7 +91,7 @@ export default function OwnerDashboard() {
   const bookings = state.bookings.filter((b) => b.ownerId === user.id);
   const complete = bookings.filter((b) => b.status === "completed");
   const earnings = complete.reduce(
-    (n, b) => n + calculateOwnerPayout(b.quote.rentalFee).payout,
+    (n, b) => n + calculateOwnerPayout(b.quote.rentalFee, b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE).payout,
     0,
   );
   const activeRentalsCount = bookings.filter((b) =>
@@ -100,9 +108,10 @@ export default function OwnerDashboard() {
       scrollToY={scrollToY}
       scrollRequestId={scrollRequestId}
     >
+      {isAdmin && <Button secondary onPress={() => router.push("/admin/listings" as never)}>Review Pending Listings</Button>}
       <View style={s.split}>
         {[
-          ["Net Earnings (88%)", money(earnings), "Payout"],
+          ["Net Earnings", money(earnings), "Payout"],
           [
             "Live Listings",
             `${listings.filter((l) => l.status === "published").length}`,
@@ -179,13 +188,14 @@ export default function OwnerDashboard() {
                     <Text style={s.h2} numberOfLines={1}>{l.title}</Text>
                     <Text style={s.caption}>{money(l.dailyPrice)} / day</Text>
                     <View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
-                      <Badge text={l.status} />
+                      <Badge text={l.status === "pending_review" ? "Pending Review" : l.status === "published" ? "Approved / Live" : l.status} />
                       {isBoosted && (
                         <Badge text="★ Featured" green />
                       )}
                     </View>
                   </View>
                 </View>
+                {l.status === "rejected" && l.rejectionReason && <Notice text={`Rejection reason: ${l.rejectionReason}`} error />}
 
                 {/* Listing Stats Row: Views, Saves, Completed */}
                 <View style={styles.statsRow}>
@@ -214,7 +224,7 @@ export default function OwnerDashboard() {
                   {/* Action 1: Boost (RM10 · 7 days) */}
                   <Pressable
                     accessibilityRole="button"
-                    disabled={Boolean(isBoosted)}
+                    disabled={Boolean(isBoosted) || l.status !== "published"}
                     onPress={() => { setPendingBoost(l.id); setReceiptId(null); setError(""); }}
                     style={[styles.actionBtn, isBoosted && styles.actionBtnActive]}
                   >
@@ -244,11 +254,11 @@ export default function OwnerDashboard() {
                   </Pressable>
 
                   {/* Action 3: Pause / Resume */}
-                  <Pressable
+                  {(l.status === "published" || l.status === "paused") && <Pressable
                     accessibilityRole="button"
-                    onPress={() => {
+                    onPress={async () => {
                       try {
-                        act({
+                        await actAndPersist({
                           type: "saveListing",
                           listing: {
                             ...l,
@@ -272,7 +282,7 @@ export default function OwnerDashboard() {
                     <Text style={styles.actionBtnText}>
                       {l.status === "published" ? "Pause" : "Resume"}
                     </Text>
-                  </Pressable>
+                  </Pressable>}
 
                   {/* Action 4: Delete */}
                   <Pressable
@@ -326,21 +336,21 @@ export default function OwnerDashboard() {
 
       {tab === "Payout" && (
         <>
-          <Notice text="Demo payouts are recorded after return inspection and deposit release. Platform commission is 12% of the rental fee. Estimated lender payout is 88%. No real funds are transferred." />
+          <Notice text={`Demo payouts are recorded after return inspection and deposit release. New rentals use a ${Math.round(CURRENT_LENDER_COMMISSION_RATE * 100)}% commission on the rental fee and a ${Math.round((1 - CURRENT_LENDER_COMMISSION_RATE) * 100)}% lender payout. Earlier bookings retain their original rate. No real funds are transferred.`} />
           {complete.length ? (
             complete.map((b) => (
               <Card key={b.id}>
                 <Text style={s.h2}>{b.title}</Text>
                 <Row label="Gross rental fee" value={money(b.quote.rentalFee)} />
                 <Row
-                  label="Platform commission · 12%"
+                  label={`Platform commission · ${Math.round((b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE) * 100)}%`}
                   value={money(
-                    calculateOwnerPayout(b.quote.rentalFee).commission,
+                    calculateOwnerPayout(b.quote.rentalFee, b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE).commission,
                   )}
                 />
                 <Row
-                  label="Net payout · 88%"
-                  value={money(calculateOwnerPayout(b.quote.rentalFee).payout)}
+                  label={`Net payout · ${Math.round((1 - (b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE)) * 100)}%`}
+                  value={money(calculateOwnerPayout(b.quote.rentalFee, b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE).payout)}
                   strong
                 />
               </Card>

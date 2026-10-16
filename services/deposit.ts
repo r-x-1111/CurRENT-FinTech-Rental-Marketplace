@@ -19,8 +19,11 @@ export function calculateBorrowerServiceFee(rentalFee: number) {
   return Math.max(5, Math.round(rentalFee * 0.05 * 100) / 100);
 }
 
-export function calculateOwnerPayout(rentalFee: number) {
-  const commission = Math.round(rentalFee * 0.12 * 100) / 100;
+export const CURRENT_LENDER_COMMISSION_RATE = 0.13;
+export const LEGACY_LENDER_COMMISSION_RATE = 0.12;
+
+export function calculateOwnerPayout(rentalFee: number, rate = CURRENT_LENDER_COMMISSION_RATE) {
+  const commission = Math.round(rentalFee * rate * 100) / 100;
   return {
     commission,
     payout: Math.round((rentalFee - commission) * 100) / 100

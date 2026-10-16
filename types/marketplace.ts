@@ -108,6 +108,17 @@ export interface Booking {
   collectionMethod?: CollectionMethod;
   status: RentalStatus;
   quote: Quote;
+  /** Stored at checkout so later rate changes never rewrite historical payouts. */
+  commissionRate?: number;
+  deliveryDemo?: {
+    provider: "GrabExpress (Simulation)";
+    origin: string;
+    destination: string;
+    fee: number;
+    status: "required" | "paid_demo";
+    receiptReference?: string;
+    paidAt?: string;
+  };
   riskScore: number;
   payment: "required" | "processing" | "failed" | "paid" | "refunded";
   deposit:

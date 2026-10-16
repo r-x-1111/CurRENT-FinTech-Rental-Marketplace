@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Image,
   Pressable,
   ScrollView,
@@ -16,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ListingGrid } from "../../components/ListingGrid";
 import { Empty } from "../../components/ui";
 import { colors } from "../../constants/theme";
-import { MAIN_CATEGORIES, locations } from "../../constants/categories";
+import { MAIN_CATEGORIES, locations, matchesMarketplaceLocation } from "../../constants/categories";
 import { useMarketplace } from "../../context/Marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
 
@@ -39,17 +40,31 @@ export default function HomeScreen() {
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState(params.q || "");
   const [selectedCategory, setSelectedCategory] = useState(params.category || "All items");
-  const [selectedLocation, setSelectedLocation] = useState(params.location || "All Klang Valley");
+  const [selectedLocation, setSelectedLocation] = useState(params.location === "All Klang Valley" ? "All Malaysia" : params.location || "All Malaysia");
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [showCategoryMenu, setShowCategoryMenu] = useState(false);
+  const [categoryHasSelection, setCategoryHasSelection] = useState(Boolean(params.category));
+  const categoryMenuAnimation = useRef(new Animated.Value(0)).current;
   const [savedOnly, setSavedOnly] = useState(params.saved === "1");
   const [authPrompt, setAuthPrompt] = useState(false);
 
   useEffect(() => {
     if (params.q !== undefined) setSearchQuery(params.q);
-    if (params.category !== undefined) setSelectedCategory(params.category);
+    if (params.category !== undefined) {
+      setSelectedCategory(params.category);
+      setCategoryHasSelection(Boolean(params.category));
+    }
     if (params.saved !== undefined) setSavedOnly(params.saved === "1");
-    if (params.location !== undefined) setSelectedLocation(params.location || "All Klang Valley");
+    if (params.location !== undefined) setSelectedLocation(params.location === "All Klang Valley" ? "All Malaysia" : params.location || "All Malaysia");
   }, [params.q, params.category, params.saved, params.location]);
+
+  useEffect(() => {
+    Animated.timing(categoryMenuAnimation, {
+      toValue: showCategoryMenu ? 1 : 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
+  }, [categoryMenuAnimation, showCategoryMenu]);
 
   function handleCategoryClick(cat: string) {
     if (selectedCategory === cat) {
@@ -62,7 +77,8 @@ export default function HomeScreen() {
   function handleClearFilters() {
     setSearchQuery("");
     setSelectedCategory("All items");
-    setSelectedLocation("All Klang Valley");
+    setCategoryHasSelection(false);
+    setSelectedLocation("All Malaysia");
     setSavedOnly(false);
   }
 
@@ -73,8 +89,7 @@ export default function HomeScreen() {
       if (selectedCategory !== "All items" && l.category !== selectedCategory) return false;
       if (savedOnly && !user?.favourites.includes(l.id)) return false;
       if (
-        selectedLocation !== "All Klang Valley" &&
-        !l.location.toLowerCase().includes(selectedLocation.toLowerCase())
+        !matchesMarketplaceLocation(l.location, selectedLocation)
       ) {
         return false;
       }
@@ -98,7 +113,7 @@ export default function HomeScreen() {
   const hasFilter =
     searchQuery.trim() !== "" ||
     selectedCategory !== "All items" ||
-    selectedLocation !== "All Klang Valley" ||
+    selectedLocation !== "All Malaysia" ||
     savedOnly;
 
   return (
@@ -122,7 +137,7 @@ export default function HomeScreen() {
             >
               <View style={styles.heroTopRow}>
                 <View style={styles.eyebrowBadge}>
-                  <Text style={styles.eyebrowText}>KLANG VALLEY RENTALS</Text>
+                  <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -156,7 +171,7 @@ export default function HomeScreen() {
 
               {/* Subtitle */}
               <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead]}>
-                Useful things, nearby. Discover trusted rentals across Klang Valley
+                Useful things, nearby. Discover trusted rentals across Malaysia
                 or turn your idle gear into extra income.
               </Text>
 
@@ -217,7 +232,7 @@ export default function HomeScreen() {
 
               {/* Location Picker dropdown items */}
               {showLocationPicker && (
-                <View style={styles.locationDropdownList}>
+                <ScrollView nestedScrollEnabled style={styles.locationDropdownList}>
                   {locations.map((loc) => (
                     <Pressable
                       key={loc}
@@ -244,12 +259,56 @@ export default function HomeScreen() {
                       </Text>
                     </Pressable>
                   ))}
-                </View>
+                </ScrollView>
               )}
 
-              {/* 8 Main Categories pills with responsive wrapping */}
-              <View style={[styles.quickCatSection, isMobile && styles.mobileQuickCatSection]}>
-                <ScrollView horizontal={isMobile} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.quickCatWrapper, isMobile && styles.mobileQuickCatWrapper]}>
+              {isMobile ? (
+                <View style={styles.mobileCategorySection}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Choose category"
+                    accessibilityState={{ expanded: showCategoryMenu }}
+                    onPress={() => setShowCategoryMenu((open) => !open)}
+                    style={styles.mobileCategoryButton}
+                  >
+                    <Text style={styles.mobileCategoryButtonText}>
+                      {categoryHasSelection ? (selectedCategory === "All items" ? "All Items" : selectedCategory) : "All Categories"}
+                    </Text>
+                    <Ionicons name={showCategoryMenu ? "chevron-up" : "chevron-down"} size={17} color={colors.blue} />
+                  </Pressable>
+                  <Animated.View style={[styles.mobileCategoryMenu, {
+                    height: categoryMenuAnimation.interpolate({ inputRange: [0, 1], outputRange: [0, 288] }),
+                    opacity: categoryMenuAnimation,
+                  }]}>
+                    <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+                      {["All items", ...MAIN_CATEGORIES].map((cat) => {
+                        const selected = selectedCategory === cat;
+                        return (
+                          <Pressable
+                            key={cat}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Filter by ${cat === "All items" ? "All Items" : cat}`}
+                            accessibilityState={{ selected }}
+                            onPress={() => {
+                              setSelectedCategory(cat);
+                              setCategoryHasSelection(true);
+                              setShowCategoryMenu(false);
+                            }}
+                            style={[styles.mobileCategoryOption, selected && styles.mobileCategoryOptionSelected]}
+                          >
+                            <Text style={[styles.mobileCategoryOptionText, selected && styles.mobileCategoryOptionTextSelected]}>
+                              {cat === "All items" ? "All Items" : cat}
+                            </Text>
+                            {selected && <Ionicons name="checkmark" size={17} color={colors.blue} />}
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                  </Animated.View>
+                </View>
+              ) : (
+              <View style={styles.quickCatSection}>
+                <View style={styles.quickCatWrapper}>
                   <Text style={styles.quickCatLabel}>Categories:</Text>
                   <Pressable
                     accessibilityRole="button"
@@ -295,8 +354,9 @@ export default function HomeScreen() {
                       </Pressable>
                     );
                   })}
-                </ScrollView>
+                </View>
               </View>
+              )}
             </View>
 
             {/* Floating Sample Cards (Shown on Desktop, Canva Page 2) */}
@@ -575,6 +635,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
     marginTop: -8,
+    maxHeight: 260,
   },
   locationOption: {
     paddingVertical: 8,
@@ -592,14 +653,43 @@ const styles = StyleSheet.create({
   quickCatSection: {
     marginTop: 8,
   },
-  mobileQuickCatSection: { marginTop: 2, marginRight: -22 },
+  mobileCategorySection: { marginTop: 2, gap: 5 },
+  mobileCategoryButton: {
+    minHeight: 43,
+    paddingHorizontal: 14,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    cursor: "pointer",
+  },
+  mobileCategoryButtonText: { color: colors.navy, fontSize: 13, fontWeight: "700" },
+  mobileCategoryMenu: {
+    overflow: "hidden",
+    borderRadius: 11,
+    backgroundColor: colors.white,
+  },
+  mobileCategoryOption: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  mobileCategoryOptionSelected: { backgroundColor: colors.paleBlue },
+  mobileCategoryOptionText: { color: colors.navy, fontSize: 13 },
+  mobileCategoryOptionTextSelected: { color: colors.blue, fontWeight: "700" },
   quickCatWrapper: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
   },
-  mobileQuickCatWrapper: { flexWrap: "nowrap", paddingRight: 22, alignItems: "center" },
   quickCatLabel: {
     fontSize: 12,
     color: "#8FA3BF",

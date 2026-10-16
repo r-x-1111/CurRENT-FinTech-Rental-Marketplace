@@ -32,6 +32,8 @@ import {
   isDemoSeededListing,
   dateAfter,
   formatMalaysiaDateTime,
+  malaysiaDateKey,
+  malaysiaTimeKey,
   money,
   parseMalaysiaTimestamp,
   quoteFor,
@@ -43,6 +45,7 @@ import { colors } from "../../constants/theme";
 import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
+import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
@@ -84,9 +87,11 @@ function formatDate(dateStr: string) {
 }
 
 export default function ListingDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, checkoutId } = useLocalSearchParams<{ id: string; checkoutId?: string }>();
   const { state, user, act, actAndPersist } = useMarketplace();
   const listing = state.listings.find((l) => l.id === id);
+  const checkoutBooking = state.bookings.find((booking) =>
+    booking.id === checkoutId && booking.renterId === user?.id && booking.listingId === id && booking.status === "payment_required");
   // 8 Fixed Delivery Slots filtered by lender's selection (Section 4.3, 7.1, 17.8)
   const availableSlots = FIXED_DELIVERY_SLOTS.filter((opt) => {
     if (!listing) return true;
@@ -101,8 +106,8 @@ export default function ListingDetailScreen() {
     return true;
   });
 
-  const [start, setStart] = useState(dateAfter(1));
-  const [end, setEnd] = useState(dateAfter(3));
+  const [start, setStart] = useState(checkoutBooking ? malaysiaDateKey(checkoutBooking.start) : dateAfter(1));
+  const [end, setEnd] = useState(checkoutBooking ? malaysiaDateKey(checkoutBooking.end) : dateAfter(3));
   const slotUnavailable = (slot: string) => {
     if (state.mode !== "admin_demo" || !listing || !isDemoSeededListing(listing.id) || !start) return false;
     const lastDate = end && end > start ? end : new Date(Date.parse(`${start}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
@@ -117,7 +122,7 @@ export default function ListingDetailScreen() {
   const [calendarPicker, setCalendarPicker] = useState<"month" | "year" | null>(
     null,
   );
-  const [pickupTime, setPickupTime] = useState("");
+  const [pickupTime, setPickupTime] = useState(checkoutBooking ? malaysiaTimeKey(checkoutBooking.start) : "");
   const effectivePickupTime =
     pickupTime && availableSlots.some((s) => s.value === pickupTime) && !slotUnavailable(pickupTime)
       ? pickupTime
@@ -127,7 +132,7 @@ export default function ListingDetailScreen() {
   const [collectionMethod, setCollectionMethod] =
     useState<CollectionMethod>("Delivery");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
-  const [showCheckout, setShowCheckout] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(Boolean(checkoutBooking));
   const [isPaying, setIsPaying] = useState(false);
   const payInProgress = useRef(false);
   const [error, setError] = useState("");
@@ -235,7 +240,7 @@ export default function ListingDetailScreen() {
         startTimestamp,
         endTimestamp,
       );
-      availability(state, listing, startTimestamp, endTimestamp);
+      availability(state, listing, startTimestamp, endTimestamp, checkoutBooking?.id);
     } catch (e) {
       dateError = (e as Error).message;
     }
@@ -243,6 +248,7 @@ export default function ListingDetailScreen() {
 
   // Two-click calendar selection handler
   function handleDayPress(dayDate: string) {
+    if (checkoutBooking) return;
     setError("");
     setSuccessNotice("");
     if (!start || (start && end)) {
@@ -316,36 +322,65 @@ export default function ListingDetailScreen() {
   }
 
   // Handle Instant Booking checkout confirmation
+  async function handleDeliveryDemo() {
+    if (!user || payInProgress.current) return;
+    if (!checkoutBooking && !deliveryAddressIsComplete()) {
+      setError("Complete the required delivery address before continuing.");
+      return;
+    }
+    if (checkoutBooking) {
+      router.push(`/delivery-demo/${checkoutBooking.id}` as never);
+      return;
+    }
+    const existing = state.bookings.find((booking) => booking.renterId === user.id &&
+      booking.listingId === id && booking.start === startTimestamp && booking.end === endTimestamp &&
+      booking.status === "payment_required");
+    if (existing) {
+      router.push(`/delivery-demo/${existing.id}` as never);
+      return;
+    }
+    payInProgress.current = true;
+    setIsPaying(true);
+    try {
+      const address = getDeliveryAddress();
+      const bookingId = newId();
+      await actAndPersist({ type: "startDeliveryCheckout", id: bookingId, listingId: id,
+        start: startTimestamp, end: endTimestamp, deliveryAddress: formatDeliveryAddress(address) });
+      act({ type: "saveDeliveryAddress", address });
+      router.push(`/delivery-demo/${bookingId}` as never);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      payInProgress.current = false;
+      setIsPaying(false);
+    }
+  }
+
   async function handleConfirmInstantBook() {
     if (payInProgress.current) return;
     if (!user) {
       setAuthPrompt(true);
       return;
     }
-    if (!deliveryAddressIsComplete()) {
+    if (!checkoutBooking && !deliveryAddressIsComplete()) {
       setError(
         "Complete the required Address fields before paying: recipient name, phone, street address, postcode, city, and state.",
       );
       return;
     }
     try {
-      const address = getDeliveryAddress();
-      act({ type: "saveDeliveryAddress", address });
-      const bookingId = newId();
+      if (!checkoutBooking || checkoutBooking.deliveryDemo?.status !== "paid_demo") {
+        throw new Error("Complete the separate delivery demo payment first.");
+      }
       payInProgress.current = true;
       setIsPaying(true);
       setError("");
       await actAndPersist({
-        type: "instantBook",
-        id: bookingId,
-        listingId: id,
-        start: startTimestamp,
-        end: endTimestamp,
-        collectionMethod: selectedMethod,
+        type: "completeRentalCheckout",
+        bookingId: checkoutBooking.id,
         paymentMethod: selectedPaymentMethod,
-        deliveryAddress: formatDeliveryAddress(address),
       });
-      router.push(`/rental/${bookingId}`);
+      router.push(`/rental/${checkoutBooking.id}`);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -880,7 +915,7 @@ export default function ListingDetailScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={`Delivery at ${opt.label}`}
                         accessibilityState={{ disabled: unavailable }}
-                        disabled={unavailable}
+                        disabled={unavailable || Boolean(checkoutBooking)}
                         onPress={() => setPickupTime(opt.value)}
                         style={[
                           styles.timeSlotBtn,
@@ -1035,15 +1070,7 @@ export default function ListingDetailScreen() {
                   </View>
                 </View>
 
-                <View>
-                  <Text style={styles.inputLabel}>State</Text>
-                  <TextInput
-                    style={styles.addressInput}
-                    value={stateName}
-                    onChangeText={setStateName}
-                    placeholder="State"
-                  />
-                </View>
+                <MalaysiaStateSelector value={stateName} onChange={setStateName} />
 
                 <View>
                   <Text style={styles.inputLabel}>Delivery Instructions (Optional)</Text>
@@ -1166,9 +1193,30 @@ export default function ListingDetailScreen() {
             {/* Simulated Checkout Panel */}
             {showCheckout && quote && (
               <>
+                <View style={styles.checkoutPanel}>
+                  <Text style={styles.checkoutTitle}>Delivery Fee — Separate Demo Payment</Text>
+                  <Row label="Delivery provider" value="GrabExpress (Demo)" />
+                  <Row label="Delivery origin" value={listing.location} />
+                  <Row label="Delivery destination" value={checkoutBooking?.deliveryDemo?.destination || (deliveryAddressIsComplete() ? formatDeliveryAddress(getDeliveryAddress()) : "Complete your delivery address above")} />
+                  <Row label="Delivery fee" value="RM10.00 (simulated quote, not an official GrabExpress rate)" />
+                  <Row label="Delivery payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" ? "Demo Payment Completed" : "Required"} />
+                  <Notice text="GrabExpress-inspired simulation only. Coverage is unverified; no real Grab payment or official partnership is claimed. The RM10.00 is excluded from CurRENT rental charges and lender commission." />
+                  {checkoutBooking && <Text style={s.caption}>This checkout uses the booked dates and destination shown above. Cancel it to change them.</Text>}
+                  {checkoutBooking?.deliveryDemo?.status === "paid_demo" ? (
+                    <Button secondary onPress={() => router.push(`/delivery-demo/${checkoutBooking.id}` as never)}>View Demo Delivery Receipt</Button>
+                  ) : (
+                    <Button disabled={isPaying || (!checkoutBooking && !deliveryAddressIsComplete())} onPress={() => void handleDeliveryDemo()}>Pay Delivery Fee</Button>
+                  )}
+                  {checkoutBooking && <Button secondary onPress={async () => {
+                    try {
+                      await actAndPersist({ type: "cancelDeliveryCheckout", bookingId: checkoutBooking.id });
+                      router.replace({ pathname: "/listing/[id]", params: { id } });
+                    } catch (e) { setError((e as Error).message); }
+                  }}>Cancel Unfinished Checkout</Button>}
+                </View>
                 <Notice text="Demo payment only. No real funds or banking credentials are collected." />
                 <View style={styles.checkoutPanel}>
-                  <Text style={styles.checkoutTitle}>Payment</Text>
+                  <Text style={styles.checkoutTitle}>CurRENT Rental Payment</Text>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Select FPX payment method"
@@ -1185,7 +1233,7 @@ export default function ListingDetailScreen() {
                       <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
                     )}
                   </Pressable>
-                  <Button disabled={isPaying} onPress={handleConfirmInstantBook}>
+                  <Button disabled={isPaying || checkoutBooking?.deliveryDemo?.status !== "paid_demo"} onPress={handleConfirmInstantBook}>
                     {isPaying ? "Processing demo payment…" : "Pay"}
                   </Button>
                   <Button secondary onPress={() => setShowCheckout(false)}>

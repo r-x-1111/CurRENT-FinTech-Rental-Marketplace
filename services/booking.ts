@@ -267,7 +267,6 @@ export function availability(
         b.id !== exceptId &&
         [
           "approved",
-          "payment_required",
           "confirmed",
           "upcoming",
           "active",

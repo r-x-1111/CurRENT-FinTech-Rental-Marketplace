@@ -26,7 +26,7 @@ export default function HelpScreen() {
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={styles.stepTitle}>Browse & Select Dates</Text>
             <Text style={s.caption}>
-              Choose from 22 verified listings across Klang Valley. Select your dates using the 2-click calendar and view your transparent rental rate, 5% service fee, and risk-based deposit.
+              Browse available listings across Malaysia. Select your dates using the 2-click calendar and view your transparent rental rate, 5% service fee, and risk-based deposit.
             </Text>
           </View>
         </View>

@@ -9,7 +9,7 @@ export default function HowItWorksScreen() {
     <Screen
       back
       title="How CurRENT Works"
-      subtitle="A simple way to rent. Step-by-step guide for peer-to-peer rentals in Klang Valley."
+      subtitle="A simple way to rent. Step-by-step guide for peer-to-peer rentals across Malaysia."
     >
       <Notice text="CurRENT is a classroom simulation. Identity checks, payments, deposits, insurance and delivery are not performed by real providers. Do not submit identity documents or bank credentials." />
 

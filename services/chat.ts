@@ -39,29 +39,63 @@ function fail(error: { message: string } | null, fallback: string) {
 }
 
 export async function publishChatListing(listing: Listing, ownerName: string) {
+  if (listing.status === "published" || listing.status === "paused") {
+    const { error } = await client().rpc("set_approved_listing_active", {
+      target_listing_id: listing.id, make_active: listing.status === "published",
+    });
+    fail(error, "Could not change the approved listing's visibility.");
+    return;
+  }
   const safeListing = { ...listing, privateMeetingVenue: undefined, ownerEstimatedValue: undefined };
   const { error } = await client().from("chat_listings").upsert({
     listing_id: listing.id,
     owner_id: listing.ownerId,
     owner_name: ownerName,
     listing_data: safeListing,
-    published: listing.status === "published",
+    published: false,
+    archived: false,
+    moderation_status: listing.status === "pending_review" ? "pending_review" : "draft",
+    rejection_reason: null,
     updated_at: new Date().toISOString(),
   }, { onConflict: "listing_id" });
   fail(error, "Could not publish messaging information for the listing.");
 }
 
 export async function unpublishChatListing(listingId: string) {
-  const { error } = await client().from("chat_listings").update({ published: false, updated_at: new Date().toISOString() }).eq("listing_id", listingId);
+  const { error } = await client().rpc("archive_chat_listing", { target_listing_id: listingId });
   fail(error, "Could not remove the listing from shared messaging.");
 }
 
 export async function fetchPublishedChatListings(): Promise<SharedChatListing[]> {
   const { data, error } = await client().from("chat_listings")
     .select("listing_id,owner_id,owner_name,listing_data,published")
-    .eq("published", true);
+    .eq("published", true).eq("archived", false);
   fail(error, "Could not load shared listings.");
   return (data || []) as SharedChatListing[];
+}
+
+export async function fetchOwnChatListings(ownerId: string): Promise<SharedChatListing[]> {
+  const { data, error } = await client().from("chat_listings")
+    .select("listing_id,owner_id,owner_name,listing_data,published")
+    .eq("owner_id", ownerId).eq("archived", false);
+  fail(error, "Could not load your listing review statuses.");
+  return (data || []) as SharedChatListing[];
+}
+
+export async function fetchPendingListingReviews() {
+  const { data, error } = await client().from("chat_listings")
+    .select("listing_id,owner_id,owner_name,listing_data,published")
+    .eq("moderation_status", "pending_review")
+    .order("updated_at", { ascending: true });
+  fail(error, "Could not load pending listing reviews.");
+  return (data || []) as SharedChatListing[];
+}
+
+export async function reviewChatListing(listingId: string, approve: boolean, reason?: string) {
+  const { error } = await client().rpc("review_chat_listing", {
+    target_listing_id: listingId, approve, reason: reason || null,
+  });
+  fail(error, "Could not review this listing.");
 }
 
 export async function fetchChatInbox(): Promise<{ conversations: SharedConversation[]; messages: SharedMessage[] }> {

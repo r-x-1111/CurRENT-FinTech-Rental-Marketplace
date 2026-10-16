@@ -16,8 +16,9 @@ import { isSupabaseConfigured, supabase } from "../lib/supabase";
 export default function Auth() {
   const { state, activateAuthenticatedWorkspace } = useMarketplace();
   const params = useLocalSearchParams<{ mode?: string; returnTo?: string }>();
-  const returnTo = params.returnTo?.startsWith("/listing/") || params.returnTo?.startsWith("/(tabs)/")
-    ? params.returnTo : "/(tabs)/profile";
+  const returnTo = params.returnTo?.startsWith("/listing/") || params.returnTo?.startsWith("/(tabs)/") ||
+    params.returnTo?.startsWith("/owner") || params.returnTo?.startsWith("/rental/")
+    ? params.returnTo : "/(tabs)";
   const [mode, setMode] = useState(
     params.mode === "Create account" ? "Create account" : "Sign in",
   );
@@ -91,12 +92,11 @@ export default function Auth() {
           );
           return;
         }
-        const account = await authenticateWithPassword(
-          supabase.auth,
-          address,
-          password,
-        );
-        await activateAuthenticatedWorkspace(account);
+        if (!data.user) throw new Error("Supabase did not return the newly created account.");
+        await activateAuthenticatedWorkspace({
+          accountKind: "normal", id: data.user.id, email: data.user.email || address,
+          name: name.trim(), phone: normalizedPhone, verified: false,
+        });
         router.replace(returnTo as never);
         return;
       } else {
@@ -287,6 +287,7 @@ export default function Auth() {
               </Text>
             </TouchableOpacity>
           </View>
+          <Button secondary onPress={() => router.replace(returnTo as never)}>Continue browsing</Button>
         </Card>
       </View>
     </Screen>

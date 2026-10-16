@@ -286,6 +286,29 @@ function journey() {
   };
 }
 
+test("delivery demo receipt is stored separately before rental payment", () => {
+  const j = journey();
+  const start = `${dateAfter(2)}T11:00:00+08:00`;
+  const end = `${dateAfter(4)}T11:00:00+08:00`;
+  j.act({ type: "startDeliveryCheckout", id: "delivery-booking", listingId: "sony-a7iii",
+    start, end, deliveryAddress: "12 Jalan Example, Kuala Lumpur" });
+  const pending = j.state.bookings.find((booking) => booking.id === "delivery-booking")!;
+  assert.equal(pending.payment, "required");
+  assert.equal(pending.status, "payment_required");
+  assert.equal(pending.deliveryDemo?.fee, 10);
+  assert.equal(pending.commissionRate, 0.13);
+  assert.equal(pending.quote.total, pending.quote.rentalFee + pending.quote.serviceFee + pending.quote.deposit);
+  assert.throws(() => j.act({ type: "completeRentalCheckout", bookingId: pending.id, paymentMethod: "Demo FPX" }), /delivery demo payment/);
+  j.act({ type: "payDeliveryDemo", bookingId: pending.id, receiptReference: "DEMO-GE-123" });
+  j.act({ type: "payDeliveryDemo", bookingId: pending.id, receiptReference: "DEMO-GE-DUPLICATE" });
+  assert.equal(j.state.bookings.find((booking) => booking.id === pending.id)?.deliveryDemo?.receiptReference, "DEMO-GE-123");
+  j.act({ type: "completeRentalCheckout", bookingId: pending.id, paymentMethod: "Demo FPX" });
+  assert.equal(j.state.bookings.find((booking) => booking.id === pending.id)?.payment, "paid");
+  assert.throws(() => j.act({ type: "completeRentalCheckout", bookingId: pending.id, paymentMethod: "Demo FPX" }), /already completed/);
+  assert.equal(calculateOwnerPayout(pending.quote.rentalFee, pending.commissionRate).commission,
+    Math.round(pending.quote.rentalFee * 13) / 100);
+});
+
 function withMockedNow<T>(timestamp: number, run: () => T): T {
   const originalNow = Date.now;
   Date.now = () => timestamp;
@@ -443,8 +466,8 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
     total: 295,
   });
   assert.deepEqual(calculateOwnerPayout(90), {
-    commission: 10.8,
-    payout: 79.2,
+    commission: 11.7,
+    payout: 78.3,
   });
   assert.equal(
     quoteFor(
@@ -534,12 +557,13 @@ test("listing publication, dates, ownership, verification and deletion are enfor
     images: [],
     imageUrl: "",
   };
-  assert.throws(() => j.act({ type: "saveListing", listing }), /photo/);
+  assert.throws(() => j.act({ type: "saveListing", listing }), /submit this listing/i);
+  assert.throws(() => j.act({ type: "saveListing", listing: { ...listing, status: "pending_review" } }), /photo/);
   j.act({ type: "saveListing", listing: { ...listing, status: "draft" } });
   assert.throws(() => j.book("bad", "new"), /own item/);
   assert.throws(
     () =>
-      j.act({ type: "saveListing", listing: { ...listing, dailyPrice: NaN } }),
+      j.act({ type: "saveListing", listing: { ...listing, status: "pending_review", dailyPrice: NaN } }),
     /positive/,
   );
   assert.throws(
@@ -658,7 +682,7 @@ test("Demo baseline restores complete fictional addresses and permits zero-media
             (listing) => listing.id === "demo-zero-media-listing",
           )!,
           id: "normal-zero-media-listing",
-          status: "published",
+          status: "pending_review",
         },
       }),
     /at least 6 photos and 1 video/,
@@ -2032,7 +2056,7 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
   );
   assert.equal(lenderPayouts[0].id, "demo-lender-completed-1");
   assert.equal(
-    calculateOwnerPayout(lenderPayouts[0].quote.rentalFee).payout,
+    calculateOwnerPayout(lenderPayouts[0].quote.rentalFee, lenderPayouts[0].commissionRate ?? 0.12).payout,
     39.6,
   );
   assert.equal(

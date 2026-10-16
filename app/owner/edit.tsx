@@ -23,7 +23,9 @@ import {
 import { useMarketplace } from "../../context/Marketplace";
 import { categories } from "../../constants/categories";
 import { newId } from "../../services/marketplace";
+import { calculateOwnerPayout, CURRENT_LENDER_COMMISSION_RATE } from "../../services/deposit";
 import { colors } from "../../constants/theme";
+import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 import type { AvailabilityPeriod, Listing } from "../../types";
 import {
   DEMO_LISTING_TEMPLATE,
@@ -211,7 +213,7 @@ export default function EditListing() {
   const dailyPriceNum = parseFloat(price);
   const estimatedPayout =
     !isNaN(dailyPriceNum) && dailyPriceNum > 0
-      ? (dailyPriceNum * 0.88).toFixed(2)
+      ? calculateOwnerPayout(dailyPriceNum).payout.toFixed(2)
       : "—";
 
   function handleAddPeriod() {
@@ -299,7 +301,7 @@ export default function EditListing() {
     );
   }
 
-  async function save(status: "draft" | "published") {
+  async function save(status: "draft" | "pending_review") {
     if (isSaving) return;
     setIsSaving(true);
     try {
@@ -307,12 +309,12 @@ export default function EditListing() {
         setError("Availability must end by 31 December 2026.");
         return;
       }
-      if (selectedSlots.length < 2 && status === "published") {
+      if (selectedSlots.length < 2 && status === "pending_review") {
         setError("Select at least 2 delivery time slots.");
         return;
       }
 
-      if (periods.length === 0 && status === "published") {
+      if (periods.length === 0 && status === "pending_review") {
         setError("Please add at least one availability period before publishing.");
         return;
       }
@@ -326,14 +328,16 @@ export default function EditListing() {
         .filter(Boolean)
         .join(", ");
 
+      const publicLocation = stateName.trim() && !location.toLowerCase().includes(stateName.trim().toLowerCase())
+        ? `${location.trim()}, ${stateName.trim()}` : location.trim();
       const listing: Listing = {
         id: existing?.id || newId(),
         ownerId: user!.id,
         title: title.trim(),
         description: description.trim(),
         category,
-        location: location.trim(),
-        publicArea: location.trim(),
+        location: publicLocation,
+        publicArea: publicLocation,
         privateMeetingVenue: formattedDispatchAddress,
         dailyPrice: Number(price),
         estimatedValue:
@@ -349,6 +353,7 @@ export default function EditListing() {
         rating: existing?.rating || 0,
         verifiedOwner: user!.verification === "verified",
         status,
+        rejectionReason: undefined,
         featuredUntil: existing?.featuredUntil,
         deliveryTimeSlots: selectedSlots,
         pickupTimeWindows: selectedSlots.map((s) => ({ start: s, end: s })),
@@ -358,7 +363,7 @@ export default function EditListing() {
         listing,
       });
       router.replace(
-        status === "published"
+        status === "pending_review"
           ? { pathname: "/owner", params: { published: "1" } }
           : "/owner",
       );
@@ -474,12 +479,7 @@ export default function EditListing() {
               />
             </View>
           </View>
-          <Field
-            label="State"
-            value={stateName}
-            onChangeText={setStateName}
-            placeholder="Selangor"
-          />
+          <MalaysiaStateSelector value={stateName} onChange={setStateName} />
         </View>
 
         <Field
@@ -490,22 +490,22 @@ export default function EditListing() {
           placeholder="e.g. 45.00"
         />
 
-        {/* Read-only Estimated Payout (RM/day) - 88% of daily rental price */}
+        {/* Read-only estimated payout at the current commission rate. */}
         <View style={styles.payoutContainer}>
           <Text style={s.label}>Estimated payout (RM/day)</Text>
           <View style={styles.payoutBox}>
             <Text style={styles.payoutValue}>
               {estimatedPayout !== "—" ? `RM ${estimatedPayout}` : "—"}
             </Text>
-            <Text style={styles.payoutSub}>88% of daily price</Text>
+            <Text style={styles.payoutSub}>{Math.round((1 - CURRENT_LENDER_COMMISSION_RATE) * 100)}% of daily price</Text>
           </View>
         </View>
 
-        {/* Exact Pale-blue 12% commission notice from Section 4.2 / website reference */}
+        {/* Existing pale-blue commission notice. */}
         <View style={styles.commissionNoticeBox}>
           <Ionicons name="information-circle-outline" size={18} color={colors.navy} />
           <Text style={styles.commissionNoticeText}>
-            CurRENT charges a 12% commission only when a rental is successfully completed. Your payout will be released once the deposit has been settled.
+            CurRENT charges a {Math.round(CURRENT_LENDER_COMMISSION_RATE * 100)}% commission only when a rental is successfully completed. Your payout will be released once the deposit has been settled.
           </Text>
         </View>
 
@@ -862,9 +862,9 @@ export default function EditListing() {
           )}
           <Button
             disabled={!canPublish || isSaving}
-            onPress={() => void save("published")}
+            onPress={() => void save("pending_review")}
           >
-            Publish Listing
+            Submit Listing for Review
           </Button>
           <Button secondary disabled={isSaving} onPress={() => void save("draft")}>
             Save as draft

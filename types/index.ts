@@ -6,7 +6,7 @@ export type RiskLevel =
   | "high"
   | "very_high"
   | "unverified";
-export type ListingStatus = "draft" | "published" | "paused" | "unavailable";
+export type ListingStatus = "draft" | "pending_review" | "published" | "rejected" | "paused" | "unavailable";
 export type CollectionMethod =
   | "Meet Owner"
   | "Self-Pickup"
@@ -56,6 +56,7 @@ export interface Listing {
   imageUrl: string;
   description: string;
   status: ListingStatus;
+  rejectionReason?: string;
   images?: string[];
   videos?: string[];
   availableFrom?: string;

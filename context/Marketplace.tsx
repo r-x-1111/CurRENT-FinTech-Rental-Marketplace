@@ -26,18 +26,17 @@ import {
   startDemoWorkspaceSession,
 } from "../services/demoWorkspaceSessions";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import { fetchPublishedChatListings, publishChatListing, unpublishChatListing } from "../services/chat";
+import { fetchOwnChatListings, fetchPublishedChatListings, publishChatListing, unpublishChatListing } from "../services/chat";
 
 async function includeSharedListings(workspace: Marketplace, ownerId: string): Promise<Marketplace> {
-  const ownerName = workspace.profiles.find((profile) => profile.id === ownerId)?.name || "Owner";
-  await Promise.all(workspace.listings.filter((listing) => listing.ownerId === ownerId).map((listing) => publishChatListing(listing, ownerName)));
-  const remote = await fetchPublishedChatListings();
+  const [own, published] = await Promise.all([fetchOwnChatListings(ownerId), fetchPublishedChatListings()]);
+  const remote = [...published.filter((entry) => entry.owner_id !== ownerId), ...own];
   const listings = [...workspace.listings];
   const profiles = [...workspace.profiles];
   for (const entry of remote) {
     const listingIndex = listings.findIndex((listing) => listing.id === entry.listing_id);
     if (listingIndex < 0) listings.push(entry.listing_data);
-    else if (entry.owner_id !== ownerId) listings[listingIndex] = entry.listing_data;
+    else listings[listingIndex] = entry.listing_data;
     const profileIndex = profiles.findIndex((profile) => profile.id === entry.owner_id);
     if (profileIndex < 0) profiles.push({
       id: entry.owner_id, name: entry.owner_name, email: "", verification: "verified", favourites: [],
@@ -89,6 +88,7 @@ const Context = createContext<{
     account: AuthenticatedMarketplaceAccount,
   ) => Promise<void>;
   closeAuthenticatedWorkspace: () => Promise<void>;
+  refreshSharedListings: () => Promise<void>;
   storageError: string;
 }>(null!);
 
@@ -372,6 +372,17 @@ export function MarketplaceProvider({
     authAccountKind.current = null;
   }
 
+  async function refreshSharedListings() {
+    const ownerId = authOwnerId.current;
+    if (!ownerId || authAccountKind.current !== "normal") return;
+    await writes.current;
+    const merged = await includeSharedListings(current.current, ownerId);
+    if (authOwnerId.current === ownerId) {
+      current.current = merged;
+      setState(merged);
+    }
+  }
+
   if (!ready) {
     return (
       <View
@@ -395,6 +406,7 @@ export function MarketplaceProvider({
         actAndPersist,
         activateAuthenticatedWorkspace,
         closeAuthenticatedWorkspace,
+        refreshSharedListings,
         storageError,
       }}
     >
