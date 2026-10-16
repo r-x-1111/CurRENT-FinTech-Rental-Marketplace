@@ -142,7 +142,7 @@ export default function HomeScreen() {
                   <Ionicons
                     name="notifications-outline"
                     size={21}
-                    color="white"
+                    color={colors.navy}
                   />
                   {unreadNotifications > 0 && (
                     <View style={styles.notificationCount}>
@@ -425,9 +425,10 @@ const styles = StyleSheet.create({
   heroWrapper: {
     backgroundColor: colors.navy,
     paddingHorizontal: 20,
-    paddingVertical: 36,
+    paddingTop: 50,
+    paddingBottom: 36,
   },
-  mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 18 },
+  mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 18 },
   heroContainer: {
     maxWidth: 1180,
     width: "100%",
@@ -446,12 +447,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.navy,
+    backgroundColor: "#EAF3FF",
     position: "relative",
   },
   notificationCount: {
