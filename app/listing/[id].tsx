@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Image,
   Modal,
@@ -159,6 +159,28 @@ export default function ListingDetailScreen() {
   const [selectedDemoAddressIndex, setSelectedDemoAddressIndex] = useState(
     user?.defaultDeliveryAddressIndex ?? 0,
   );
+
+  // The user's saved address can still be loading (async session restore) when this
+  // screen mounts directly, e.g. a hard refresh landing straight on a listing URL —
+  // the useState initializers above would then lock in as empty forever. Re-sync once
+  // the account's saved address data actually arrives.
+  const hydratedAddressFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!user?.id || hydratedAddressFor.current === user.id) return;
+    hydratedAddressFor.current = user.id;
+    const saved = user.savedDeliveryAddress;
+    if (saved || user.name || user.phone) {
+      setRecipientName(saved?.recipientName || user.name || "");
+      setDeliveryPhone(saved?.phone || user.phone || "");
+      setStreetAddress(saved?.addressLine1 || "");
+      setUnit(saved?.addressLine2 || "");
+      setPostcode(saved?.postcode || "");
+      setCity(saved?.city || "");
+      setStateName(saved?.state || "");
+      setDeliveryNotes(saved?.instructions || "");
+    }
+    setSelectedDemoAddressIndex(user.defaultDeliveryAddressIndex ?? 0);
+  }, [user?.id, user?.savedDeliveryAddress, user?.name, user?.phone, user?.defaultDeliveryAddressIndex]);
 
   const { width } = useWindowDimensions();
 
