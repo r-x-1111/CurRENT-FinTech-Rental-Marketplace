@@ -3,6 +3,12 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 import { createSeed } from "../data/seed";
+import { listings as mockListings } from "../data/mock";
+import {
+  MAIN_CATEGORIES,
+  MOBILE_BROWSE_CATEGORIES,
+  mobileBrowseCategoryFor,
+} from "../constants/categories";
 import {
   getIssueReportPermissions,
   isLenderDisputeEligible,
@@ -282,6 +288,7 @@ function journey() {
   const book = (id = "booking-1", listingId = "sony-a7iii") =>
     act({
       type: "instantBook",
+      deliveryAddress: "Mont Kiara, Kuala Lumpur",
       id,
       listingId,
       start: `${dateAfter(2)}T11:00:00+08:00`,
@@ -349,10 +356,12 @@ test("deriveDisplayDelivery connects Transaction Details / Rental Details to eac
   assert.ok(seed.deliveryHistory?.some((entry) => entry.id === paidDisplay.receiptReference));
 
   // A booking with no saved deliveryDemo and no delivery address must never claim a completed payment.
+  // (Every real Delivery Only booking must carry an address per checkout validation; this models the
+  // in-flight pre-checkout state before an address has been entered.)
   const noAddress = byId("demo-booking-protection-active");
   const noAddressDisplay = deriveDisplayDelivery({
-    collectionMethod: noAddress.collectionMethod, deliveryDemo: noAddress.deliveryDemo || null,
-    pickupLocation: listingFor(noAddress)?.location || "", deliveryAddress: noAddress.deliveryAddress,
+    collectionMethod: noAddress.collectionMethod, deliveryDemo: null,
+    pickupLocation: listingFor(noAddress)?.location || "", deliveryAddress: undefined,
   });
   assert.notEqual(noAddressDisplay.status, "paid_demo");
   assert.equal(noAddressDisplay.fee, null, "Must never fabricate a delivery fee");
@@ -937,6 +946,7 @@ test("accounts, private messages and notifications stay separated", () => {
   j.act({ type: "verify", status: "verified" });
   j.act({
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "verified",
     listingId: "sony-a7iii",
     start: `${dateAfter(5)}T11:00:00+08:00`,
@@ -952,6 +962,7 @@ test("Delivery Only is enforced and recorded in the agreement", () => {
   let state = createSeed();
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "collection-booking",
     listingId: "sony-a7iii",
     start: `${dateAfter(2)}T11:00:00+08:00`,
@@ -1395,6 +1406,7 @@ test("restrictions block rental requests for overdue obligations and banned user
     () =>
       transition(state, {
         type: "instantBook",
+        deliveryAddress: "Mont Kiara, Kuala Lumpur",
         id: "req-overdue",
         listingId: "sony-a7iii",
         start: `${dateAfter(2)}T11:00:00+08:00`,
@@ -1411,6 +1423,7 @@ test("restrictions block rental requests for overdue obligations and banned user
     () =>
       transition(state, {
         type: "instantBook",
+        deliveryAddress: "Mont Kiara, Kuala Lumpur",
         id: "req-banned",
         listingId: "sony-a7iii",
         start: `${dateAfter(2)}T11:00:00+08:00`,
@@ -1428,6 +1441,7 @@ test("Confirm Received records delivery without gating or shifting the rental cl
   const end = `${dateAfter(22)}T11:00:00+08:00`;
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "booking-handover",
     listingId: "sony-a7iii",
     start,
@@ -1475,6 +1489,7 @@ test("scheduled start derives Active independently of delivery receipt or later 
   const end = `${dateAfter(22)}T11:00:00+08:00`;
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "booking-auto-active",
     listingId: "sony-a7iii",
     start,
@@ -1556,6 +1571,7 @@ test("confirmed booking cancellation is available to both participants only befo
   const end = `${dateAfter(22)}T11:00:00+08:00`;
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "booking-cancel-ok",
     listingId: "sony-a7iii",
     start,
@@ -1609,6 +1625,7 @@ test("confirmed booking cancellation is available to both participants only befo
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "booking-cancel-renter",
     listingId: "sony-a7iii",
     start: `${dateAfter(25)}T11:00:00+08:00`,
@@ -1629,6 +1646,7 @@ test("confirmed booking cancellation is available to both participants only befo
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "booking-cancel-late",
     listingId: "sony-a7iii",
     start: `${dateAfter(25)}T11:00:00+08:00`,
@@ -1776,6 +1794,7 @@ test("return evidence releases the deposit and preserves the unassessed timing o
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "booking-return",
     listingId: "sony-a7iii",
     start: `${dateAfter(20)}T11:00:00+08:00`,
@@ -1857,6 +1876,7 @@ test("Phase 5: predefined fictional dispute resolutions properly adjust deposit 
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "booking-dispute",
     listingId: "sony-a7iii",
     start: `${dateAfter(20)}T11:00:00+08:00`,
@@ -2053,6 +2073,7 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "booking-eligible-after-req",
     listingId: "sony-a7iii",
     start: "2026-11-23T02:00:00Z",
@@ -2534,6 +2555,7 @@ test("V3.23 Section 7.4: free-cancellation deadline calculation, notice format, 
   state = transition(state, { type: "login", userId: "demo-renter" });
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "booking-tz-test",
     listingId: "sony-a7iii",
     start: startUtc,
@@ -2617,6 +2639,7 @@ test("Section 10: contiguous rental dates create a new booking and charge a new 
 
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "first-independent-rental",
     listingId: "sony-a7iii",
     start: startTs,
@@ -2626,6 +2649,7 @@ test("Section 10: contiguous rental dates create a new booking and charge a new 
 
   state = transition(state, {
     type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
     id: "second-independent-rental",
     listingId: "sony-a7iii",
     start: endTs,
@@ -3218,4 +3242,71 @@ test("Section 31: Profile post-verification cleanup — generic Verified badge a
     "Customer Service",
   ];
   assert.equal(trustAndSupportItems.length, 4);
+});
+
+test("Every seeded Delivery Only booking carries a delivery address, and checkout rejects a missing one", () => {
+  const state = createSeed("admin_demo");
+  const deliveryOnlyBookings = state.bookings.filter((b) => b.collectionMethod === "Delivery Only");
+  assert.ok(deliveryOnlyBookings.length > 0);
+  for (const booking of deliveryOnlyBookings) {
+    assert.ok(
+      booking.deliveryAddress && booking.deliveryAddress.trim().length > 0,
+      `Delivery Only booking ${booking.id} must have a non-empty deliveryAddress`,
+    );
+  }
+
+  // The Sony A7 III upcoming booking specifically must no longer show "Not provided".
+  const sonyUpcoming = state.bookings.find((b) => b.id === "demo-booking-upcoming-1")!;
+  assert.equal(sonyUpcoming.collectionMethod, "Delivery Only");
+  assert.ok(sonyUpcoming.deliveryAddress);
+
+  // Checkout-time validation: instantBook must reject an empty delivery address.
+  const seed = createSeed("admin_demo");
+  assert.throws(() => {
+    transition(seed, {
+      type: "instantBook",
+      id: "no-address-booking",
+      listingId: "portable-projector",
+      start: `${dateAfter(20)}T11:00:00+08:00`,
+      end: `${dateAfter(22)}T11:00:00+08:00`,
+      paymentMethod: "Demo FPX",
+      deliveryAddress: "",
+    } as Action);
+  }, /Enter a delivery destination/);
+});
+
+test("Home filter chips and listing category tags share one vocabulary; empty chips are hidden", () => {
+  // Every mock listing's category must be one of the shared MAIN_CATEGORIES.
+  for (const listing of mockListings) {
+    assert.ok(
+      (MAIN_CATEGORIES as readonly string[]).includes(listing.category),
+      `Listing ${listing.id} has category "${listing.category}" outside MAIN_CATEGORIES`,
+    );
+  }
+
+  // The chip list is derived from the exact same MAIN_CATEGORIES vocabulary.
+  assert.deepEqual(
+    MOBILE_BROWSE_CATEGORIES,
+    ["All Categories", ...MAIN_CATEGORIES],
+  );
+
+  // mobileBrowseCategoryFor must map every listing to a real chip 1:1 (no lossy bucketing into "Other").
+  for (const listing of mockListings) {
+    assert.equal(mobileBrowseCategoryFor(listing), listing.category);
+  }
+
+  // A category with zero published listings must be absent from the visible chip set.
+  const publishedCategories = new Set(
+    mockListings.filter((l) => l.status === "published").map((l) => mobileBrowseCategoryFor(l)),
+  );
+  const visibleCategories = MOBILE_BROWSE_CATEGORIES.filter(
+    (c) => c === "All Categories" || publishedCategories.has(c),
+  );
+  for (const category of visibleCategories) {
+    if (category === "All Categories") continue;
+    assert.ok(
+      mockListings.some((l) => l.status === "published" && mobileBrowseCategoryFor(l) === category),
+      `Chip "${category}" is visible but has no published listings`,
+    );
+  }
 });

@@ -159,8 +159,12 @@ export default function MessagesScreen() {
       unread: state.notifications.filter((notice) => notice.bookingId === booking.id && notice.userId === user.id && !notice.read && notice.title.includes("sent you a message")).length });
   }
   rows.sort((a, b) => b.latestAt.localeCompare(a.latestAt));
+  // Prefer the specific booking's own title over the shared catalogue listing's
+  // title, so a conversation always identifies the exact rental it belongs to —
+  // matching what My Rentals / Transaction History show for that same booking.
+  const rowTitle = (row: Row) => row.booking?.title || row.listing.title;
   const visible = rows.filter((row) =>
-    `${row.other} ${row.listing.title}`.toLowerCase().includes(search.toLowerCase()));
+    `${row.other} ${rowTitle(row)}`.toLowerCase().includes(search.toLowerCase()));
   const active = rows.find((row) => row.id === selected);
   const messages = [
     ...(active?.kind === "shared" ? remoteMessages.filter((message) => message.conversation_id === active.id)
@@ -215,13 +219,13 @@ export default function MessagesScreen() {
     <View style={styles.shell}>
       {(!mobile || !active) && <View style={[styles.sidebar, mobile && styles.mobileSidebar]}>
         <View style={mobile && styles.mobileSearchWrap}>{mobile && <Ionicons name="search-outline" size={18} color={colors.muted} />}<TextInput accessibilityLabel="Search conversations" placeholder="Search conversations" value={search} onChangeText={setSearch} style={[styles.search, mobile && styles.mobileSearch]} /></View>
-        <ScrollView style={styles.conversationList} keyboardShouldPersistTaps="handled">{visible.length ? visible.map((row) => <Pressable key={row.id} accessibilityRole="button" accessibilityLabel={`Open conversation with ${row.other} about ${row.listing.title}`}
+        <ScrollView style={styles.conversationList} keyboardShouldPersistTaps="handled">{visible.length ? visible.map((row) => <Pressable key={row.id} accessibilityRole="button" accessibilityLabel={`Open conversation with ${row.other} about ${rowTitle(row)}`}
           onPress={() => { setSelected(row.id); setDraft(""); setPhoto(null); }} style={[styles.row, mobile && styles.mobileRow, selected === row.id && { backgroundColor: colors.paleBlue }]}>
           {row.listing.imageUrl
             ? <Image source={{ uri: row.listing.imageUrl }} style={[styles.rowThumb, mobile && styles.mobileRowThumb]} />
             : <View style={[styles.avatar, mobile && styles.mobileAvatar]}><Ionicons name="person-outline" size={21} color={colors.blue} /></View>}
           <View style={{ flex: 1 }}><View style={styles.rowTop}><Text style={styles.name} numberOfLines={1}>{row.other}</Text><Text style={s.caption}>{formatMalaysiaDateTime(row.latestAt).split(", ")[1]}</Text></View>
-            <Text style={styles.roleLabel} numberOfLines={1}>{row.listing.ownerId === user.id ? "My Listing" : "Renting"} · {row.listing.title}</Text>
+            <Text style={styles.roleLabel} numberOfLines={1}>{row.listing.ownerId === user.id ? "My Listing" : "Renting"} · {rowTitle(row)}</Text>
             <Text style={s.caption} numberOfLines={1}>{row.preview}</Text></View>
           <View style={styles.rowEnd}>
             {!!row.unread && <View style={[styles.badge, mobile && styles.mobileBadge]}><Text style={styles.badgeText}>{row.unread}</Text></View>}
@@ -235,7 +239,7 @@ export default function MessagesScreen() {
             <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View><View><Text style={styles.name}>{active.other}</Text><Text style={s.caption}>{active.booking?.status || "Listing enquiry"}</Text></View></View>
           <Pressable accessibilityRole="button" onPress={viewRentalItem} style={styles.listing}>
             {!!active.listing.imageUrl && <Image source={{ uri: active.listing.imageUrl }} style={styles.listingImage} />}
-            <View style={{ flex: 1 }}><Text style={styles.itemName}>{active.listing.title}</Text><Text style={s.caption}>{money(active.listing.dailyPrice)} / day · Owner: {active.listing.ownerId === user.id ? user.name : active.other}</Text></View>
+            <View style={{ flex: 1 }}><Text style={styles.itemName}>{rowTitle(active)}</Text><Text style={s.caption}>{money(active.listing.dailyPrice)} / day · Owner: {active.listing.ownerId === user.id ? user.name : active.other}</Text></View>
             <Ionicons name="chevron-forward" size={18} color={colors.blue} /></Pressable>
           {!!active.booking && <Button secondary onPress={viewRentalItem}>View Rental Details</Button>}
           {active.listing.ownerId !== user.id && <Button secondary onPress={() => router.push(`/listing/${active.listing.id}`)}>Book This Item</Button>}

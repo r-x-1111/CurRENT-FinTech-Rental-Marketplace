@@ -21,27 +21,25 @@ export const MAIN_CATEGORIES = [
   "Event Gear",
 ] as const;
 
-export const MOBILE_BROWSE_CATEGORIES = [
-  "All Categories", "Electronics", "Tools", "Furniture", "Sports & Outdoors",
-  "Vehicles", "Party & Events", "Clothing", "Other",
-] as const;
+// Single shared category vocabulary used by both the Home filter chips and
+// every listing's `category` field (set at creation in app/owner/edit.tsx via
+// the `categories` export above). Keeping one list means a chip can never
+// drift out of sync with the tags actually used on listings.
+export const MOBILE_BROWSE_CATEGORIES = ["All Categories", ...MAIN_CATEGORIES] as const;
 
 export type MobileBrowseCategory = (typeof MOBILE_BROWSE_CATEGORIES)[number];
 
-export function mobileBrowseCategoryFor(listing: { category: string; title: string }): MobileBrowseCategory {
-  const category = listing.category;
-  if (category === "Electronics" || category === "Tools" || category === "Vehicles" || category === "Furniture" || category === "Clothing") return category;
-  if (category === "Outdoors" || category === "Sports & Outdoors") return "Sports & Outdoors";
-  if (category === "Event Gear" || category === "Party & Events") return "Party & Events";
-  if (/\b(chair|sofa|table|desk|cabinet|stool|shelf|bed)\b/i.test(listing.title)) return "Furniture";
-  if (/\b(dress|shirt|jacket|coat|suit|jeans|skirt|handbag|clothing)\b/i.test(listing.title)) return "Clothing";
-  return "Other";
+export function mobileBrowseCategoryFor(listing: { category: string }): MobileBrowseCategory {
+  return (MAIN_CATEGORIES as readonly string[]).includes(listing.category)
+    ? (listing.category as MobileBrowseCategory)
+    : "All Categories";
 }
 
 export function mobileBrowseCategoryForParam(category?: string): MobileBrowseCategory {
-  if (!category || category === "All items" || category === "All Items") return "All Categories";
-  if (category === "Gaming" || category === "Luxury" || category === "Household" || category === "Work & Office") return "Other";
-  return mobileBrowseCategoryFor({ category, title: "" });
+  if (!category || category === "All items" || category === "All Categories") return "All Categories";
+  return (MAIN_CATEGORIES as readonly string[]).includes(category)
+    ? (category as MobileBrowseCategory)
+    : "All Categories";
 }
 
 export const MALAYSIAN_STATES = [

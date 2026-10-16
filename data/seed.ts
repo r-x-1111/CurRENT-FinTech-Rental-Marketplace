@@ -192,6 +192,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-02T02:00:00Z",
       end: "2026-11-04T02:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Mont Kiara, Kuala Lumpur",
       status: "upcoming",
       quote: {
         days: 2,
@@ -222,6 +223,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-08T03:00:00Z",
       end: "2026-11-11T03:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Bangsar, Kuala Lumpur",
       status: "upcoming",
       quote: {
         days: 3,
@@ -252,6 +254,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-15T06:00:00Z",
       end: "2026-11-17T06:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Shah Alam, Selangor",
       status: "upcoming",
       quote: {
         days: 2,
@@ -286,6 +289,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-09T14:00:00Z",
       end: "2026-10-15T14:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Puchong, Selangor",
       status: "active",
       quote: {
         days: 6,
@@ -319,6 +323,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-08T10:00:00Z",
       end: "2026-10-14T10:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Petaling Jaya, Selangor",
       status: "active",
       quote: {
         days: 6,
@@ -352,6 +357,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-07T09:00:00Z",
       end: "2026-10-13T09:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Subang Jaya, Selangor",
       status: "active",
       quote: {
         days: 6,
@@ -389,6 +395,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-05T10:00:00Z",
       end: "2026-10-10T10:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Cheras, Kuala Lumpur",
       status: "return_pending",
       quote: {
         days: 5,
@@ -424,6 +431,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-06T11:00:00Z",
       end: "2026-10-10T11:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Georgetown, Penang",
       status: "return_pending",
       quote: {
         days: 4,
@@ -459,6 +467,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-08T12:00:00Z",
       end: "2026-10-10T12:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Bayan Lepas, Penang",
       status: "return_pending",
       quote: {
         days: 2,
@@ -498,6 +507,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-20T10:00:00Z",
       end: "2026-11-22T10:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Ampang, Kuala Lumpur",
       status: "cancelled",
       quote: {
         days: 2,
@@ -526,6 +536,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-25T09:00:00Z",
       end: "2026-11-27T09:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Klang, Selangor",
       status: "cancelled",
       quote: {
         days: 2,
@@ -554,6 +565,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-28T14:00:00Z",
       end: "2026-11-30T14:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Damansara, Selangor",
       status: "cancelled",
       quote: {
         days: 2,
@@ -586,6 +598,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-09-20T10:00:00Z",
       end: "2026-09-22T10:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Mont Kiara, Kuala Lumpur",
       status: "disputed",
       quote: {
         days: 2,
@@ -618,6 +631,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-09-24T10:00:00Z",
       end: "2026-09-26T10:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Bangsar, Kuala Lumpur",
       status: "disputed",
       quote: {
         days: 2,
@@ -650,6 +664,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-09-28T14:00:00Z",
       end: "2026-09-30T14:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Shah Alam, Selangor",
       status: "disputed",
       quote: {
         days: 2,
@@ -871,6 +886,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-21T02:00:00Z",
       end: "2026-10-24T02:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Puchong, Selangor",
       status: "upcoming",
       quote: {
         days: 3,
@@ -911,6 +927,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-13T02:00:00Z",
       end: "2026-10-19T02:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Petaling Jaya, Selangor",
       status: "active",
       quote: {
         days: 6,
@@ -945,6 +962,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-10T02:00:00Z",
       end: "2026-10-15T02:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Subang Jaya, Selangor",
       status: "active",
       quote: {
         days: 5,
@@ -1072,6 +1090,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-25T03:00:00Z",
       end: "2026-10-27T03:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Cheras, Kuala Lumpur",
       status: "cancelled",
       quote: {
         days: 2,
@@ -1104,6 +1123,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-09-26T02:00:00Z",
       end: "2026-09-28T02:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Georgetown, Penang",
       status: "disputed",
       quote: {
         days: 2,
@@ -1143,6 +1163,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-05T02:00:00Z",
       end: "2026-11-08T02:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Bayan Lepas, Penang",
       status: "upcoming",
       quote: {
         days: 3,
@@ -1172,6 +1193,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-12T06:00:00Z",
       end: "2026-11-14T06:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Ampang, Kuala Lumpur",
       status: "upcoming",
       quote: {
         days: 2,
@@ -1201,6 +1223,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-10T09:00:00Z",
       end: "2026-10-13T09:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Klang, Selangor",
       status: "active",
       quote: {
         days: 3,
@@ -1237,6 +1260,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-09-05T10:00:00Z",
       end: "2026-09-08T10:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Damansara, Selangor",
       status: "completed",
       quote: {
         days: 3,
@@ -1272,6 +1296,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-09-12T14:00:00Z",
       end: "2026-09-14T14:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Mont Kiara, Kuala Lumpur",
       status: "completed",
       quote: {
         days: 2,
@@ -1307,6 +1332,7 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-09-18T10:00:00Z",
       end: "2026-09-20T10:00:00Z",
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Bangsar, Kuala Lumpur",
       status: "completed",
       quote: {
         days: 2,
@@ -1665,6 +1691,7 @@ export function createAdminDemoSeed(): Marketplace {
       returnTime: "11:00 AM",
       durationDays: 3,
       collectionMethod: "Delivery Only",
+      deliveryAddress: "Shah Alam, Selangor",
       location: "Kuala Lumpur",
       dailyPrice: 80,
       estimatedRentalFee: 240,

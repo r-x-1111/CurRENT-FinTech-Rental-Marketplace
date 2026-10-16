@@ -95,6 +95,14 @@ export default function HomeScreen() {
     selectedLocation !== "All Malaysia" ||
     savedOnly;
 
+  // Hide any category chip that has no published listings tagged with it.
+  const publishedListings = state.listings.filter((l) => l.status === "published");
+  const visibleCategories = MOBILE_BROWSE_CATEGORIES.filter(
+    (category) =>
+      category === "All Categories" ||
+      publishedListings.some((l) => mobileBrowseCategoryFor(l) === category),
+  );
+
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.screen}>
       <GuestAuthPrompt visible={authPrompt} onClose={() => setAuthPrompt(false)} returnTo="/(tabs)" />
@@ -105,17 +113,18 @@ export default function HomeScreen() {
         {/* =========================================================================
             1. HERO SECTION (Canva Page 2 Dark Navy Anchor)
            ========================================================================= */}
-        <LinearGradient colors={isMobile ? ["#061A38", colors.navy, "#2463FF"] : [colors.navy, colors.navy]} locations={[0, 0.55, 1]} style={[styles.heroWrapper, isMobile && styles.mobileHeroWrapper]}>
+        <LinearGradient colors={["#061A38", colors.navy, "#2463FF"]} locations={[0, 0.55, 1]} style={[styles.heroWrapper, isMobile && styles.mobileHeroWrapper]}>
           {isMobile && <View pointerEvents="none" style={styles.mobileHeroCurve} />}
           {isMobile && width >= 375 && <View pointerEvents="none" style={styles.mobileHeroProduct}>
             <Image source={{ uri: "/products/sony-a7iii.jpg" }} style={styles.mobileHeroProductImage} />
           </View>}
+          {isDesktop && <View pointerEvents="none" style={styles.desktopHeroCurve} />}
           <View style={styles.heroContainer}>
             <View
               style={[
                 styles.heroContent,
                 isMobile && styles.mobileHeroContent,
-                { width: isDesktop ? "62%" : "100%" },
+                { width: isDesktop ? "58%" : "100%" },
               ]}
             >
               <View style={styles.heroTopRow}>
@@ -246,7 +255,7 @@ export default function HomeScreen() {
               )}
 
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.mobileCategoryScroll} contentContainerStyle={styles.categoryChips}>
-                  {MOBILE_BROWSE_CATEGORIES.map((category) => {
+                  {visibleCategories.map((category) => {
                     const selected = mobileCategory === category;
                     return (
                       <Pressable key={category} accessibilityRole="button" accessibilityLabel={`Filter by ${category}`} accessibilityState={{ selected }} onPress={() => setMobileCategory(category)} style={[styles.categoryChip, selected && styles.categoryChipSelected]}>
@@ -257,19 +266,13 @@ export default function HomeScreen() {
                 </ScrollView>
             </View>
 
-            {/* Floating Sample Cards (Shown on Desktop, Canva Page 2) */}
             {isDesktop && (
               <View style={styles.heroShowcase}>
                 <Pressable
                   onPress={() => router.push("/listing/sony-a7iii")}
                   style={[styles.floatingCard, styles.floatCard1]}
                 >
-                  <Image
-                    source={{
-                      uri: "/products/sony-a7iii.jpg",
-                    }}
-                    style={styles.floatImg}
-                  />
+                  <Image source={{ uri: "/products/sony-a7iii.jpg" }} style={styles.floatImg} />
                   <View style={styles.floatBody}>
                     <Text style={styles.floatTitle}>Sony A7 III</Text>
                     <Text style={styles.floatPrice}>RM45/day · PJ</Text>
@@ -280,12 +283,7 @@ export default function HomeScreen() {
                   onPress={() => router.push("/listing/ps5-console")}
                   style={[styles.floatingCard, styles.floatCard2]}
                 >
-                  <Image
-                    source={{
-                      uri: "/products/ps5-console.jpg",
-                    }}
-                    style={styles.floatImg}
-                  />
+                  <Image source={{ uri: "/products/ps5-console.jpg" }} style={styles.floatImg} />
                   <View style={styles.floatBody}>
                     <Text style={styles.floatTitle}>PlayStation 5</Text>
                     <Text style={styles.floatPrice}>RM35/day · Subang</Text>
@@ -296,12 +294,7 @@ export default function HomeScreen() {
                   onPress={() => router.push("/listing/portable-projector")}
                   style={[styles.floatingCard, styles.floatCard3]}
                 >
-                  <Image
-                    source={{
-                      uri: "/products/portable-projector.jpg",
-                    }}
-                    style={styles.floatImg}
-                  />
+                  <Image source={{ uri: "/products/portable-projector.jpg" }} style={styles.floatImg} />
                   <View style={styles.floatBody}>
                     <Text style={styles.floatTitle}>Portable Projector</Text>
                     <Text style={styles.floatPrice}>RM28/day · KL</Text>
@@ -391,6 +384,57 @@ const styles = StyleSheet.create({
   mobileHeroCurve: { position: "absolute", right: -86, top: 10, width: 250, height: 310, borderRadius: 150, backgroundColor: "#2463FF", opacity: 0.28 },
   mobileHeroProduct: { position: "absolute", right: 16, top: 150, width: 118, height: 92, borderRadius: 15, backgroundColor: colors.white, padding: 4, transform: [{ rotate: "7deg" }], shadowColor: "#061A38", shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
   mobileHeroProductImage: { width: "100%", height: "100%", borderRadius: 11 },
+  desktopHeroCurve: { position: "absolute", right: -140, top: -40, width: 460, height: 520, borderRadius: 260, backgroundColor: "#2463FF", opacity: 0.22 },
+  heroShowcase: {
+    width: "38%",
+    height: 320,
+    position: "relative",
+  },
+  floatingCard: {
+    position: "absolute",
+    backgroundColor: "white",
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#061A38",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    elevation: 8,
+    width: 175,
+  },
+  floatCard1: {
+    top: 5,
+    left: 10,
+    transform: [{ rotate: "-5deg" }],
+  },
+  floatCard2: {
+    top: 35,
+    right: 10,
+    transform: [{ rotate: "4deg" }],
+  },
+  floatCard3: {
+    bottom: 20,
+    left: 70,
+    transform: [{ rotate: "-3deg" }],
+  },
+  floatImg: {
+    width: "100%",
+    height: 95,
+  },
+  floatBody: {
+    padding: 9,
+    gap: 2,
+  },
+  floatTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.navy,
+  },
+  floatPrice: {
+    fontSize: 11,
+    color: colors.blue,
+    fontWeight: "600",
+  },
   heroContainer: {
     maxWidth: 1180,
     width: "100%",
@@ -559,55 +603,6 @@ const styles = StyleSheet.create({
   categoryChipText: { color: colors.navy, fontSize: 12, fontWeight: "700" },
   categoryChipTextSelected: { color: colors.white },
   // Floating Hero Showcase
-  heroShowcase: {
-    width: "35%",
-    height: 380,
-    position: "relative",
-  },
-  floatingCard: {
-    position: "absolute",
-    backgroundColor: "white",
-    borderRadius: 14,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 5,
-    width: 175,
-  },
-  floatCard1: {
-    top: 15,
-    left: 20,
-    transform: [{ rotate: "-4deg" }],
-  },
-  floatCard2: {
-    top: 80,
-    right: 10,
-    transform: [{ rotate: "3deg" }],
-  },
-  floatCard3: {
-    bottom: 25,
-    left: 45,
-    transform: [{ rotate: "-2deg" }],
-  },
-  floatImg: {
-    width: "100%",
-    height: 100,
-  },
-  floatBody: {
-    padding: 8,
-    gap: 2,
-  },
-  floatTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.navy,
-  },
-  floatPrice: {
-    fontSize: 11,
-    color: colors.blue,
-    fontWeight: "600",
-  },
   // Catalogue section
   catalogueSection: {
     maxWidth: 1180,

@@ -815,6 +815,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       availability(state, listing, action.start, action.end);
       const collectionMethod = "Delivery Only";
+      requireThat(
+        action.deliveryAddress && action.deliveryAddress.trim().length > 0,
+        "Enter a delivery destination before confirming this booking.",
+      );
 
       const durMinutes = calculateDurationMinutes(action.start, action.end);
       const cutoff = calculateCancellationCutoff(action.start);
