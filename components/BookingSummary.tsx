@@ -27,13 +27,19 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
     pickupLocation: listing?.privateMeetingVenue || listing?.location || booking.deliveryDemo?.origin || "",
     deliveryAddress: booking.deliveryAddress,
     pickupPostcode: listing?.pickupPostcode,
+    parcelWeightKg: listing?.parcelWeightKg,
+    parcelDimensionsCm: listing?.parcelDimensionsCm,
+    deliveryRequirement: listing?.deliveryRequirement,
+    title: listing?.title || booking.title,
+    category: listing?.category,
+    description: listing?.description,
     deliveryPostcode: booking.deliveryPostcode,
     demoBooking: booking.contextMode === "admin_demo" && booking.id.startsWith("demo-"),
     listingId: booking.listingId,
   });
   const unpaidDeliveryQuote = booking.deliveryDemo?.status === "required";
   const recordedDeliveryFee = booking.deliveryDemo?.fee ?? (booking.collectionMethod === "Self-Pickup" ? 0 : null);
-  const summaryDeliveryFee = unpaidDeliveryQuote ? delivery.estimatedTwoWayFee ?? recordedDeliveryFee : recordedDeliveryFee;
+  const summaryDeliveryFee = unpaidDeliveryQuote || !booking.deliveryDemo ? delivery.estimatedTwoWayFee ?? null : recordedDeliveryFee;
   const totals = getBookingTotals(booking.quote, summaryDeliveryFee);
   const tier = tierForScore(booking.riskScore);
   const paymentMade = booking.payment === "paid" || booking.payment === "refunded";
@@ -50,8 +56,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
   // with the outbound/return split tucked behind "View Delivery Breakdown".
   const isPaidDelivery = booking.deliveryDemo?.status === "paid_demo";
   const isRefundedDelivery = booking.deliveryDemo?.status === "refunded_demo";
-  const isAwaitingDelivery = unpaidDeliveryQuote;
-  const isPaidOrRefundedDelivery = isPaidDelivery || isRefundedDelivery;
+  const isAwaitingDelivery = unpaidDeliveryQuote || (!booking.deliveryDemo && delivery.estimatedTwoWayFee != null);
   const totalDeliveryFee = summaryDeliveryFee;
   const deliveryOutboundFee = delivery.outboundFee ?? delivery.estimatedOutboundFee ?? null;
   const deliveryReturnFee = delivery.returnFee ?? delivery.estimatedReturnFee ?? null;
@@ -84,42 +89,35 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
         <Text style={styles.section}>GrabExpress Delivery (Demo)</Text>
         <Badge text={deliveryStatusLabel} tone={deliveryStatusTone} />
       </View>
-      <Row label="Pickup" value={delivery.origin || "Not recorded"} />
-      <Row label="Deliver to" value={delivery.destination || "Not recorded"} />
-      {delivery.distanceKm != null && (
-        <Row
-          label="Round-trip distance"
-          value={
-            sameRouteDistance
-              ? `${delivery.distanceKm} km each way`
-              : `${delivery.distanceKm} km out · ${delivery.returnDistanceKm ?? "—"} km back`
-          }
-        />
-      )}
       {totalDeliveryFee != null ? (
         <Row
-          label={isPaidOrRefundedDelivery ? "Total delivery fee" : "Total delivery fee (Estimate)"}
+          label="Calculated Delivery Fee (two-way)"
           value={money(totalDeliveryFee)}
           strong
         />
       ) : (
         <Text style={styles.note}>Delivery Address Required</Text>
       )}
-      {isAwaitingDelivery && totalDeliveryFee != null && <Row label="Outstanding" value={money(totalDeliveryFee)} />}
-      {isRefundedDelivery && totalDeliveryFee != null && <Row label="Refunded amount" value={money(totalDeliveryFee)} />}
-      {(deliveryOutboundFee != null || deliveryReturnFee != null) && (
+      <Row label="Automatically Selected Vehicle" value={delivery.vehicle || "Unavailable"} />
+      <Row label="Payment Status" value={deliveryStatusLabel} />
+      {(deliveryOutboundFee != null || deliveryReturnFee != null || delivery.origin || delivery.destination) && (
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: showDeliveryBreakdown }} onPress={() => setShowDeliveryBreakdown((v) => !v)}>
           <View style={styles.breakdownToggleRow}>
-            <Text style={styles.link}>{showDeliveryBreakdown ? "Hide Delivery Breakdown" : "View Delivery Breakdown"}</Text>
+            <Text style={styles.link}>{showDeliveryBreakdown ? "Hide Delivery Details" : "View Delivery Details"}</Text>
             <Ionicons name={showDeliveryBreakdown ? "chevron-up" : "chevron-down"} size={14} color={colors.blue} />
           </View>
         </Pressable>
       )}
       {showDeliveryBreakdown && (
         <View style={styles.breakdownBox}>
+          <Row label="Pickup Location" value={delivery.origin || "Not recorded"} />
+          <Row label="Delivery Address" value={delivery.destination || "Not recorded"} />
+          <Row label="Estimated Distance" value={sameRouteDistance ? `${delivery.distanceKm} km each way` : `${delivery.distanceKm ?? "—"} km out · ${delivery.returnDistanceKm ?? "—"} km back`} />
+          <Row label="Vehicle type" value={delivery.vehicle || "Unavailable"} />
           <Row label="Outbound delivery" value={`${delivery.distanceKm ?? "—"} km · ${money(deliveryOutboundFee ?? 0)}`} />
           <Row label="Return delivery" value={`${delivery.returnDistanceKm ?? "—"} km · ${money(deliveryReturnFee ?? 0)}`} />
-          <Row label={isPaidDelivery ? "Total paid" : isRefundedDelivery ? "Total refunded" : "Total delivery fee"} value={money(totalDeliveryFee ?? 0)} strong />
+          <Row label="Total two-way delivery fee" value={totalDeliveryFee != null ? money(totalDeliveryFee) : "Unavailable"} strong />
+          <Row label="Payment status" value={deliveryStatusLabel} />
         </View>
       )}
 

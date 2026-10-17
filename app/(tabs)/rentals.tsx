@@ -126,6 +126,12 @@ export default function RentalsScreen() {
       pickupLocation: listing?.privateMeetingVenue || listing?.location || b.deliveryDemo?.origin || "",
       deliveryAddress: b.deliveryAddress,
       pickupPostcode: listing?.pickupPostcode,
+      parcelWeightKg: listing?.parcelWeightKg,
+      parcelDimensionsCm: listing?.parcelDimensionsCm,
+      deliveryRequirement: listing?.deliveryRequirement,
+      title: listing?.title || b.title,
+      category: listing?.category,
+      description: listing?.description,
       deliveryPostcode: b.deliveryPostcode,
       demoBooking: b.contextMode === "admin_demo" && b.id.startsWith("demo-"),
       listingId: b.listingId,
@@ -318,33 +324,31 @@ export default function RentalsScreen() {
                     <Badge text="Self-Pickup — No Delivery Fee" />
                   ) : card.delivery.fee != null ? (
                     <>
-                      <View style={s.row}>
-                        <Text style={s.caption}>
-                          {card.delivery.origin} → {card.delivery.destination}{card.delivery.distanceKm ? `, ${card.delivery.distanceKm} km` : ""}
-                        </Text>
-                        <Text style={styles.txAmount}>{money(b.deliveryDemo ? card.delivery.fee : card.delivery.estimatedTwoWayFee ?? card.delivery.fee)}</Text>
-                      </View>
-                      <Text style={styles.ledgerLineStatus}>
-                        {card.delivery.status === "paid_demo" ? "Paid" : card.delivery.status === "refunded_demo" ? "Refunded" : b.deliveryDemo?.status === "required" ? "Awaiting payment" : "Two-way estimate only · no delivery payment recorded"}
-                      </Text>
-                      <Text style={s.caption}>Demo estimate, not a live Grab quotation. Not CurRENT revenue.</Text>
+                      <Row label="Calculated Delivery Fee (two-way)" value={money(b.deliveryDemo ? card.delivery.fee : card.delivery.estimatedTwoWayFee ?? card.delivery.fee)} />
+                      <Row label="Automatically Selected Vehicle" value={card.delivery.vehicle || "Unavailable"} />
+                      <Row label="Payment Status" value={card.delivery.status === "paid_demo" ? "Paid (Demo)" : card.delivery.status === "refunded_demo" ? "Refunded (Demo)" : "Awaiting Payment"} />
                       <Pressable accessibilityRole="button" onPress={() => setExpandedDeliveryBreakdown((prev) => {
                         const next = new Set(prev);
                         if (next.has(b.id)) next.delete(b.id); else next.add(b.id);
                         return next;
                       })}>
                         <Text style={{ color: colors.blue, fontWeight: "700", marginTop: 2 }}>
-                          {showBreakdown ? "Hide Fee Breakdown" : "View Fee Breakdown"}
+                          {showBreakdown ? "Hide Delivery Details" : "View Delivery Details"}
                         </Text>
                       </Pressable>
                       {showBreakdown && (
                         <View style={styles.feeBreakdownBox}>
+                          <Row label="Pickup Location" value={card.delivery.origin || "Not recorded"} />
+                          <Row label="Delivery Address" value={card.delivery.destination || "Not recorded"} />
+                          <Row label="Estimated Distance" value={card.delivery.distanceKm != null ? `${card.delivery.distanceKm} km each way` : "Unavailable"} />
+                          <Row label="Vehicle type" value={card.delivery.vehicle || "Unavailable"} />
                           {(card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee) != null && <View style={s.row}><Text style={s.caption}>Outbound delivery fee{b.deliveryDemo?.status === "required" || card.delivery.outboundFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee)!)}</Text></View>}
                           {(card.delivery.returnFee ?? card.delivery.estimatedReturnFee) != null && <View style={s.row}><Text style={s.caption}>Return delivery fee{b.deliveryDemo?.status === "required" || card.delivery.returnFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.returnFee ?? card.delivery.estimatedReturnFee)!)}</Text></View>}
                           {card.deliveryPaid && b.deliveryDemo
                             ? <View style={s.row}><Text style={s.bold}>Total two-way delivery fee</Text><Text style={s.bold}>{money(b.deliveryDemo.fee)}</Text></View>
                             : card.delivery.estimatedTwoWayFee != null && <View style={s.row}><Text style={s.bold}>Estimated two-way delivery fee</Text><Text style={s.bold}>{money(card.delivery.estimatedTwoWayFee)}</Text></View>}
                           <View style={s.row}><Text style={s.caption}>Delivery amount paid</Text><Text style={s.caption}>{money(card.deliveryPaid ? b.deliveryDemo?.fee || 0 : 0)}</Text></View>
+                          <Row label="Payment status" value={card.delivery.status === "paid_demo" ? "Paid (Demo)" : card.delivery.status === "refunded_demo" ? "Refunded (Demo)" : "Awaiting Payment"} />
                         </View>
                       )}
                       {(card.delivery.status === "paid_demo" || card.delivery.status === "refunded_demo") && card.delivery.receiptReference && (

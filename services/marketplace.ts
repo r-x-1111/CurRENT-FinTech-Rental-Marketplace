@@ -24,8 +24,7 @@ import {
 } from "./deposit";
 import { evaluateRentalOutcome, tierForScore } from "./riskScore";
 import { createSeed } from "../data/seed";
-import { estimateAutomaticDelivery } from "./geo";
-import { deriveDisplayDelivery } from "./delivery";
+import { deriveDisplayDelivery, quoteAutomaticVehicleDelivery } from "./delivery";
 
 export type Action =
   | { type: "login"; userId: string | null }
@@ -701,9 +700,11 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery destination.");
       requireThat(action.returnPickupTime && action.returnPickupTime.trim().length > 0,
         "Select a scheduled return pickup time.");
-      const outboundEstimate = estimateAutomaticDelivery(listing.pickupPostcode, action.deliveryPostcode);
-      const returnEstimate = estimateAutomaticDelivery(action.deliveryPostcode, listing.pickupPostcode);
-      requireThat(outboundEstimate && returnEstimate, "Enter a valid Malaysian postcode to automatically estimate the delivery fee.");
+      const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
+        title: listing.title, category: listing.category, description: listing.description };
+      const outboundEstimate = quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: action.deliveryPostcode, ...parcel });
+      const returnEstimate = quoteAutomaticVehicleDelivery({ pickupPostcode: action.deliveryPostcode, deliveryPostcode: listing.pickupPostcode, ...parcel });
+      requireThat(outboundEstimate && returnEstimate, "Delivery estimate unavailable. Check the pickup and delivery postcodes and route.");
       const deliveryEstimate = outboundEstimate;
       // Combined two-way (outbound + return) delivery fee: each leg calculated separately with
       // the same automatic postcode-distance formula, never assumed equal without calculating it.
@@ -732,9 +733,11 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           provider: "GrabExpress (Simulation)", origin: listing.location,
           destination: action.deliveryAddress, fee: twoWayFee, status: "required",
           outboundFee: outboundEstimate.fee, returnFee: returnEstimate.fee,
-          distanceKm: deliveryEstimate.distanceKm, baseFare: deliveryEstimate.baseFee,
-          distanceCharge: deliveryEstimate.distanceCharge, minimumFare: 5,
-          pricingReference: "CurRENT demo formula: two-way, MAX(RM5, RM4 + distance x RM1/km) per leg",
+          area: deliveryEstimate.area, vehicle: deliveryEstimate.vehicle,
+          weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm,
+          distanceKm: deliveryEstimate.distanceKm, baseFare: deliveryEstimate.baseFare,
+          distanceCharge: deliveryEstimate.distanceCharge, minimumFare: deliveryEstimate.minimumFare,
+          pricingReference: deliveryEstimate.reference,
         },
       });
       break;
@@ -748,9 +751,11 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const listing = state.listings.find((item) => item.id === booking.listingId);
       requireThat(listing?.pickupPostcode, "The lender must add a valid pickup postcode first.");
       requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery address.");
-      const outbound = estimateAutomaticDelivery(listing.pickupPostcode, action.deliveryPostcode);
-      const inbound = estimateAutomaticDelivery(action.deliveryPostcode, listing.pickupPostcode);
-      requireThat(outbound && inbound, "Enter a supported Malaysian delivery postcode.");
+      const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
+        title: listing.title, category: listing.category, description: listing.description };
+      const outbound = quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: action.deliveryPostcode, ...parcel });
+      const inbound = quoteAutomaticVehicleDelivery({ pickupPostcode: action.deliveryPostcode, deliveryPostcode: listing.pickupPostcode, ...parcel });
+      requireThat(outbound && inbound, "A valid local pickup and delivery route is required.");
       booking.deliveryAddress = action.deliveryAddress.trim();
       booking.deliveryPostcode = action.deliveryPostcode.trim();
       if (booking.deliveryDemo?.status === "required") {
@@ -760,8 +765,12 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         booking.deliveryDemo.returnFee = inbound.fee;
         booking.deliveryDemo.fee = Math.round((outbound.fee + inbound.fee) * 100) / 100;
         booking.deliveryDemo.distanceKm = outbound.distanceKm;
-        booking.deliveryDemo.baseFare = outbound.baseFee;
+        booking.deliveryDemo.baseFare = outbound.baseFare;
         booking.deliveryDemo.distanceCharge = outbound.distanceCharge;
+        booking.deliveryDemo.minimumFare = outbound.minimumFare;
+        booking.deliveryDemo.area = outbound.area;
+        booking.deliveryDemo.vehicle = outbound.vehicle;
+        booking.deliveryDemo.pricingReference = outbound.reference;
       }
       break;
     }
@@ -781,6 +790,12 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         deliveryAddress: booking.deliveryAddress,
         pickupPostcode: listing?.pickupPostcode,
         deliveryPostcode: booking.deliveryPostcode,
+        parcelWeightKg: listing?.parcelWeightKg,
+        parcelDimensionsCm: listing?.parcelDimensionsCm,
+        deliveryRequirement: listing?.deliveryRequirement,
+        title: listing?.title,
+        category: listing?.category,
+        description: listing?.description,
         demoBooking: booking.contextMode === "admin_demo" && booking.id.startsWith("demo-"),
         listingId: booking.listingId,
       });
@@ -789,6 +804,19 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       booking.deliveryDemo.origin = currentQuote.origin;
       booking.deliveryDemo.destination = currentQuote.destination;
       booking.deliveryDemo.distanceKm = currentQuote.distanceKm ?? undefined;
+      booking.deliveryDemo.area = currentQuote.area ?? undefined;
+      booking.deliveryDemo.vehicle = currentQuote.vehicle ?? undefined;
+      booking.deliveryDemo.weightKg = listing?.parcelWeightKg;
+      booking.deliveryDemo.dimensionsCm = listing?.parcelDimensionsCm;
+      booking.deliveryDemo.baseFare = currentQuote.baseFare ?? undefined;
+      booking.deliveryDemo.distanceCharge = currentQuote.distanceCharge ?? undefined;
+      booking.deliveryDemo.minimumFare = currentQuote.minimumFare ?? undefined;
+      booking.deliveryDemo.pricingReference = quoteAutomaticVehicleDelivery({
+        pickupPostcode: listing?.pickupPostcode, deliveryPostcode: booking.deliveryPostcode,
+        weightKg: listing?.parcelWeightKg, dimensionsCm: listing?.parcelDimensionsCm,
+        requirement: listing?.deliveryRequirement,
+        title: listing?.title, category: listing?.category, description: listing?.description,
+      })?.reference;
       booking.deliveryDemo.outboundFee = currentQuote.estimatedOutboundFee;
       booking.deliveryDemo.returnFee = currentQuote.estimatedReturnFee;
       booking.deliveryDemo.fee = currentQuote.estimatedTwoWayFee;

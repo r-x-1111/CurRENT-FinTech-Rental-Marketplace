@@ -51,6 +51,10 @@ export interface Listing {
   privateMeetingVenue?: string;
   /** Used to automatically estimate GrabExpress-inspired demo delivery distance (no maps API). */
   pickupPostcode?: string;
+  /** Lender-provided packaged parcel details, required for a new delivery quote. */
+  parcelWeightKg?: number;
+  parcelDimensionsCm?: { length: number; width: number; height: number };
+  deliveryRequirement?: "standard" | "fragile" | "bulky";
   rating: number;
   completedRentalsCount?: number;
   demoViewCount?: number;

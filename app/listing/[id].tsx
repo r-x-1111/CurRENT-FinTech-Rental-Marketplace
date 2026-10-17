@@ -50,7 +50,8 @@ import { newId } from "../../services/marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
 import { SuccessBurst } from "../../components/SuccessBurst";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
-import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../../services/geo";
+import { resolvePostcodeCoordinate } from "../../services/geo";
+import { deliveryRateDescription, quoteAutomaticVehicleDelivery } from "../../services/delivery";
 
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
@@ -259,12 +260,14 @@ export default function ListingDetailScreen() {
 
   const owner = state.profiles.find((p) => p.id === listing.ownerId);
   const currentDeliveryAddress = formatDeliveryAddress(getDeliveryAddress());
-  // Fully automatic: no vehicle, parcel or manual distance input — distance and fee come from the
-  // lender's listing pickup postcode and the renter's own delivery postcode (no maps API).
-  const deliveryEstimate = deliveryLocalityIsComplete() ? estimateAutomaticDelivery(listing.pickupPostcode, postcode) : null;
+  // Vehicle and fee come from the lender's parcel details and pickup postcode,
+  // plus the renter's delivery postcode (no maps API or renter distance input).
+  const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
+    title: listing.title, category: listing.category, description: listing.description };
+  const deliveryEstimate = deliveryLocalityIsComplete() ? quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: postcode, ...parcel }) : null;
   // Return leg (delivery address → pickup), calculated separately with the same automatic
   // postcode-distance formula — never assumed to cost the same as the outbound leg.
-  const returnDeliveryEstimate = deliveryLocalityIsComplete() ? estimateAutomaticDelivery(postcode, listing.pickupPostcode) : null;
+  const returnDeliveryEstimate = deliveryLocalityIsComplete() ? quoteAutomaticVehicleDelivery({ pickupPostcode: postcode, deliveryPostcode: listing.pickupPostcode, ...parcel }) : null;
   const twoWayDeliveryFee = deliveryEstimate && returnDeliveryEstimate
     ? Math.round((deliveryEstimate.fee + returnDeliveryEstimate.fee) * 100) / 100
     : null;
@@ -276,7 +279,7 @@ export default function ListingDetailScreen() {
     ? { message: "Lender pickup postcode required.", action: "" }
     : !resolvePostcodeCoordinate(postcode)
     ? { message: "Postcode not recognised. Please verify your postcode or select your locality.", action: "" }
-    : { message: "Delivery Estimate Unavailable. Verify the postcode is correct.", action: "View Delivery Details" };
+    : { message: "Delivery estimate unavailable for this route or parcel. This is not an interstate courier quote.", action: "View Delivery Details" };
   // Lock the time-slot pickers only once the delivery fee has actually been paid for this
   // checkout — an in-progress, unpaid checkout record must not block the renter from still
   // adjusting their pickup/return time before paying.
@@ -1483,14 +1486,13 @@ export default function ListingDetailScreen() {
                   {hasAddress ? (
                     <>
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>
-                          {listing.location} → {city}, {stateName}
-                          {deliveryEstimate ? `, ${deliveryEstimate.distanceKm} km` : ""}
-                        </Text>
+                        <Text style={styles.summaryLabel}>Calculated Delivery Fee (two-way)</Text>
                         <Text style={styles.summaryValue}>
                           {deliveryFeeValue != null ? money(deliveryFeeValue) : "—"}
                         </Text>
                       </View>
+                      <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Automatically Selected Vehicle</Text><Text style={styles.summaryValue}>{deliveryEstimate?.vehicle || "Unavailable"}</Text></View>
+                      <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Payment Status</Text><Text style={styles.summaryValue}>{checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Paid (Demo)" : "Awaiting Payment"}</Text></View>
                       {!deliveryEstimate && (
                         <Text style={styles.deliveryIssueText}>{deliveryIssue.message}</Text>
                       )}
@@ -1500,12 +1502,20 @@ export default function ListingDetailScreen() {
                         onPress={() => setShowDeliveryDetails((open) => !open)}
                       >
                         <Text style={styles.summaryLinkText}>
-                          {showDeliveryDetails ? "Hide details" : "How is this calculated?"}
+                          {showDeliveryDetails ? "Hide Delivery Details" : "View Delivery Details"}
                         </Text>
                       </Pressable>
                       {showDeliveryDetails && deliveryEstimate && returnDeliveryEstimate && (
                         <View style={styles.deliveryDetails}>
+                          <Row label="Pickup Location" value={listing.privateMeetingVenue || listing.location} />
+                          <Row label="Delivery Address" value={currentDeliveryAddress} />
                           <Row label="Estimated Distance (Demo)" value={`${deliveryEstimate.distanceKm} km (estimated, not a measured route)`} />
+                          <Row label="Vehicle" value={deliveryEstimate.vehicle} />
+                          <Row label="Payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Paid (Demo)" : "Awaiting Payment"} />
+                          <Row label="Pricing basis" value={deliveryEstimate.reference} />
+                          <Row label="Rate" value={deliveryRateDescription(deliveryEstimate.area, deliveryEstimate.vehicle)} />
+                          <Row label="Outbound base fare" value={money(deliveryEstimate.baseFare)} />
+                          <Row label="Outbound distance charge" value={money(deliveryEstimate.distanceCharge)} />
                           <Row label="Outbound delivery fee (pickup → you)" value={money(deliveryEstimate.fee)} />
                           <Row label="Return delivery fee (you → pickup)" value={money(returnDeliveryEstimate.fee)} />
                           <Row label="Total two-way delivery fee" value={money(twoWayDeliveryFee!)} strong />

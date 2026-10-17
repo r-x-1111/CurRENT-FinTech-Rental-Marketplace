@@ -25,6 +25,7 @@ import { categories } from "../../constants/categories";
 import { newId } from "../../services/marketplace";
 import { calculateOwnerPayout, CURRENT_LENDER_COMMISSION_RATE } from "../../services/deposit";
 import { colors } from "../../constants/theme";
+import { selectDeliveryVehicle } from "../../services/delivery";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 import type { AvailabilityPeriod, Listing } from "../../types";
 import {
@@ -122,6 +123,11 @@ export default function EditListing() {
     existing?.dailyPrice?.toString() ||
       (demoAccount ? DEMO_LISTING_TEMPLATE.dailyPrice : ""),
   );
+  const [parcelWeight, setParcelWeight] = useState(existing?.parcelWeightKg?.toString() || "");
+  const [parcelLength, setParcelLength] = useState(existing?.parcelDimensionsCm?.length?.toString() || "");
+  const [parcelWidth, setParcelWidth] = useState(existing?.parcelDimensionsCm?.width?.toString() || "");
+  const [parcelHeight, setParcelHeight] = useState(existing?.parcelDimensionsCm?.height?.toString() || "");
+  const [deliveryRequirement, setDeliveryRequirement] = useState<"standard" | "fragile" | "bulky">(existing?.deliveryRequirement || "standard");
   
   const [photos, setPhotos] = useState<string[]>(
     existing?.images && existing.images.length >= 6
@@ -211,6 +217,8 @@ export default function EditListing() {
   }
 
   const dailyPriceNum = parseFloat(price);
+  const parcelDimensions = { length: Number(parcelLength), width: Number(parcelWidth), height: Number(parcelHeight) };
+  const selectedVehicle = selectDeliveryVehicle(Number(parcelWeight), parcelDimensions, deliveryRequirement);
   const estimatedPayout =
     !isNaN(dailyPriceNum) && dailyPriceNum > 0
       ? calculateOwnerPayout(dailyPriceNum).payout.toFixed(2)
@@ -339,6 +347,10 @@ export default function EditListing() {
         location: publicLocation,
         publicArea: publicLocation,
         privateMeetingVenue: formattedDispatchAddress,
+        pickupPostcode: postcode.trim(),
+        parcelWeightKg: selectedVehicle ? Number(parcelWeight) : undefined,
+        parcelDimensionsCm: selectedVehicle ? parcelDimensions : undefined,
+        deliveryRequirement,
         dailyPrice: Number(price),
         estimatedValue:
           existing?.estimatedValue ||
@@ -480,6 +492,20 @@ export default function EditListing() {
             </View>
           </View>
           <MalaysiaStateSelector value={stateName} onChange={setStateName} />
+        </View>
+
+        <View style={{ marginTop: 14, gap: 8 }}>
+          <Text style={s.label}>Packaged item for delivery</Text>
+          <Text style={s.caption}>Optional: add packed weight and dimensions to improve the automatic vehicle estimate.</Text>
+          <Field label="Packaged weight (kg)" value={parcelWeight} onChangeText={setParcelWeight} keyboardType="decimal-pad" placeholder="e.g. 2.5" />
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}><Field label="Length (cm)" value={parcelLength} onChangeText={setParcelLength} keyboardType="decimal-pad" /></View>
+            <View style={{ flex: 1 }}><Field label="Width (cm)" value={parcelWidth} onChangeText={setParcelWidth} keyboardType="decimal-pad" /></View>
+            <View style={{ flex: 1 }}><Field label="Height (cm)" value={parcelHeight} onChangeText={setParcelHeight} keyboardType="decimal-pad" /></View>
+          </View>
+          <Text style={s.label}>Delivery requirement</Text>
+          <Chips options={["standard", "fragile", "bulky"]} selected={deliveryRequirement} onSelect={(value) => setDeliveryRequirement(value as typeof deliveryRequirement)} />
+          <Text style={s.caption}>{selectedVehicle ? `Automatically selected: ${selectedVehicle}` : "Vehicle will be inferred from the listing."}</Text>
         </View>
 
         <Field

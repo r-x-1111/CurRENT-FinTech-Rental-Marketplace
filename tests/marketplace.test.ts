@@ -36,7 +36,7 @@ import {
   toMalaysiaUtcTimestamp,
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
-import { deriveDisplayDelivery, eligibleDeliveryVehicles, quoteDemoDelivery } from "../services/delivery";
+import { deriveDisplayDelivery, eligibleDeliveryVehicles, quoteAutomaticVehicleDelivery, quoteDemoDelivery } from "../services/delivery";
 import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../services/geo";
 import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
 import { evaluateRentalOutcome } from "../services/riskScore";
@@ -314,15 +314,31 @@ function journey() {
   };
 }
 
-test("historical delivery brackets and parcel limits drive demo quotes, scoped to Klang Valley and Penang", () => {
+test("historical regional delivery brackets and parcel limits drive demo quotes", () => {
   assert.equal(quoteDemoDelivery("Klang Valley", "Motorcycle", 5)?.fee, 5);
   assert.equal(quoteDemoDelivery("Klang Valley", "Motorcycle", 8)?.fee, 8);
   assert.equal(quoteDemoDelivery("Penang", "Motorcycle", 6)?.fee, 5.8);
   assert.equal(quoteDemoDelivery("Penang", "Motorcycle", 12)?.fee, 10.4);
   assert.equal(quoteDemoDelivery("Klang Valley", "Car", 16)?.fee, 19.5);
+  assert.equal(quoteDemoDelivery("Klang Valley", "MPV", 101)?.fee, 201.5);
+  assert.equal(quoteDemoDelivery("Melaka", "Car", 21)?.fee, 21.3);
+  assert.equal(quoteDemoDelivery("Kota Kinabalu", "Motorcycle", 5)?.fee, 11);
   assert.equal(quoteDemoDelivery("Penang", "MPV", 8), null, "Penang has no MPV pricing bracket");
   assert.deepEqual(eligibleDeliveryVehicles(1, { length: 20, width: 20, height: 20 }), ["Motorcycle", "Car", "MPV"]);
   assert.deepEqual(eligibleDeliveryVehicles(60, { length: 70, width: 70, height: 70 }), ["MPV"]);
+  const local = quoteAutomaticVehicleDelivery({ pickupPostcode: "46200", deliveryPostcode: "50480",
+    weightKg: 1.5, dimensionsCm: { length: 30, width: 20, height: 15 } });
+  assert.equal(local?.vehicle, "Motorcycle");
+  assert.equal(local?.fee, quoteDemoDelivery("Klang Valley", "Motorcycle", local!.distanceKm)?.fee);
+  assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: "46200", deliveryPostcode: "50480",
+    title: "Sony camera" })?.vehicle, "Motorcycle");
+  assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: "46200", deliveryPostcode: "50480",
+    title: "Ergonomic Office Chair" })?.vehicle, "Car");
+  assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: "46200", deliveryPostcode: "50480",
+    title: "Unfamiliar rental item" })?.vehicle, "Car", "Unclear items use the Car fallback");
+  assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: "46200", deliveryPostcode: "10000",
+    weightKg: 1.5, dimensionsCm: { length: 30, width: 20, height: 15 } }), null,
+    "Interstate routes are not quoted");
 
   const seed = createSeed("admin_demo");
   // Every paid fictional booking has one linked delivery receipt, alongside four standalone samples.
@@ -430,13 +446,21 @@ test("historical demo rentals show separate two-way estimates without changing r
       deliveryAddress: booking.deliveryAddress,
       pickupPostcode: listing?.pickupPostcode,
       deliveryPostcode: booking.deliveryPostcode,
+      parcelWeightKg: listing?.parcelWeightKg,
+      parcelDimensionsCm: listing?.parcelDimensionsCm,
+      deliveryRequirement: listing?.deliveryRequirement,
       demoBooking: true,
       listingId: booking.listingId,
     });
-    assert.ok(delivery.estimatedOutboundFee != null, `${booking.id}: outbound estimate`);
-    assert.ok(delivery.estimatedReturnFee != null, `${booking.id}: return estimate`);
-    assert.equal(delivery.estimatedTwoWayFee,
-      Math.round((delivery.estimatedOutboundFee! + delivery.estimatedReturnFee!) * 100) / 100);
+    const expected = quoteAutomaticVehicleDelivery({ pickupPostcode: listing?.pickupPostcode,
+      deliveryPostcode: booking.deliveryPostcode, weightKg: listing?.parcelWeightKg,
+      dimensionsCm: listing?.parcelDimensionsCm, requirement: listing?.deliveryRequirement });
+    if (expected) {
+      assert.ok(delivery.estimatedOutboundFee != null, `${booking.id}: outbound estimate`);
+      assert.ok(delivery.estimatedReturnFee != null, `${booking.id}: return estimate`);
+      assert.equal(delivery.estimatedTwoWayFee,
+        Math.round((delivery.estimatedOutboundFee! + delivery.estimatedReturnFee!) * 100) / 100);
+    }
     if (booking.deliveryDemo && booking.deliveryDemo.status !== "required") {
       assert.equal(delivery.fee, booking.deliveryDemo.fee, `${booking.id}: historical charge stays unchanged`);
       assert.equal(delivery.status, booking.deliveryDemo.status, `${booking.id}: payment status stays unchanged`);
@@ -508,9 +532,10 @@ test("an unpaid booking address can be corrected without changing a paid deliver
   const requoted = transition(seed, { type: "correctBookingDeliveryAddress", bookingId: pending.id,
     deliveryAddress: "Bangsar, Kuala Lumpur", deliveryPostcode: "59100" });
   const changed = requoted.bookings.find((booking) => booking.id === pending.id)!;
-  const pickupPostcode = seed.listings.find((listing) => listing.id === pending.listingId)!.pickupPostcode;
-  const outbound = estimateAutomaticDelivery(pickupPostcode, "59100")!;
-  const inbound = estimateAutomaticDelivery("59100", pickupPostcode)!;
+  const pendingListing = seed.listings.find((listing) => listing.id === pending.listingId)!;
+  const parcel = { weightKg: pendingListing.parcelWeightKg, dimensionsCm: pendingListing.parcelDimensionsCm };
+  const outbound = quoteAutomaticVehicleDelivery({ pickupPostcode: pendingListing.pickupPostcode, deliveryPostcode: "59100", ...parcel })!;
+  const inbound = quoteAutomaticVehicleDelivery({ pickupPostcode: "59100", deliveryPostcode: pendingListing.pickupPostcode, ...parcel })!;
   assert.equal(changed.deliveryDemo?.fee, Math.round((outbound.fee + inbound.fee) * 100) / 100);
   assert.equal(changed.deliveryDemo?.status, "required");
 
@@ -534,14 +559,16 @@ test("stale RM8 unpaid demo quote uses one route and current two-way fee before 
     pickupLocation: listing.privateMeetingVenue || listing.location,
     deliveryAddress: booking.deliveryAddress,
     pickupPostcode: listing.pickupPostcode, deliveryPostcode: booking.deliveryPostcode,
+    parcelWeightKg: listing.parcelWeightKg, parcelDimensionsCm: listing.parcelDimensionsCm,
     demoBooking: true, listingId: listing.id,
   });
   assert.equal(booking.deliveryDemo?.fee, 8, "synthetic legacy unpaid quote remains identifiable");
   assert.equal(display.origin, listing.privateMeetingVenue);
   assert.equal(display.destination, booking.deliveryAddress);
   assert.equal(display.distanceKm, display.returnDistanceKm);
-  assert.equal(display.outboundFee, estimateAutomaticDelivery(listing.pickupPostcode, booking.deliveryPostcode)!.fee);
-  assert.equal(display.returnFee, estimateAutomaticDelivery(booking.deliveryPostcode, listing.pickupPostcode)!.fee);
+  const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm };
+  assert.equal(display.outboundFee, quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: booking.deliveryPostcode, ...parcel })!.fee);
+  assert.equal(display.returnFee, quoteAutomaticVehicleDelivery({ pickupPostcode: booking.deliveryPostcode, deliveryPostcode: listing.pickupPostcode, ...parcel })!.fee);
   assert.equal(display.fee, display.estimatedTwoWayFee);
   assert.notEqual(display.fee, booking.deliveryDemo?.fee);
 
@@ -803,8 +830,9 @@ test("delivery demo receipt is stored separately before rental payment", () => {
   const start = `${dateAfter(2)}T11:00:00+08:00`;
   const end = `${dateAfter(4)}T11:00:00+08:00`;
   const listing = createSeed().listings.find((l) => l.id === "sony-a7iii")!;
-  const expectedOutbound = estimateAutomaticDelivery(listing.pickupPostcode, "50480")!;
-  const expectedReturn = estimateAutomaticDelivery("50480", listing.pickupPostcode)!;
+  const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm };
+  const expectedOutbound = quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: "50480", ...parcel })!;
+  const expectedReturn = quoteAutomaticVehicleDelivery({ pickupPostcode: "50480", deliveryPostcode: listing.pickupPostcode, ...parcel })!;
   j.act({ type: "startDeliveryCheckout", id: "delivery-booking", listingId: "sony-a7iii",
     start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480", returnPickupTime: "15:00" });
   const pending = j.state.bookings.find((booking) => booking.id === "delivery-booking")!;
