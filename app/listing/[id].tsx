@@ -1201,7 +1201,7 @@ export default function ListingDetailScreen() {
                   <Text style={styles.insurancePremium}>+{money(calculateInsurancePremium(listing.estimatedValue || 0, quote.days))}</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" onPress={() => setShowInsuranceDetails(true)}>
-                  <Text style={styles.insuranceLink}>View Details</Text>
+                  <Text style={styles.insuranceLink}>How is this calculated?</Text>
                 </Pressable>
               </View>
             )}
@@ -1229,6 +1229,9 @@ export default function ListingDetailScreen() {
                         <Text style={styles.summaryLabel}>Rental duration</Text>
                         <Text style={styles.summaryValue}>{quote.days} {quote.days === 1 ? "day" : "days"}</Text>
                       </View>
+                      <Text style={s.caption}>
+                        Fee = max(RM5, {money(listing.estimatedValue || 0)} × 0.3% × {Math.ceil(quote.days / 7)} {Math.ceil(quote.days / 7) === 1 ? "period" : "periods"}) = {money(calculateInsurancePremium(listing.estimatedValue || 0, quote.days))}.
+                      </Text>
                     </>
                   )}
                   <Text style={[s.body, { marginTop: 10 }]}>
@@ -1340,7 +1343,7 @@ export default function ListingDetailScreen() {
                   onPress={() => setShowDeliveryDetails((open) => !open)}
                   style={styles.deliveryToggle}
                 >
-                  <Text style={styles.deliveryToggleText}>{showDeliveryDetails ? "Hide Delivery Details" : "View Delivery Details"}</Text>
+                  <Text style={styles.deliveryToggleText}>{showDeliveryDetails ? "Hide Delivery Details" : "How is this calculated?"}</Text>
                   <Ionicons name={showDeliveryDetails ? "chevron-up" : "chevron-down"} size={16} color={colors.blue} />
                 </Pressable>
                 {showDeliveryDetails && (
@@ -1354,6 +1357,7 @@ export default function ListingDetailScreen() {
                       <Row label="Distance-based charges" value={money(deliveryEstimate.distanceCharge)} />
                       <Row label="Total delivery fee" value={money(deliveryEstimate.fee)} strong />
                       <Text style={s.caption}>Delivery Fee = MAX(RM5, RM4 base + estimated distance × RM1/km). Distance is automatically estimated from pickup and delivery postcodes — a straight-line estimate, not an actual road route.</Text>
+                      <Text style={s.caption}>Your quote: max(RM5, {money(deliveryEstimate.baseFee)} + {deliveryEstimate.distanceKm} km × RM1) = {money(deliveryEstimate.fee)}.</Text>
                     </>}
                   </View>
                 )}
