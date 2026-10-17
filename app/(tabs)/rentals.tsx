@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react";
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Image, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Badge, Button, Chips, Empty, Screen, s } from "../../components/ui";
+import { Badge, Button, Chips, Empty, Row, Screen, s } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
+import { MorphIcon } from "../../components/MorphIcon";
 import { useMarketplace } from "../../context/Marketplace";
 import {
-  formatMalaysiaDateTime,
+  formatShortDate,
+  getBookingTotals,
   getEffectiveBookingStatus,
   money,
   parseMalaysiaTimestamp,
 } from "../../services/booking";
-import { deriveDisplayDelivery } from "../../services/delivery";
+import { deriveDisplayDelivery, type DisplayDelivery } from "../../services/delivery";
 import { colors } from "../../constants/theme";
 import { GuestAuthGate } from "../../components/GuestAuth";
+import type { Booking } from "../../types/marketplace";
 
 export default function RentalsScreen() {
   const { tab, bookingId } = useLocalSearchParams<{ tab?: string; bookingId?: string }>();
@@ -21,8 +24,10 @@ export default function RentalsScreen() {
   const mobile = useWindowDimensions().width < 768;
   const [activeTab, setActiveTab] = useState("Upcoming");
   const [now, setNow] = useState(() => Date.now());
-  const [detailsBookingId, setDetailsBookingId] = useState<string | null>(null);
-  const [showFeeBreakdown, setShowFeeBreakdown] = useState(false);
+  const [expandedLedgerCards, setExpandedLedgerCards] = useState<Set<string>>(new Set());
+  const [expandedDeliveryBreakdown, setExpandedDeliveryBreakdown] = useState<Set<string>>(new Set());
+  const [historyFilter, setHistoryFilter] = useState("All");
+  const [historySearch, setHistorySearch] = useState("");
 
   useEffect(() => {
     if (typeof tab === "string" && ["Upcoming", "Active", "Return Due", "Completed", "Cancelled", "Disputed", "Payment & Transaction History"].includes(tab)) setActiveTab(tab);
@@ -79,11 +84,85 @@ export default function RentalsScreen() {
     }
   }).sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId));
 
-  // Helper to build transaction ledger
+  function depositStatusLabel(status: Booking["deposit"]): string {
+    switch (status) {
+      case "held": return "Held securely";
+      case "release_pending": return "Release pending";
+      case "released": return "Released";
+      case "disputed": return "Held for dispute review";
+      case "required": return "Required";
+      default: return "Secured";
+    }
+  }
+
+  function statusChipFor(b: Booking): { text: string; tone: "red" | "grey" | "amber" | "blue" | "green" } {
+    if (b.status === "disputed") return { text: "Disputed", tone: "red" };
+    if (b.status === "cancelled" || b.status === "rejected") return { text: "Cancelled · Refunded", tone: "grey" };
+    if (b.deposit === "release_pending") return { text: "Deposit release pending", tone: "amber" };
+    if (b.deposit === "released") return { text: "Completed · Deposit released", tone: "green" };
+    return { text: "Deposit held", tone: "blue" };
+  }
+
+  type LedgerCard = {
+    booking: Booking;
+    listing: ReturnType<typeof state.listings.find>;
+    delivery: DisplayDelivery;
+    deliveryPaid: boolean;
+    totals: ReturnType<typeof getBookingTotals>;
+    grandTotal: number;
+    refundRows: { label: string; amount: number; date: string }[];
+    refundsTotal: number;
+    netCost: number;
+    statusChip: ReturnType<typeof statusChipFor>;
+  };
+
+  function buildLedgerCard(b: Booking): LedgerCard {
+    const listing = state.listings.find((l) => l.id === b.listingId);
+    const delivery = deriveDisplayDelivery({
+      collectionMethod: b.collectionMethod,
+      deliveryDemo: b.deliveryDemo || null,
+      pickupLocation: listing?.location || b.deliveryDemo?.origin || "",
+      deliveryAddress: b.deliveryAddress,
+      pickupPostcode: listing?.pickupPostcode,
+      deliveryPostcode: b.deliveryPostcode,
+    });
+    const deliveryPaid = delivery.status === "paid_demo";
+    const totals = getBookingTotals(b.quote, deliveryPaid ? delivery.fee : null);
+    const grandTotal = totals.grandTotal ?? totals.subtotal;
+
+    const refundRows: { label: string; amount: number; date: string }[] = [];
+    if (b.status === "cancelled" && b.payment === "refunded") {
+      refundRows.push({
+        label: "Cancellation refund (Demo, full refund)",
+        amount: Math.round((b.quote.rentalFee + b.quote.serviceFee + b.quote.protection) * 100) / 100,
+        date: (b.cancelledAt || b.createdAt).slice(0, 10),
+      });
+    }
+    if (b.deposit === "released") {
+      refundRows.push({
+        label: "Security deposit refund",
+        amount: b.quote.deposit,
+        date: (b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.cancelledAt || b.createdAt).slice(0, 10),
+      });
+    }
+    if (delivery.status === "refunded_demo") {
+      refundRows.push({
+        label: "GrabExpress delivery refund (Demo)",
+        amount: delivery.fee ?? 0,
+        date: (b.cancelledAt || b.createdAt).slice(0, 10),
+      });
+    }
+    const refundsTotal = Math.round(refundRows.reduce((sum, r) => sum + r.amount, 0) * 100) / 100;
+    const netCost = Math.round((grandTotal - refundsTotal) * 100) / 100;
+
+    return { booking: b, listing, delivery, deliveryPaid, totals, grandTotal, refundRows, refundsTotal, netCost, statusChip: statusChipFor(b) };
+  }
+
+  // Helper to render the "Payment & Transaction History" view: one expandable card per
+  // rental, grouped the same way as the listing page's Booking Summary (Paid to CurRENT /
+  // Delivery · GrabExpress (Demo) / Refunds and releases), newest first.
   function renderPaymentHistory() {
-    const deliveryRecords = (state.deliveryHistory || []).filter((record) => record.renterId === user!.id)
-      .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
-    if (!userBookings.length && !deliveryRecords.length) {
+    if (!userBookings.length) {
       return (
         <Empty
           title="No transaction history yet"
@@ -94,103 +173,26 @@ export default function RentalsScreen() {
       );
     }
 
-    const transactions: {
-      id: string;
-      bookingId: string;
-      date: string;
-      itemTitle: string;
-      type: string;
-      amount: number;
-      method: string;
-      status: string;
-      isCredit?: boolean;
-    }[] = [];
+    const cards = [...userBookings]
+      .sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId) || b.createdAt.localeCompare(a.createdAt))
+      .map(buildLedgerCard);
 
-    [...userBookings].sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId)).forEach((b) => {
-      const paymentStatus = b.payment === "paid" ? "Paid" : b.payment === "refunded" ? "Refunded" : b.payment === "processing" ? "Processing" : b.payment === "failed" ? "Failed" : "Payment Required";
-      // 1. Rental fee paid
-      transactions.push({
-        id: `${b.id}-rent`, bookingId: b.id,
-        date: b.createdAt.slice(0, 10),
-        itemTitle: b.title,
-        type: "Rental Fee",
-        amount: b.quote.rentalFee,
-        method: b.paymentMethod || "FPX",
-        status: paymentStatus,
-      });
+    const totalPaid = Math.round(cards.reduce((sum, c) => sum + c.grandTotal, 0) * 100) / 100;
+    const totalRefunded = Math.round(cards.reduce((sum, c) => sum + c.refundsTotal, 0) * 100) / 100;
+    const depositsInEscrow = Math.round(
+      cards.reduce((sum, c) => sum + (c.booking.deposit === "held" || c.booking.deposit === "release_pending" ? c.booking.quote.deposit : 0), 0) * 100,
+    ) / 100;
 
-      // 2. Platform service fee
-      transactions.push({
-        id: `${b.id}-svc`, bookingId: b.id,
-        date: b.createdAt.slice(0, 10),
-        itemTitle: b.title,
-        type: "CurRENT Service Fee",
-        amount: b.quote.serviceFee,
-        method: b.paymentMethod || "FPX",
-        status: paymentStatus,
-      });
-
-      // 3. Optional Rental Protection premium (only when the renter selected it at checkout)
-      if (b.insurance?.selected) {
-        transactions.push({
-          id: `${b.id}-ins`, bookingId: b.id,
-          date: b.createdAt.slice(0, 10),
-          itemTitle: b.title,
-          type: "Rental Protection (Optional, Demo)",
-          amount: b.insurance.premium,
-          method: b.paymentMethod || "FPX",
-          status: paymentStatus,
-        });
-      }
-
-      // 4. Security deposit hold
-      transactions.push({
-        id: `${b.id}-dep`, bookingId: b.id,
-        date: b.createdAt.slice(0, 10),
-        itemTitle: b.title,
-        type: "Security Deposit (Refundable)",
-        amount: b.quote.deposit,
-        method: b.paymentMethod || "FPX",
-        status:
-          b.deposit === "released"
-            ? "Released · Full Deposit Refund"
-            : b.deposit === "held"
-            ? "Held Securely"
-            : b.deposit === "disputed"
-            ? "Held for Dispute Review"
-            : b.deposit === "required"
-            ? "Deposit Required"
-            : b.deposit === "release_pending"
-            ? "Release Pending"
-            : "Secured",
-      });
-
-      // 5. Security deposit refund — recorded as its own credit once released, separate from the original hold above
-      if (b.deposit === "released") {
-        transactions.push({
-          id: `${b.id}-dep-refund`, bookingId: b.id,
-          date: (b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.cancelledAt || b.createdAt).slice(0, 10),
-          itemTitle: b.title,
-          type: "Security Deposit Refund",
-          amount: b.quote.deposit,
-          method: b.paymentMethod || "FPX",
-          status: "Completed",
-          isCredit: true,
-        });
-      }
-
-      // 6. Cancellation refund — the original rental fee, service fee and (if any) insurance premium returned in full
-      if (b.status === "cancelled" && b.payment === "refunded") {
-        transactions.push({
-          id: `${b.id}-cancel-refund`, bookingId: b.id,
-          date: (b.cancelledAt || b.createdAt).slice(0, 10),
-          itemTitle: b.title,
-          type: "Cancellation Refund (Demo, Full Refund)",
-          amount: Math.round((b.quote.rentalFee + b.quote.serviceFee + b.quote.protection) * 100) / 100,
-          method: b.paymentMethod || "FPX",
-          status: "Completed",
-          isCredit: true,
-        });
+    const filters = ["All", "Paid", "Deposit held", "Release pending", "Refunded", "Delivery"];
+    const filtered = cards.filter((c) => {
+      if (historySearch.trim() && !c.booking.title.toLowerCase().includes(historySearch.trim().toLowerCase())) return false;
+      switch (historyFilter) {
+        case "Paid": return c.booking.payment === "paid";
+        case "Deposit held": return c.booking.deposit === "held";
+        case "Release pending": return c.booking.deposit === "release_pending";
+        case "Refunded": return c.refundsTotal > 0;
+        case "Delivery": return c.delivery.status !== "self_pickup";
+        default: return true;
       }
     });
 
@@ -199,150 +201,174 @@ export default function RentalsScreen() {
         <View style={styles.historyNoticeBox}>
           <Ionicons name="information-circle-outline" size={18} color={colors.navy} />
           <Text style={styles.historyNoticeText}>
-            Simulated classroom ledger. Transparently tracks rental fees, 5% platform service fees, and refundable security deposits.
+            Simulated classroom ledger. Transparently tracks rental fees, 5% platform service fees, refundable security deposits and separate GrabExpress delivery fees.
           </Text>
         </View>
 
-        {transactions.map((tx) => (
-          <Pressable
-            key={tx.id}
-            accessibilityRole="button"
-            accessibilityLabel={`View transaction details for ${tx.type}, ${tx.itemTitle}`}
-            onPress={() => { setDetailsBookingId(tx.bookingId); setShowFeeBreakdown(false); }}
-            style={styles.txCard}
-          >
-            <View style={s.row}>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.txType}>{tx.type}</Text>
-                <Text style={styles.txItemTitle}>{tx.itemTitle}</Text>
-                <Text style={styles.txDate}>
-                  {tx.date} · via {tx.method}
-                </Text>
-              </View>
-              <View style={{ alignItems: "flex-end", gap: 4 }}>
-                <Text style={styles.txAmount}>
-                  {tx.isCredit ? "+ " : ""}RM{tx.amount.toFixed(2)}
-                </Text>
-                <Badge
-                  text={tx.status}
-                  green={tx.status.includes("Released") || tx.status === "Paid"}
-                />
-              </View>
-            </View>
-          </Pressable>
-        ))}
-      </View>
-    );
-  }
+        <View style={styles.summaryTilesRow}>
+          <View style={styles.summaryTile}>
+            <Text style={styles.summaryTileLabel}>Total paid</Text>
+            <Text style={styles.summaryTileValue}>{money(totalPaid)}</Text>
+          </View>
+          <View style={styles.summaryTile}>
+            <Text style={styles.summaryTileLabel}>Refunded</Text>
+            <Text style={styles.summaryTileValue}>{money(totalRefunded)}</Text>
+          </View>
+          <View style={styles.summaryTile}>
+            <Text style={styles.summaryTileLabel}>Deposits held in escrow</Text>
+            <Text style={styles.summaryTileValue}>{money(depositsInEscrow)}</Text>
+          </View>
+        </View>
 
-  const detailsBooking = detailsBookingId ? userBookings.find((b) => b.id === detailsBookingId) : null;
-  const detailsListing = detailsBooking ? state.listings.find((l) => l.id === detailsBooking.listingId) : null;
-  const detailsLender = detailsBooking ? state.profiles.find((p) => p.id === detailsBooking.ownerId) : null;
-  const detailsDelivery = detailsBooking
-    ? deriveDisplayDelivery({
-        collectionMethod: detailsBooking.collectionMethod,
-        deliveryDemo: detailsBooking.deliveryDemo || null,
-        pickupLocation: detailsListing?.location || detailsBooking.deliveryDemo?.origin || "",
-        deliveryAddress: detailsBooking.deliveryAddress,
-      })
-    : null;
+        <Chips options={filters} selected={historyFilter} onSelect={setHistoryFilter} />
 
-  function renderTransactionDetailsModal() {
-    return (
-      <Modal transparent visible={!!detailsBooking} animationType="fade" onRequestClose={() => setDetailsBookingId(null)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setDetailsBookingId(null)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
-            {detailsBooking && (
-              <ScrollView style={{ gap: 10 }} contentContainerStyle={{ gap: 10 }}>
-                <View style={s.row}>
-                  <Text style={s.h2}>Transaction Details</Text>
-                  <Pressable accessibilityRole="button" accessibilityLabel="Close transaction details" onPress={() => setDetailsBookingId(null)}>
-                    <Ionicons name="close" size={22} color={colors.muted} />
-                  </Pressable>
-                </View>
+        <TextInput
+          accessibilityLabel="Search transaction history by item name"
+          placeholder="Search by item name"
+          placeholderTextColor={colors.muted}
+          value={historySearch}
+          onChangeText={setHistorySearch}
+          style={styles.historySearchInput}
+        />
 
-                <Text style={s.bold}>{detailsBooking.title}</Text>
-                <Text style={s.caption}>Booking Ref: {detailsBooking.id}</Text>
-                {detailsLender && <Text style={s.caption}>Lender: {detailsLender.name}</Text>}
-                <Text style={s.caption}>
-                  {formatMalaysiaDateTime(detailsBooking.start)} – {formatMalaysiaDateTime(detailsBooking.end)}
-                </Text>
-
-                <View style={styles.modalDivider} />
-                <Text style={styles.modalSectionTitle}>CurRENT Payment Breakdown</Text>
-                <View style={s.row}><Text style={s.caption}>Rental fee</Text><Text style={styles.txAmount}>{money(detailsBooking.quote.rentalFee)}</Text></View>
-                <View style={s.row}><Text style={s.caption}>CurRENT service fee</Text><Text style={styles.txAmount}>{money(detailsBooking.quote.serviceFee)}</Text></View>
-                {detailsBooking.insurance?.selected && (
-                  <View style={s.row}><Text style={s.caption}>Rental Protection (Optional, Demo)</Text><Text style={styles.txAmount}>{money(detailsBooking.insurance.premium)}</Text></View>
-                )}
-                <View style={s.row}><Text style={s.caption}>Refundable security deposit</Text><Text style={styles.txAmount}>{money(detailsBooking.quote.deposit)}</Text></View>
-                <View style={s.row}><Text style={s.bold}>CurRENT Total Paid</Text><Text style={[styles.txAmount, { fontSize: 16 }]}>{money(detailsBooking.quote.total)}</Text></View>
-                <Text style={s.caption}>Deposit status: {detailsBooking.deposit.replace("_", " ")}</Text>
-
-                <View style={styles.modalDivider} />
-                <View style={styles.deliverySectionHeader}>
-                  <Ionicons name="bicycle-outline" size={16} color={colors.navy} />
-                  <Text style={styles.modalSectionTitle}>GrabExpress Delivery (Demo)</Text>
-                </View>
-                {detailsDelivery && (
-                  <View style={{ gap: 4 }}>
-                    <View style={s.row}><Text style={s.caption}>Delivery method</Text><Text style={s.bold}>{detailsDelivery.method}</Text></View>
-                    {detailsDelivery.status === "self_pickup" ? (
-                      <Badge text="Self-Pickup — No Delivery Fee" />
-                    ) : (
-                      <>
-                        <View style={s.row}><Text style={s.caption}>Pickup</Text><Text style={[s.caption, { color: colors.navy, fontWeight: "600" }]}>{detailsDelivery.origin}</Text></View>
-                        <View style={s.row}><Text style={s.caption}>Delivery</Text><Text style={[s.caption, { color: colors.navy, fontWeight: "600" }]}>{detailsDelivery.destination}</Text></View>
-                        {detailsDelivery.area && <View style={s.row}><Text style={s.caption}>Service area</Text><Text style={s.caption}>{detailsDelivery.area}</Text></View>}
-                        {!!detailsDelivery.distanceKm && <View style={s.row}><Text style={s.caption}>Distance</Text><Text style={s.caption}>{detailsDelivery.distanceKm} km (Demo Route)</Text></View>}
-                        {detailsDelivery.vehicle && <View style={s.row}><Text style={s.caption}>Vehicle</Text><Text style={s.caption}>{detailsDelivery.vehicle}</Text></View>}
-                        {detailsDelivery.fee != null ? (
-                          <View style={s.row}><Text style={s.bold}>Delivery Fee</Text><Text style={styles.txAmount}>{money(detailsDelivery.fee)}</Text></View>
-                        ) : (
-                          <Text style={[s.caption, { color: colors.danger }]}>Delivery Estimate Unavailable</Text>
-                        )}
-                        <Badge
-                          text={detailsDelivery.status === "paid_demo" ? "Demo Payment Completed" : detailsDelivery.status === "required" ? "Delivery Payment Required (Demo)" : "No Delivery Record"}
-                          green={detailsDelivery.status === "paid_demo"}
-                        />
-                        {detailsDelivery.fee != null && (
-                          <Pressable accessibilityRole="button" onPress={() => setShowFeeBreakdown((v) => !v)}>
-                            <Text style={{ color: colors.blue, fontWeight: "700", marginTop: 4 }}>
-                              {showFeeBreakdown ? "Hide Fee Breakdown" : "View Fee Breakdown"}
-                            </Text>
-                          </Pressable>
-                        )}
-                        {showFeeBreakdown && detailsDelivery.fee != null && (
-                          <View style={styles.feeBreakdownBox}>
-                            <View style={s.row}><Text style={s.caption}>Base Fare</Text><Text style={s.caption}>{money(detailsDelivery.baseFare || 0)}</Text></View>
-                            <View style={s.row}>
-                              <Text style={s.caption}>Additional Distance Charge</Text>
-                              <Text style={s.caption}>{money(detailsDelivery.distanceCharge || 0)}</Text>
-                            </View>
-                            <View style={s.row}><Text style={s.bold}>Delivery Fee</Text><Text style={s.bold}>{money(detailsDelivery.fee)}</Text></View>
-                          </View>
-                        )}
-                        {detailsDelivery.status === "paid_demo" && detailsDelivery.receiptReference && (
-                          <Button secondary onPress={() => {
-                            const receiptId = detailsDelivery.receiptReference!;
-                            setDetailsBookingId(null);
-                            router.push({ pathname: "/delivery-receipt/[id]", params: { id: receiptId } });
-                          }}>
-                            View Delivery Receipt
-                          </Button>
-                        )}
-                      </>
-                    )}
-                    <Text style={[s.caption, { marginTop: 4 }]}>
-                      GrabExpress delivery fees are separate from CurRENT's rental fee, service fee, security deposit and total paid above.
-                    </Text>
+        {filtered.length === 0 ? (
+          <Empty title="No matching transactions" text="Try a different filter or search term." />
+        ) : filtered.map((card) => {
+          const b = card.booking;
+          const expanded = expandedLedgerCards.has(b.id);
+          const showBreakdown = expandedDeliveryBreakdown.has(b.id);
+          const paymentStatusLabel = b.payment === "paid" ? "Paid" : b.payment === "refunded" ? "Refunded" : b.payment === "processing" ? "Processing" : b.payment === "failed" ? "Failed" : "Payment required";
+          return (
+            <Pressable
+              key={b.id}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              accessibilityLabel={`${expanded ? "Collapse" : "Expand"} transaction details for ${b.title}`}
+              onPress={() => setExpandedLedgerCards((prev) => {
+                const next = new Set(prev);
+                if (next.has(b.id)) next.delete(b.id); else next.add(b.id);
+                return next;
+              })}
+              style={styles.ledgerCard}
+            >
+              {/* Collapsed summary */}
+              <View style={s.row}>
+                <Image source={{ uri: card.listing?.imageUrl || b.image }} style={styles.ledgerThumb} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <View style={s.row}>
+                    <Text style={styles.txType}>{b.title}</Text>
+                    <Badge text={card.statusChip.text} tone={card.statusChip.tone} />
                   </View>
-                )}
-              </ScrollView>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+                  <Text style={styles.txDate}>Booked {formatShortDate(b.createdAt)} · via {b.paymentMethod || "FPX"}</Text>
+                  <View style={s.row}>
+                    <Text style={styles.txItemTitle}>Total for this rental</Text>
+                    <Text style={styles.txAmount}>{money(card.grandTotal)}</Text>
+                  </View>
+                  <View style={s.row}>
+                    <Text style={styles.txItemTitle}>Deposit {depositStatusLabel(b.deposit).toLowerCase()}</Text>
+                    <Text style={styles.txItemTitle}>{money(b.quote.deposit)}</Text>
+                  </View>
+                </View>
+                <MorphIcon name={expanded ? "chevron-up" : "chevron-down"} size={18} color={colors.muted} toggleKey={expanded} />
+              </View>
+
+              {expanded && (
+                <View style={{ gap: 6, marginTop: 10 }}>
+                  <View style={styles.modalDivider} />
+                  <Text style={styles.modalSectionTitle}>Paid to CurRENT</Text>
+                  <Row label={`Rental fee · ${b.quote.days ?? ""} days`} value={money(b.quote.rentalFee)} />
+                  <Text style={styles.ledgerLineStatus}>{paymentStatusLabel}</Text>
+                  <Row label="CurRENT service fee (5%, min RM5)" value={money(b.quote.serviceFee)} />
+                  <Text style={styles.ledgerLineStatus}>{paymentStatusLabel}</Text>
+                  {b.insurance?.selected && (
+                    <>
+                      <Row label="Rental Protection (Optional, Demo)" value={money(b.insurance.premium)} />
+                      <Text style={styles.ledgerLineStatus}>{paymentStatusLabel}</Text>
+                    </>
+                  )}
+                  <Row label="Refundable security deposit" value={money(b.quote.deposit)} />
+                  <Text style={styles.ledgerLineStatus}>{depositStatusLabel(b.deposit)}</Text>
+                  <View style={s.row}><Text style={s.bold}>Subtotal</Text><Text style={[styles.txAmount, { fontSize: 14 }]}>{money(card.totals.subtotal)}</Text></View>
+
+                  <View style={styles.modalDivider} />
+                  <View style={styles.deliverySectionHeader}>
+                    <Ionicons name="bicycle-outline" size={16} color={colors.navy} />
+                    <Text style={styles.modalSectionTitle}>Delivery · GrabExpress (Demo)</Text>
+                  </View>
+                  {card.delivery.status === "self_pickup" ? (
+                    <Badge text="Self-Pickup — No Delivery Fee" />
+                  ) : card.delivery.fee != null ? (
+                    <>
+                      <View style={s.row}>
+                        <Text style={s.caption}>
+                          {card.delivery.origin} → {card.delivery.destination}{card.delivery.distanceKm ? `, ${card.delivery.distanceKm} km` : ""}
+                        </Text>
+                        <Text style={styles.txAmount}>{money(card.delivery.fee)}</Text>
+                      </View>
+                      <Text style={styles.ledgerLineStatus}>
+                        {card.delivery.status === "paid_demo" ? "Paid" : card.delivery.status === "refunded_demo" ? "Refunded" : "Awaiting payment"}
+                      </Text>
+                      <Text style={s.caption}>Demo estimate, not a live Grab quotation. Not CurRENT revenue.</Text>
+                      <Pressable accessibilityRole="button" onPress={() => setExpandedDeliveryBreakdown((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(b.id)) next.delete(b.id); else next.add(b.id);
+                        return next;
+                      })}>
+                        <Text style={{ color: colors.blue, fontWeight: "700", marginTop: 2 }}>
+                          {showBreakdown ? "Hide Fee Breakdown" : "View Fee Breakdown"}
+                        </Text>
+                      </Pressable>
+                      {showBreakdown && (
+                        <View style={styles.feeBreakdownBox}>
+                          {card.delivery.outboundFee != null && <View style={s.row}><Text style={s.caption}>Outbound delivery fee</Text><Text style={s.caption}>{money(card.delivery.outboundFee)}</Text></View>}
+                          {card.delivery.returnFee != null && <View style={s.row}><Text style={s.caption}>Return delivery fee</Text><Text style={s.caption}>{money(card.delivery.returnFee)}</Text></View>}
+                          <View style={s.row}><Text style={s.bold}>Total two-way delivery fee</Text><Text style={s.bold}>{money(card.delivery.fee)}</Text></View>
+                        </View>
+                      )}
+                      {card.delivery.status === "paid_demo" && card.delivery.receiptReference && (
+                        <Button secondary onPress={() => router.push({ pathname: "/delivery-receipt/[id]", params: { id: card.delivery.receiptReference! } })}>
+                          View Delivery Receipt
+                        </Button>
+                      )}
+                      {card.delivery.status === "required" && b.status === "payment_required" && (
+                        <Button onPress={() => router.push(`/delivery-demo/${b.id}` as never)}>
+                          Pay delivery fee · {money(card.delivery.fee)}
+                        </Button>
+                      )}
+                    </>
+                  ) : (
+                    <Text style={s.caption}>{b.deliveryDemo ? "Delivery fee not paid yet" : "No delivery record"}</Text>
+                  )}
+
+                  {card.refundRows.length > 0 && (
+                    <>
+                      <View style={styles.modalDivider} />
+                      <Text style={styles.modalSectionTitle}>Refunds and releases</Text>
+                      {card.refundRows.map((r) => (
+                        <View key={r.label} style={s.row}>
+                          <Text style={s.caption}>{r.label}</Text>
+                          <View style={{ alignItems: "flex-end" }}>
+                            <Text style={[styles.txAmount, { color: colors.green }]}>+ {money(r.amount)}</Text>
+                            <Text style={styles.ledgerLineStatus}>Completed · {formatShortDate(r.date)}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  )}
+
+                  <View style={styles.modalDivider} />
+                  <View style={s.row}><Text style={s.bold}>Total paid</Text><Text style={[styles.txAmount, { fontSize: 16 }]}>{money(card.grandTotal)}</Text></View>
+                  {card.refundsTotal > 0 && (
+                    <View style={s.row}><Text style={[s.caption, { color: colors.green }]}>Refunded so far</Text><Text style={[styles.txAmount, { color: colors.green }]}>+ {money(card.refundsTotal)}</Text></View>
+                  )}
+                  <View style={s.row}><Text style={s.bold}>Net cost</Text><Text style={[styles.txAmount, { fontSize: 16 }]}>{money(card.netCost)}</Text></View>
+                  <Text style={s.caption}>Includes {money(b.quote.deposit)} refundable deposit ({depositStatusLabel(b.deposit).toLowerCase()})</Text>
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
     );
   }
 
@@ -469,7 +495,6 @@ export default function RentalsScreen() {
             )}
           </View>
         )}
-      {renderTransactionDetailsModal()}
     </Screen>
   );
 }
@@ -575,6 +600,64 @@ const styles = StyleSheet.create({
   txAmount: {
     fontSize: 15,
     fontWeight: "800",
+    color: colors.navy,
+  },
+  ledgerCard: {
+    backgroundColor: colors.white,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.navy,
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  ledgerThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: colors.lightGrey,
+    marginRight: 10,
+  },
+  ledgerLineStatus: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: -2,
+    marginBottom: 2,
+  },
+  summaryTilesRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  summaryTile: {
+    flex: 1,
+    backgroundColor: colors.paleBlue,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    borderRadius: 12,
+    padding: 10,
+    gap: 4,
+  },
+  summaryTileLabel: {
+    fontSize: 11,
+    color: colors.slate,
+    fontWeight: "700",
+  },
+  summaryTileValue: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.navy,
+  },
+  historySearchInput: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
     color: colors.navy,
   },
   reviewNoticeBox: {

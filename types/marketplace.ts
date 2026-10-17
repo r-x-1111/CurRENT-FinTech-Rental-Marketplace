@@ -116,7 +116,12 @@ export interface Booking {
     provider: "GrabExpress (Simulation)";
     origin: string;
     destination: string;
+    /** Combined two-way (outbound + return) delivery fee — the actual amount charged. */
     fee: number;
+    /** Outbound leg (pickup → delivery), same formula as the renter-side estimate. */
+    outboundFee?: number;
+    /** Return leg (delivery → pickup), same formula, calculated separately — never assumed equal to outbound. */
+    returnFee?: number;
     area?: string;
     distanceKm?: number;
     vehicle?: "Motorcycle" | "Car" | "MPV";
@@ -126,9 +131,10 @@ export interface Booking {
     distanceCharge?: number;
     minimumFare?: number;
     pricingReference?: string;
-    status: "required" | "paid_demo";
+    status: "required" | "paid_demo" | "refunded_demo";
     receiptReference?: string;
     paidAt?: string;
+    refundedAt?: string;
   };
   riskScore: number;
   payment: "required" | "processing" | "failed" | "paid" | "refunded";
@@ -142,6 +148,9 @@ export interface Booking {
   paymentMethod?: string;
   agreement?: string;
   deliveryAddress?: string;
+  /** Renter's delivery postcode, stored alongside deliveryAddress so the fee can always be
+   * recomputed from the same automatic postcode-distance formula used at checkout. */
+  deliveryPostcode?: string;
   cancelledAt?: string;
   cancelledById?: string;
   createdAt: string;

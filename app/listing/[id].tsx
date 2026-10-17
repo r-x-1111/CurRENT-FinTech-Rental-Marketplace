@@ -33,6 +33,7 @@ import {
   isDemoSeededListing,
   dateAfter,
   formatMalaysiaDateTime,
+  getBookingTotals,
   malaysiaDateKey,
   malaysiaTimeKey,
   money,
@@ -40,12 +41,14 @@ import {
   quoteFor,
   rentalDays,
   riskFor,
+  SINGLE_CHECKOUT,
   toMalaysiaUtcTimestamp,
 } from "../../services/booking";
 import { colors } from "../../constants/theme";
 import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
+import { SuccessBurst } from "../../components/SuccessBurst";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 import { estimateAutomaticDelivery } from "../../services/geo";
 
@@ -134,15 +137,22 @@ export default function ListingDetailScreen() {
   const [collectionMethod, setCollectionMethod] =
     useState<CollectionMethod>("Delivery");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
-  const [showCheckout, setShowCheckout] = useState(false);
+  // Once GrabExpress delivery is paid, automatically land the renter on the CurRENT Rental
+  // Payment step (the two-step order is: delivery first, then rental payment).
+  const [showCheckout, setShowCheckout] = useState(
+    () => checkoutBooking?.deliveryDemo?.status === "paid_demo",
+  );
   const [showDeliveryDetails, setShowDeliveryDetails] = useState(false);
   const [insuranceSelected, setInsuranceSelected] = useState(false);
   const [showInsuranceDetails, setShowInsuranceDetails] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
+  const [paySuccess, setPaySuccess] = useState(false);
   const payInProgress = useRef(false);
   const [error, setError] = useState("");
   const [authPrompt, setAuthPrompt] = useState(false);
   const [successNotice, setSuccessNotice] = useState("");
+  const [addressSectionY, setAddressSectionY] = useState<number | null>(null);
+  const [scrollToAddressRequestId, setScrollToAddressRequestId] = useState(0);
   const [photo, setPhoto] = useState("");
 
   // Delivery Address state per README V3.23 Section 7.2
@@ -220,6 +230,12 @@ export default function ListingDetailScreen() {
   // Fully automatic: no vehicle, parcel or manual distance input — distance and fee come from the
   // lender's listing pickup postcode and the renter's own delivery postcode (no maps API).
   const deliveryEstimate = deliveryAddressIsComplete() ? estimateAutomaticDelivery(listing.pickupPostcode, postcode) : null;
+  // Return leg (delivery address → pickup), calculated separately with the same automatic
+  // postcode-distance formula — never assumed to cost the same as the outbound leg.
+  const returnDeliveryEstimate = deliveryAddressIsComplete() ? estimateAutomaticDelivery(postcode, listing.pickupPostcode) : null;
+  const twoWayDeliveryFee = deliveryEstimate && returnDeliveryEstimate
+    ? Math.round((deliveryEstimate.fee + returnDeliveryEstimate.fee) * 100) / 100
+    : null;
   const deliveryIssue = !deliveryAddressIsComplete()
     ? { message: "Add your delivery address above to automatically estimate the delivery fee.", action: "" }
     : { message: "Delivery Estimate Unavailable. Check the delivery postcode is correct.", action: "View Delivery Details" };
@@ -380,7 +396,7 @@ export default function ListingDetailScreen() {
   // Handle Instant Booking checkout confirmation
   async function handleDeliveryDemo() {
     if (!user || payInProgress.current) return;
-    if (!deliveryEstimate) { setError("Delivery Estimate Unavailable. Enter a complete delivery address with a valid Malaysian postcode."); return; }
+    if (!deliveryEstimate || !returnDeliveryEstimate) { setError("Delivery Estimate Unavailable. Enter a complete delivery address with a valid Malaysian postcode."); return; }
     if (!checkoutBooking && !deliveryAddressIsComplete()) {
       setError("Complete the required delivery address before continuing.");
       return;
@@ -444,6 +460,7 @@ export default function ListingDetailScreen() {
         paymentMethod: selectedPaymentMethod,
         insuranceSelected,
       });
+      setPaySuccess(true);
       router.push(`/rental/${checkoutBooking.id}`);
     } catch (e) {
       setError((e as Error).message);
@@ -522,7 +539,7 @@ export default function ListingDetailScreen() {
   }
 
   return (
-    <Screen back>
+    <Screen back scrollToY={addressSectionY} scrollRequestId={scrollToAddressRequestId}>
       <GuestAuthPrompt visible={authPrompt} onClose={() => setAuthPrompt(false)} returnTo={`/listing/${id}`} />
       <View style={[s.split, width < 800 && { flexDirection: "column" }]}>
         {/* Left Column: Image, Details, Reviews */}
@@ -1027,7 +1044,7 @@ export default function ListingDetailScreen() {
             </View>
 
             {/* 4. Structured Delivery Address Form (Section 7.2) */}
-            <View style={styles.deliveryAddressSection}>
+            <View style={styles.deliveryAddressSection} onLayout={(e) => setAddressSectionY(e.nativeEvent.layout.y)}>
               <View style={styles.arrangementHeaderRow}>
                 <Ionicons name="location-outline" size={15} color={colors.navy} />
                 <Text style={styles.arrangementTitle}>Address</Text>
@@ -1272,123 +1289,150 @@ export default function ListingDetailScreen() {
               </Pressable>
             </Modal>
 
-            {/* Concise Booking Summary for eligible direct renters */}
-            {renterRisk?.level !== "very_high" && quote && (
-              <View style={styles.summaryContainer}>
-                <Text style={styles.summaryTitle}>Booking Summary</Text>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>
-                    Rental fee · {quote.days}{" "}
-                    {quote.days === 1 ? "day" : "days"}
-                  </Text>
-                  <Text style={styles.summaryValue}>
-                    {money(quote.rentalFee)}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>
-                    CurRENT service fee (5%, min RM5)
-                  </Text>
-                  <Text style={styles.summaryValue}>
-                    {money(quote.serviceFee)}
-                  </Text>
-                </View>
-                {insuranceSelected && (
+            {/* Booking Summary for eligible direct renters — grouped into "Paid to CurRENT" and
+                "Delivery · GrabExpress (Demo)" so the renter sees one combined total before renting. */}
+            {renterRisk?.level !== "very_high" && quote && (() => {
+              const hasAddress = deliveryAddressIsComplete();
+              const deliveryFeeValue = hasAddress && deliveryEstimate && returnDeliveryEstimate ? twoWayDeliveryFee : null;
+              const totals = getBookingTotals(quote, deliveryFeeValue);
+              const depositTierNote = renterRisk?.canDirectBook
+                ? `Your ${renterRisk.label} tier sets a ${
+                    renterRisk.level === "low"
+                      ? "5% (capped at RM500)"
+                      : renterRisk.level === "medium"
+                      ? "10% (capped at RM1,000)"
+                      : "15% (capped at RM1,500)"
+                  } refundable deposit based on replacement value. Released automatically upon verified clean return.`
+                : "Sign in and complete demo eKYC to view your risk-based deposit.";
+              const totalLabel = renterRisk?.canDirectBook && hasAddress && totals.grandTotal != null
+                ? "Total for this rental" : "Estimated total";
+              const totalValue = renterRisk?.canDirectBook && hasAddress && totals.grandTotal != null
+                ? totals.grandTotal : totals.subtotal;
+              return (
+                <View style={styles.summaryContainer}>
+                  <Text style={styles.summaryTitle}>Booking Summary</Text>
+
+                  <Text style={styles.summarySectionLabel}>Paid to CurRENT</Text>
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>
-                      Rental Protection (Optional)
+                      Rental fee · {quote.days}{" "}
+                      {quote.days === 1 ? "day" : "days"}
                     </Text>
                     <Text style={styles.summaryValue}>
-                      {money(quote.protection)}
+                      {money(quote.rentalFee)}
                     </Text>
                   </View>
-                )}
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>
-                    Risk-based security deposit
-                  </Text>
-                  <Text style={styles.summaryValue}>
-                    {money(quote.deposit)}
-                  </Text>
-                </View>
-                <Text style={styles.depositNote}>
-                  {renterRisk?.canDirectBook
-                    ? `Your ${renterRisk.label} tier sets a ${
-                        renterRisk.level === "low"
-                          ? "5% (capped at RM500)"
-                          : renterRisk.level === "medium"
-                          ? "10% (capped at RM1,000)"
-                          : "15% (capped at RM1,500)"
-                      } refundable deposit based on replacement value. Released automatically upon verified clean return.`
-                    : "Sign in and complete demo eKYC to view your risk-based deposit."}
-                </Text>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryRowTotal}>
-                  <Text style={styles.summaryTotalLabel}>
-                    Total to Pay
-                  </Text>
-                  <Text style={styles.summaryTotalValue}>
-                    {money(quote.total)}
-                  </Text>
-                </View>
-              </View>
-            )}
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>
+                      CurRENT service fee (5%, min RM5)
+                    </Text>
+                    <Text style={styles.summaryValue}>
+                      {money(quote.serviceFee)}
+                    </Text>
+                  </View>
+                  {insuranceSelected && (
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>
+                        Rental Protection (Optional)
+                      </Text>
+                      <Text style={styles.summaryValue}>
+                        {money(quote.protection)}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>
+                      Refundable security deposit
+                    </Text>
+                    <Text style={styles.summaryValue}>
+                      {money(quote.deposit)}
+                    </Text>
+                  </View>
+                  <Text style={styles.depositNote}>{depositTierNote}</Text>
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryLabel, { fontWeight: "700" }]}>Subtotal</Text>
+                    <Text style={[styles.summaryValue, { fontWeight: "700" }]}>{money(totals.subtotal)}</Text>
+                  </View>
 
+                  <View style={styles.summaryDivider} />
+                  <Text style={styles.summarySectionLabel}>Delivery · GrabExpress (Demo)</Text>
+                  {hasAddress ? (
+                    <>
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>
+                          {listing.location} → {city}, {stateName}
+                          {deliveryEstimate ? `, ${deliveryEstimate.distanceKm} km` : ""}
+                        </Text>
+                        <Text style={styles.summaryValue}>
+                          {deliveryFeeValue != null ? money(deliveryFeeValue) : "—"}
+                        </Text>
+                      </View>
+                      {!deliveryEstimate && (
+                        <Text style={styles.deliveryIssueText}>{deliveryIssue.message}</Text>
+                      )}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: showDeliveryDetails }}
+                        onPress={() => setShowDeliveryDetails((open) => !open)}
+                      >
+                        <Text style={styles.summaryLinkText}>
+                          Demo estimate, not a live Grab quotation. {showDeliveryDetails ? "Hide details" : "How is this calculated?"}
+                        </Text>
+                      </Pressable>
+                      {showDeliveryDetails && deliveryEstimate && returnDeliveryEstimate && (
+                        <View style={styles.deliveryDetails}>
+                          <Row label="Distance used for calculation" value={`${deliveryEstimate.distanceKm} km (estimated, not a measured route)`} />
+                          <Row label="Outbound delivery fee (pickup → you)" value={money(deliveryEstimate.fee)} />
+                          <Row label="Return delivery fee (you → pickup)" value={money(returnDeliveryEstimate.fee)} />
+                          <Row label="Total two-way delivery fee" value={money(twoWayDeliveryFee!)} strong />
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => setScrollToAddressRequestId((n) => n + 1)}
+                    >
+                      <Text style={styles.summaryLinkText}>Add address to see fee</Text>
+                    </Pressable>
+                  )}
+
+                  <View style={styles.summaryDivider} />
+                  <View style={styles.summaryRowTotal}>
+                    <Text style={styles.summaryTotalLabel}>{totalLabel}</Text>
+                    <Text style={styles.summaryTotalValue}>{money(totalValue)}</Text>
+                  </View>
+                  <Text style={styles.depositNote}>
+                    {!renterRisk?.canDirectBook
+                      ? "Complete demo eKYC to see your exact deposit and total."
+                      : hasAddress && totals.grandTotal != null
+                        ? `Includes ${money(quote.deposit)} refundable deposit`
+                        : "Delivery fee added once you choose an address"}
+                  </Text>
+                  {renterRisk?.canDirectBook && hasAddress && deliveryFeeValue != null && !SINGLE_CHECKOUT && (
+                    <Text style={styles.depositNote}>
+                      You'll pay {money(deliveryFeeValue)} for GrabExpress delivery first, followed by {money(totals.subtotal)} for your rental in the next step.
+                    </Text>
+                  )}
+                </View>
+              );
+            })()}
+
+            {/* Pickup, Deliver to, Estimated distance and "How is this calculated?" are shown once,
+                in the Booking Summary's Delivery section above — not repeated here. */}
             {renterRisk?.level !== "very_high" && quote && (
               <View style={styles.checkoutPanel}>
                 <View style={styles.deliveryHeaderRow}>
                   <Ionicons name="bicycle-outline" size={16} color={colors.navy} />
                   <Text style={styles.checkoutTitle}>GrabExpress Delivery (Demo)</Text>
                 </View>
-                <View style={styles.deliverySummaryRow}>
-                  <Text style={styles.deliverySummaryLabel}>Pickup</Text>
-                  <Text style={styles.deliverySummaryValue}>{listing.location}</Text>
-                </View>
-                <View style={styles.deliverySummaryRow}>
-                  <Text style={styles.deliverySummaryLabel}>Deliver to</Text>
-                  <Text style={styles.deliverySummaryValue}>{deliveryAddressIsComplete() ? `${city}, ${stateName}` : "Add address above"}</Text>
-                </View>
-                <View style={styles.deliverySummaryRow}>
-                  <Text style={styles.deliverySummaryLabel}>Estimated distance</Text>
-                  <Text style={styles.deliverySummaryValue}>{deliveryEstimate ? `${deliveryEstimate.distanceKm} km` : "—"}</Text>
-                </View>
-                <View style={styles.deliverySummaryRow}>
-                  <Text style={styles.deliverySummaryLabel}>Delivery Fee</Text>
-                  <Text style={styles.deliveryFeeValue}>{deliveryEstimate ? money(deliveryEstimate.fee) : "Not available yet"}</Text>
-                </View>
-                {!deliveryEstimate && (
-                  <View style={styles.deliveryIssue}>
-                    <Text style={styles.deliveryIssueText}>{deliveryIssue.message}</Text>
-                  </View>
-                )}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: showDeliveryDetails }}
-                  onPress={() => setShowDeliveryDetails((open) => !open)}
-                  style={styles.deliveryToggle}
-                >
-                  <Text style={styles.deliveryToggleText}>{showDeliveryDetails ? "Hide Delivery Details" : "How is this calculated?"}</Text>
-                  <Ionicons name={showDeliveryDetails ? "chevron-up" : "chevron-down"} size={16} color={colors.blue} />
-                </Pressable>
-                {showDeliveryDetails && (
-                  <View style={styles.deliveryDetails}>
-                    <Row label="Rental item" value={listing.title} />
-                    <Row label="Pickup address" value={listing.location} />
-                    <Row label="Delivery address" value={deliveryAddressIsComplete() ? currentDeliveryAddress : "Complete your delivery address above"} />
-                    {deliveryEstimate && <>
-                      <Row label="Distance used for calculation" value={`${deliveryEstimate.distanceKm} km (estimated, not a measured route)`} />
-                      <Row label="Base delivery fee" value={money(deliveryEstimate.baseFee)} />
-                      <Row label="Distance-based charges" value={money(deliveryEstimate.distanceCharge)} />
-                      <Row label="Total delivery fee" value={money(deliveryEstimate.fee)} strong />
-                      <Text style={s.caption}>Delivery Fee = MAX(RM5, RM4 base + estimated distance × RM1/km). Distance is automatically estimated from pickup and delivery postcodes — a straight-line estimate, not an actual road route.</Text>
-                      <Text style={s.caption}>Your quote: max(RM5, {money(deliveryEstimate.baseFee)} + {deliveryEstimate.distanceKm} km × RM1) = {money(deliveryEstimate.fee)}.</Text>
-                    </>}
-                  </View>
-                )}
                 <Row label="Delivery payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Demo Payment Completed" : deliveryDetailsChanged ? "New calculation and payment required" : "Awaiting Payment"} />
                 {checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged
                   ? <Button secondary onPress={() => router.push(`/delivery-demo/${checkoutBooking.id}` as never)}>View Receipt</Button>
-                  : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() || !deliveryEstimate || !!checkoutBooking} onPress={() => void handleDeliveryDemo()}>Pay Delivery Fee</Button>}
+                  : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() || !deliveryEstimate || !returnDeliveryEstimate || !!checkoutBooking} onPress={() => void handleDeliveryDemo()}>
+                      {twoWayDeliveryFee != null ? `Pay Delivery & Continue · ${money(twoWayDeliveryFee)}` : "Pay Delivery & Continue"}
+                    </Button>}
                 {checkoutBooking && <Button secondary onPress={async () => {
                   try {
                     await actAndPersist({ type: "cancelDeliveryCheckout", bookingId: checkoutBooking.id });
@@ -1427,9 +1471,17 @@ export default function ListingDetailScreen() {
                       <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
                     )}
                   </Pressable>
-                  <Button disabled={isPaying || checkoutBooking?.deliveryDemo?.status !== "paid_demo" || deliveryDetailsChanged} onPress={handleConfirmInstantBook}>
-                    {isPaying ? "Processing demo payment…" : "Pay"}
-                  </Button>
+                  <View>
+                    <Button
+                      disabled={isPaying || checkoutBooking?.deliveryDemo?.status !== "paid_demo" || deliveryDetailsChanged}
+                      loading={isPaying}
+                      success={paySuccess}
+                      onPress={handleConfirmInstantBook}
+                    >
+                      Pay
+                    </Button>
+                    <SuccessBurst trigger={paySuccess} />
+                  </View>
                   <Button secondary onPress={() => setShowCheckout(false)}>
                     Back
                   </Button>
@@ -1469,7 +1521,9 @@ export default function ListingDetailScreen() {
                   >
                     {listing.ownerId === user?.id
                       ? "This is your listing"
-                      : "Rent"}
+                      : quote
+                        ? `Rent · ${money(SINGLE_CHECKOUT && twoWayDeliveryFee != null ? quote.total + twoWayDeliveryFee : quote.total)}`
+                        : "Rent"}
                   </Button>
                 )}
                 {user?.verification === "verified" &&
@@ -1974,6 +2028,22 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 12,
     color: colors.navy,
+  },
+  summarySectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.slate,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  summaryLinkText: {
+    fontSize: 11,
+    color: colors.blue,
+    fontWeight: "600",
+    marginTop: 2,
+    marginBottom: 2,
   },
   summaryValue: {
     fontSize: 12,

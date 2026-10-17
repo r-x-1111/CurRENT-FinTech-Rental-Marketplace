@@ -47,9 +47,9 @@ export default function DeliveryDemoCheckout() {
       <Row label="Pickup" value={delivery.origin} />
       <Row label="Deliver to" value={delivery.destination} />
       <Row label="Estimated distance" value={delivery.distanceKm ? `${delivery.distanceKm} km (estimated, not a measured route)` : "Unavailable"} />
-      <Row label="Base fee" value={money(delivery.baseFare ?? 4)} />
-      <Row label="Distance charge" value={money(delivery.distanceCharge ?? 0)} />
-      <Row label="Simulated delivery fee" value={money(delivery.fee)} />
+      {delivery.outboundFee != null && <Row label="Outbound delivery fee (pickup → you)" value={money(delivery.outboundFee)} />}
+      {delivery.returnFee != null && <Row label="Return delivery fee (you → pickup)" value={money(delivery.returnFee)} />}
+      <Row label="Total two-way delivery fee (Demo)" value={money(delivery.fee)} strong />
       <Text style={s.caption}>Demo estimate only, calculated automatically from postcodes. Not a live Grab quotation or verified road route.</Text>
       {!!error && <Notice text={error} error />}
       {delivery.status === "paid_demo" ? <>
@@ -60,10 +60,10 @@ export default function DeliveryDemoCheckout() {
         <Notice text="No actual GrabExpress payment was processed and no funds were transferred." />
         <Button secondary onPress={() => router.push({ pathname: "/delivery-receipt/[id]", params: { id: delivery.receiptReference || "" } })}>View Full Receipt</Button>
         <Button onPress={() => router.replace({ pathname: "/listing/[id]", params: { id: booking.listingId, checkoutId: booking.id } })}>
-          Return to CurRENT
+          Continue to CurRENT Rental Payment
         </Button>
-      </> : <Button disabled={busy} onPress={() => void pay()}>
-        {busy ? "Processing demo payment…" : `Pay Delivery Fee (${money(delivery.fee)} Demo)`}
+      </> : <Button disabled={busy} loading={busy} onPress={() => void pay()}>
+        Pay Delivery & Continue · {money(delivery.fee)}
       </Button>}
     </Card>
   </Screen>;

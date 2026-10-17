@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, Card, Field, Notice, Screen, s } from "../components/ui";
+import { MorphIcon } from "../components/MorphIcon";
 import { useMarketplace } from "../context/Marketplace";
 import { colors } from "../constants/theme";
 import {
@@ -31,6 +32,7 @@ export default function Auth() {
   const [error, setError] = useState("");
   const [infoNotice, setInfoNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     if (!state.currentUserId) {
@@ -97,6 +99,7 @@ export default function Auth() {
           accountKind: "normal", id: data.user.id, email: data.user.email || address,
           name: name.trim(), phone: normalizedPhone, verified: false,
         });
+        setSuccess(true);
         router.replace(returnTo as never);
         return;
       } else {
@@ -112,6 +115,7 @@ export default function Auth() {
         );
         await activateAuthenticatedWorkspace(account);
       }
+      setSuccess(true);
       router.replace(returnTo as never);
     } catch (e) {
       setError((e as Error).message);
@@ -217,10 +221,11 @@ export default function Auth() {
               onPress={() => setShowPassword(!showPassword)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons
+              <MorphIcon
                 name={showPassword ? "eye-off-outline" : "eye-outline"}
                 size={20}
                 color={colors.muted}
+                toggleKey={showPassword}
               />
             </TouchableOpacity>
           </View>
@@ -260,12 +265,8 @@ export default function Auth() {
           {!!infoNotice && <Notice text={infoNotice} />}
 
           <View style={{ marginTop: 8 }}>
-            <Button disabled={busy} onPress={submit}>
-              {busy
-                ? "Please wait…"
-                : mode === "Sign in"
-                  ? "Sign In"
-                  : "Create Account"}
+            <Button disabled={busy} loading={busy} success={success} onPress={submit}>
+              {mode === "Sign in" ? "Sign In" : "Create Account"}
             </Button>
           </View>
 

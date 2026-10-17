@@ -17,6 +17,7 @@ import { useMarketplace } from "../../context/Marketplace";
 import { riskFor } from "../../services/booking";
 import { colors } from "../../constants/theme";
 import { RiskGauge } from "../../components/RiskGauge";
+import { LiquidFillPressable } from "../../components/LiquidFillPressable";
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { signOutAuthenticatedAccount } from "../../services/auth";
 
@@ -157,13 +158,13 @@ export default function ProfileScreen() {
         )}
       </Card>
 
-      <Pressable accessibilityRole="button" onPress={() => router.push("/owner")} style={({ pressed }) => [styles.lenderButton, pressed && styles.supportNavPressed]}>
+      <LiquidFillPressable onPress={() => router.push("/owner")} fillColor={colors.navy} style={styles.lenderButton}>
         {isMobile && <LinearGradient pointerEvents="none" colors={["#0647CD", "#2463FF", "#3B82F6"]} locations={[0, 0.65, 1]} style={StyleSheet.absoluteFill} />}
         <View pointerEvents="none" style={styles.lenderAccent} />
         <View style={[styles.lenderIcon, isMobile && styles.mobileLenderIcon]}><Ionicons name="briefcase" size={22} color={colors.white} /></View>
         <View style={{ flex: 1 }}><Text style={styles.lenderTitle}>Lender Mode</Text><Text style={styles.lenderSubtitle}>Switch to manage your listings and earnings</Text></View>
         <Ionicons name="chevron-forward" size={19} color={colors.white} />
-      </Pressable>
+      </LiquidFillPressable>
 
       {user.hasOverdueObligation && (
         <Card>
@@ -449,7 +450,7 @@ const styles = StyleSheet.create({
   lenderTitle: { color: colors.white, fontSize: 17, fontWeight: "700" },
   lenderSubtitle: { color: colors.white, fontSize: 11, lineHeight: 15 },
   compactCard: { padding: 16, gap: 10, marginBottom: 12, borderRadius: 19 },
-  riskCard: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue },
+  riskCard: { backgroundColor: colors.white, borderColor: colors.border },
   mobileRiskCard: { backgroundColor: colors.white, borderColor: colors.border },
   cardHeading: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 3 },
   headingIcon: { width: 41, height: 41, borderRadius: 12, backgroundColor: colors.softBlue, alignItems: "center", justifyContent: "center" },

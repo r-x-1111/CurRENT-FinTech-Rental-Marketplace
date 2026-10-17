@@ -24,6 +24,7 @@ import {
   demoSlotAvailable,
   formatMalaysiaDateTime,
   calculateInsurancePremium,
+  getBookingTotals,
   getEffectiveBookingStatus,
   isCancellationEligible,
   parseMalaysiaTimestamp,
@@ -374,6 +375,147 @@ test("deriveDisplayDelivery connects Transaction Details / Rental Details to eac
   assert.equal(selfPickupDisplay.fee, null);
 });
 
+test("Lender Rental Details computes the Ergonomic Office Chair delivery fee with the same automatic formula as the renter checkout, instead of 'Delivery Estimate Unavailable'", () => {
+  const seed = createSeed("admin_demo");
+  const listing = seed.listings.find((l) => l.id === "office-chair")!;
+  const officeChairBookings = seed.bookings.filter((b) => b.listingId === "office-chair");
+  assert.ok(officeChairBookings.length >= 2);
+
+  for (const booking of officeChairBookings) {
+    // Pickup and delivery must be in the same Malaysian state for a sensible demo route.
+    assert.match(booking.deliveryAddress || "", /Selangor/);
+    assert.ok(booking.deliveryPostcode);
+
+    const display = deriveDisplayDelivery({
+      collectionMethod: booking.collectionMethod,
+      deliveryDemo: booking.deliveryDemo || null,
+      pickupLocation: listing.location,
+      deliveryAddress: booking.deliveryAddress,
+      pickupPostcode: listing.pickupPostcode,
+      deliveryPostcode: booking.deliveryPostcode,
+    });
+
+    // The core bug: lender view must never show "Delivery Estimate Unavailable" when a
+    // resolvable pickup/delivery postcode pair exists.
+    assert.notEqual(display.status, "unavailable");
+    assert.ok(display.fee != null, "Delivery fee must be calculated, not unavailable");
+
+    // Must be the exact same figures the renter-side checkout would have calculated —
+    // the same reused formula per leg, combined into a two-way total, not an independent guess.
+    const expectedOutbound = estimateAutomaticDelivery(listing.pickupPostcode, booking.deliveryPostcode)!;
+    const expectedReturn = estimateAutomaticDelivery(booking.deliveryPostcode, listing.pickupPostcode)!;
+    assert.ok(expectedOutbound && expectedReturn);
+    assert.equal(display.outboundFee, expectedOutbound.fee);
+    assert.equal(display.returnFee, expectedReturn.fee);
+    assert.equal(display.fee, Math.round((expectedOutbound.fee + expectedReturn.fee) * 100) / 100);
+    assert.equal(display.distanceKm, expectedOutbound.distanceKm);
+    assert.equal(display.baseFare, expectedOutbound.baseFee);
+    assert.equal(display.distanceCharge, expectedOutbound.distanceCharge);
+
+    // No stored deliveryDemo exists for these seeded bookings, so none can claim a completed
+    // demo payment that never happened.
+    assert.notEqual(display.status, "paid_demo");
+  }
+});
+
+test("getBookingTotals: subtotal with and without Rental Protection, grand total with delivery, no-address state, deposit-unknown state", () => {
+  const baseQuote = { rentalFee: 56, serviceFee: 5, deposit: 60, protection: 0, total: 56 + 5 + 60 };
+  // Subtotal without protection === quote.total (today's "Total to Pay").
+  const withoutProtection = getBookingTotals(baseQuote, null);
+  assert.equal(withoutProtection.subtotal, 121);
+  assert.equal(withoutProtection.deliveryFee, null);
+  assert.equal(withoutProtection.grandTotal, null, "No address/unavailable delivery must never fabricate a grand total");
+
+  // Subtotal with Rental Protection included in quote.total.
+  const protectedQuote = { rentalFee: 56, serviceFee: 5, deposit: 60, protection: 8, total: 56 + 5 + 60 + 8 };
+  const withProtection = getBookingTotals(protectedQuote, null);
+  assert.equal(withProtection.subtotal, 129);
+
+  // Grand total combines subtotal + delivery fee, matching the spec's worked example.
+  const withDelivery = getBookingTotals(baseQuote, 19.9);
+  assert.equal(withDelivery.subtotal, 121);
+  assert.equal(withDelivery.deliveryFee, 19.9);
+  assert.equal(withDelivery.grandTotal, 140.9);
+
+  // Deposit-unknown state (pre-eKYC): deposit is 0 in the quote, subtotal still computes cleanly
+  // and the caller is responsible for showing "Estimated total" — getBookingTotals never throws.
+  const depositUnknownQuote = { rentalFee: 56, serviceFee: 5, deposit: 0, protection: 0, total: 56 + 5 };
+  const depositUnknown = getBookingTotals(depositUnknownQuote, null);
+  assert.equal(depositUnknown.subtotal, 61);
+  assert.equal(depositUnknown.grandTotal, null);
+});
+
+test("Payment & Transaction History: grouping by booking ID, subtotal/grand total with and without delivery, refunds and net cost for a cancelled booking, and summary tile totals", () => {
+  const seed = createSeed("admin_demo");
+  const renterId = "demo-renter";
+  const renterBookings = seed.bookings.filter((b) => b.renterId === renterId);
+
+  // Grouping rows by booking ID: one card per rental, each booking id appearing exactly once.
+  const ids = renterBookings.map((b) => b.id);
+  assert.equal(new Set(ids).size, ids.length, "Every booking must produce exactly one ledger card");
+  assert.ok(renterBookings.length > 1);
+
+  function ledgerFigures(b: (typeof renterBookings)[number]) {
+    const listing = seed.listings.find((l) => l.id === b.listingId);
+    const delivery = deriveDisplayDelivery({
+      collectionMethod: b.collectionMethod, deliveryDemo: b.deliveryDemo || null,
+      pickupLocation: listing?.location || b.deliveryDemo?.origin || "", deliveryAddress: b.deliveryAddress,
+      pickupPostcode: listing?.pickupPostcode, deliveryPostcode: b.deliveryPostcode,
+    });
+    const deliveryPaid = delivery.status === "paid_demo";
+    const totals = getBookingTotals(b.quote, deliveryPaid ? delivery.fee : null);
+    const grandTotal = totals.grandTotal ?? totals.subtotal;
+    let refundsTotal = 0;
+    if (b.status === "cancelled" && b.payment === "refunded") {
+      refundsTotal += Math.round((b.quote.rentalFee + b.quote.serviceFee + b.quote.protection) * 100) / 100;
+    }
+    if (b.deposit === "released") refundsTotal += b.quote.deposit;
+    if (delivery.status === "refunded_demo") refundsTotal += delivery.fee ?? 0;
+    refundsTotal = Math.round(refundsTotal * 100) / 100;
+    const netCost = Math.round((grandTotal - refundsTotal) * 100) / 100;
+    return { totals, grandTotal, refundsTotal, netCost, deliveryPaid, delivery };
+  }
+
+  // currentSubtotal === quote.total (unchanged formula), regardless of delivery state.
+  const anyBooking = renterBookings.find((b) => b.deposit !== "released")!;
+  const anyFigures = ledgerFigures(anyBooking);
+  assert.equal(anyFigures.totals.subtotal, anyBooking.quote.total);
+
+  // Grand total without a paid delivery record equals the subtotal (delivery never added unless paid).
+  const noDeliveryBooking = renterBookings.find((b) => b.deliveryDemo?.status !== "paid_demo")!;
+  const noDeliveryFigures = ledgerFigures(noDeliveryBooking);
+  assert.equal(noDeliveryFigures.deliveryPaid, false);
+  assert.equal(noDeliveryFigures.grandTotal, noDeliveryFigures.totals.subtotal);
+
+  // The Tabletop Microwave Oven cancellation: RM85 paid (subtotal), RM85 refunded, net RM0.
+  const microwave = renterBookings.find((b) => b.id === "demo-booking-cancelled-1")!;
+  assert.ok(microwave, "Expected the seeded Tabletop Microwave Oven cancellation booking");
+  assert.equal(microwave.title, "Tabletop Microwave Oven");
+  const microwaveFigures = ledgerFigures(microwave);
+  assert.equal(microwaveFigures.totals.subtotal, 85);
+  assert.equal(microwaveFigures.grandTotal, 85);
+  assert.equal(microwaveFigures.refundsTotal, 85);
+  assert.equal(microwaveFigures.netCost, 0);
+
+  // Summary tiles: "Total paid" and "Refunded" sum cleanly across every card, and "Deposits held
+  // in escrow" only counts deposits currently Held securely or Release pending.
+  const allFigures = renterBookings.map(ledgerFigures);
+  const totalPaid = Math.round(allFigures.reduce((sum, f) => sum + f.grandTotal, 0) * 100) / 100;
+  const totalRefunded = Math.round(allFigures.reduce((sum, f) => sum + f.refundsTotal, 0) * 100) / 100;
+  const depositsInEscrow = Math.round(
+    renterBookings.reduce((sum, b) => sum + (b.deposit === "held" || b.deposit === "release_pending" ? b.quote.deposit : 0), 0) * 100,
+  ) / 100;
+  assert.ok(totalPaid > 0);
+  assert.ok(totalRefunded >= 85, "Must at least include the microwave's refund");
+  assert.ok(depositsInEscrow > 0);
+
+  // A still-held (not yet released) deposit must never appear as a refund row — escrow and
+  // refunds are mutually exclusive for the same booking.
+  const heldBooking = renterBookings.find((b) => b.deposit === "held" && b.status !== "cancelled" && b.deliveryDemo?.status !== "refunded_demo");
+  assert.ok(heldBooking, "Expected at least one seeded booking with a currently held deposit");
+  assert.equal(ledgerFigures(heldBooking!).refundsTotal, 0);
+});
+
 test("automatic postcode-based delivery estimate: Haversine x road factor, MAX(RM5, RM4 + distance) fee, no API and no manual distance", () => {
   // Exact-postcode lookup resolves without hitting the prefix fallback.
   assert.ok(resolvePostcodeCoordinate("50480"));
@@ -409,14 +551,18 @@ test("delivery demo receipt is stored separately before rental payment", () => {
   const start = `${dateAfter(2)}T11:00:00+08:00`;
   const end = `${dateAfter(4)}T11:00:00+08:00`;
   const listing = createSeed().listings.find((l) => l.id === "sony-a7iii")!;
-  const expected = estimateAutomaticDelivery(listing.pickupPostcode, "50480")!;
+  const expectedOutbound = estimateAutomaticDelivery(listing.pickupPostcode, "50480")!;
+  const expectedReturn = estimateAutomaticDelivery("50480", listing.pickupPostcode)!;
   j.act({ type: "startDeliveryCheckout", id: "delivery-booking", listingId: "sony-a7iii",
     start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480" });
   const pending = j.state.bookings.find((booking) => booking.id === "delivery-booking")!;
   assert.equal(pending.payment, "required");
   assert.equal(pending.status, "payment_required");
-  assert.equal(pending.deliveryDemo?.fee, expected.fee);
-  assert.equal(pending.deliveryDemo?.distanceKm, expected.distanceKm);
+  // Combined two-way (outbound + return) delivery fee — each leg calculated separately.
+  assert.equal(pending.deliveryDemo?.outboundFee, expectedOutbound.fee);
+  assert.equal(pending.deliveryDemo?.returnFee, expectedReturn.fee);
+  assert.equal(pending.deliveryDemo?.fee, Math.round((expectedOutbound.fee + expectedReturn.fee) * 100) / 100);
+  assert.equal(pending.deliveryDemo?.distanceKm, expectedOutbound.distanceKm);
   assert.equal(pending.commissionRate, 0.13);
   assert.equal(pending.quote.total, pending.quote.rentalFee + pending.quote.serviceFee + pending.quote.deposit);
   assert.throws(() => j.act({ type: "completeRentalCheckout", bookingId: pending.id, paymentMethod: "Demo FPX" }), /delivery demo payment/);
@@ -429,6 +575,40 @@ test("delivery demo receipt is stored separately before rental payment", () => {
   assert.throws(() => j.act({ type: "completeRentalCheckout", bookingId: pending.id, paymentMethod: "Demo FPX" }), /already completed/);
   assert.equal(calculateOwnerPayout(pending.quote.rentalFee, pending.commissionRate).commission,
     Math.round(pending.quote.rentalFee * 13) / 100);
+});
+
+test("cancelling an unfinished checkout after delivery is paid refunds the prepaid demo delivery fee, and a rejected rental-payment attempt never re-charges delivery", () => {
+  const j = journey();
+  const start = `${dateAfter(2)}T11:00:00+08:00`;
+  const end = `${dateAfter(4)}T11:00:00+08:00`;
+  j.act({ type: "startDeliveryCheckout", id: "abandon-me", listingId: "sony-a7iii",
+    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480" });
+  j.act({ type: "payDeliveryDemo", bookingId: "abandon-me", receiptReference: "DEMO-GE-ABANDON" });
+  const paid = j.state.bookings.find((booking) => booking.id === "abandon-me")!;
+  assert.equal(paid.deliveryDemo?.status, "paid_demo");
+
+  // Abandon the booking before paying the rental fee: the prepaid delivery amount is refunded
+  // (simulated), not left as a dangling paid record on a cancelled booking.
+  j.act({ type: "cancelDeliveryCheckout", bookingId: "abandon-me" });
+  const cancelled = j.state.bookings.find((booking) => booking.id === "abandon-me")!;
+  assert.equal(cancelled.status, "cancelled");
+  assert.equal(cancelled.deliveryDemo?.status, "refunded_demo");
+  assert.ok(cancelled.deliveryDemo?.refundedAt);
+
+  // Separately: a rejected rental-payment attempt (e.g. someone else tries to pay it) must leave
+  // the booking unconfirmed and retryable, and must never touch — let alone re-charge — delivery.
+  j.act({ type: "startDeliveryCheckout", id: "retry-me", listingId: "sony-a7iii",
+    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480" });
+  j.act({ type: "payDeliveryDemo", bookingId: "retry-me", receiptReference: "DEMO-GE-RETRY" });
+  j.login("owner-aiman");
+  assert.throws(() => j.act({ type: "completeRentalCheckout", bookingId: "retry-me", paymentMethod: "Demo FPX" }));
+  j.login("demo-renter");
+  const stillPending = j.state.bookings.find((booking) => booking.id === "retry-me")!;
+  assert.equal(stillPending.status, "payment_required");
+  assert.equal(stillPending.deliveryDemo?.status, "paid_demo", "Delivery payment must not be reversed by a failed rental payment");
+  // Safe retry by the actual renter succeeds without any new delivery charge.
+  j.act({ type: "completeRentalCheckout", bookingId: "retry-me", paymentMethod: "Demo FPX" });
+  assert.equal(j.state.bookings.find((booking) => booking.id === "retry-me")?.payment, "paid");
 });
 
 function withMockedNow<T>(timestamp: number, run: () => T): T {

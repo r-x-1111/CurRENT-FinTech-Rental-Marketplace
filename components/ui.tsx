@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  Animated,
   Image,
   Pressable,
   ScrollView,
@@ -12,6 +15,34 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+/** Shared across every Pressable that uses the press-scale micro-interaction, so repeated
+ * presses don't leak timers/listeners and respect the OS "reduce motion" setting. */
+function usePressScale(enabled: boolean, targetScale = 0.92) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const reduceMotion = useReduceMotion();
+  const onPressIn = () => {
+    if (!enabled || reduceMotion) return;
+    Animated.timing(scale, { toValue: targetScale, duration: 120, useNativeDriver: true }).start();
+  };
+  const onPressOut = () => {
+    if (!enabled || reduceMotion) return;
+    Animated.spring(scale, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }).start();
+  };
+  return { scale, onPressIn, onPressOut };
+}
+
+/** Polls the OS "reduce motion" accessibility setting once and keeps it live. Every animation
+ * primitive in this file checks this before starting a timer/spring, per the reduced-motion rule. */
+function useReduceMotion() {
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled?.().then((value) => { if (mounted) setReduceMotion(!!value); }).catch(() => {});
+    const sub = AccessibilityInfo.addEventListener?.("reduceMotionChanged", (value) => setReduceMotion(!!value));
+    return () => { mounted = false; sub?.remove?.(); };
+  }, []);
+  return reduceMotion;
+}
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -102,6 +133,8 @@ export function Button({
   disabled,
   danger,
   accessibilityLabel,
+  loading,
+  success,
 }: {
   children: React.ReactNode;
   onPress: () => void;
@@ -109,37 +142,80 @@ export function Button({
   disabled?: boolean;
   danger?: boolean;
   accessibilityLabel?: string;
+  /** "Load to Check" micro-interaction: shows a spinner in place of the label. Opt-in —
+   * omit for a plain button. Caller is responsible for only flipping `success` to true
+   * once the underlying operation has actually succeeded. */
+  loading?: boolean;
+  /** Shows a brief checkmark + glow, then the caller should clear it (e.g. after ~900ms or
+   * on navigation). Never shown unless the caller sets it after a real success. */
+  success?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
+  const busy = !!loading || !!disabled;
+  const { scale, onPressIn, onPressOut } = usePressScale(!busy);
+  const glow = useRef(new Animated.Value(0)).current;
+  const reduceMotion = useReduceMotion();
+  useEffect(() => {
+    if (!success) { glow.setValue(0); return; }
+    if (reduceMotion) return;
+    Animated.sequence([
+      Animated.timing(glow, { toValue: 1, duration: 180, useNativeDriver: false }),
+      Animated.timing(glow, { toValue: 0, duration: 500, useNativeDriver: false }),
+    ]).start();
+  }, [success, reduceMotion, glow]);
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
-      disabled={disabled}
-      onPress={onPress}
-      onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
-      style={({ pressed, hovered }) => [
-        s.button,
-        secondary && s.secondary,
-        danger && { backgroundColor: "#FFF0ED", borderColor: "#FFCCC2" },
-        hovered && !disabled && !danger && { backgroundColor: secondary ? colors.paleBlue : colors.mediumBlue },
-        focused && !disabled && { borderColor: colors.navy, borderWidth: 2 },
-        pressed && !disabled && { opacity: 0.82 },
-        disabled && { opacity: 0.55 },
-      ]}
-    >
-      <Text
-        style={[
-          s.buttonText,
-          secondary && { color: colors.blue },
-          danger && { color: colors.danger },
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={{ disabled: busy, busy: !!loading }}
+        disabled={busy}
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        style={({ pressed, hovered }) => [
+          s.button,
+          secondary && s.secondary,
+          danger && { backgroundColor: "#FFF0ED", borderColor: "#FFCCC2" },
+          hovered && !disabled && !danger && { backgroundColor: secondary ? colors.paleBlue : colors.mediumBlue },
+          focused && !disabled && { borderColor: colors.navy, borderWidth: 2 },
+          pressed && !disabled && { opacity: 0.82 },
+          disabled && { opacity: 0.55 },
         ]}
       >
-        {children}
-      </Text>
-    </Pressable>
+        <Animated.View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            shadowColor: colors.blue,
+            shadowOpacity: glow,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 0 },
+          }}
+        >
+          {loading && (
+            <ActivityIndicator size="small" color={secondary ? colors.blue : colors.white} />
+          )}
+          {success && !loading && (
+            <Ionicons name="checkmark-circle" size={16} color={secondary ? colors.green : colors.white} />
+          )}
+          <Text
+            style={[
+              s.buttonText,
+              secondary && { color: colors.blue },
+              danger && { color: colors.danger },
+            ]}
+          >
+            {children}
+          </Text>
+        </Animated.View>
+      </Pressable>
+    </Animated.View>
   );
 }
 export function Card({
@@ -200,21 +276,32 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
     </View>
   );
 }
+const BADGE_TONES: Record<string, { backgroundColor: string; borderColor: string; color: string }> = {
+  green: { backgroundColor: "#E7F6EC", borderColor: "#A7F3D0", color: colors.green },
+  red: { backgroundColor: "#FDECEC", borderColor: "#F5B5B5", color: colors.danger },
+  amber: { backgroundColor: "#FEF3E2", borderColor: "#FBD9A5", color: "#B45309" },
+  grey: { backgroundColor: colors.lightGrey, borderColor: colors.border, color: colors.muted },
+};
+
 export function Badge({
   text,
   green = false,
+  tone,
 }: {
   text: string;
   green?: boolean;
+  /** Reuses existing theme colors only (green/red/amber/grey); overrides `green` when set. */
+  tone?: "blue" | "green" | "red" | "amber" | "grey";
 }) {
+  const resolved = BADGE_TONES[tone || (green ? "green" : "")];
   return (
     <View
       style={[
         s.badge,
-        green && { backgroundColor: "#E7F6EC", borderColor: "#A7F3D0" },
+        resolved && { backgroundColor: resolved.backgroundColor, borderColor: resolved.borderColor },
       ]}
     >
-      <Text style={[s.badgeText, green && { color: colors.green }]}>
+      <Text style={[s.badgeText, resolved && { color: resolved.color }]}>
         {text.replaceAll("_", " ")}
       </Text>
     </View>

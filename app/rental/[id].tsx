@@ -17,6 +17,7 @@ import {
   s,
 } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
+import { HoldToConfirmButton } from "../../components/HoldToConfirm";
 import { calculateOwnerPayout, LEGACY_LENDER_COMMISSION_RATE } from "../../services/deposit";
 import { deriveDisplayDelivery } from "../../services/delivery";
 import {
@@ -118,6 +119,8 @@ export default function RentalDetail() {
     deliveryDemo: b.deliveryDemo || null,
     pickupLocation: listing?.location || b.deliveryDemo?.origin || "",
     deliveryAddress: b.deliveryAddress,
+    pickupPostcode: listing?.pickupPostcode,
+    deliveryPostcode: b.deliveryPostcode,
   });
   const startMs = parseMalaysiaTimestamp(b.start);
   const endMs = parseMalaysiaTimestamp(b.end);
@@ -307,11 +310,11 @@ export default function RentalDetail() {
             {`✓ Delivery Received (${new Date(b.renterReceivedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`}
           </Button>
         ) : isStartReached ? (
-          <Button
-            onPress={() => run({ type: "confirmReceived", bookingId: id })}
-          >
-            Confirm Received — Delivered item successfully received
-          </Button>
+          <HoldToConfirmButton
+            label="Hold to Confirm — Delivered item successfully received"
+            disabled={isSavingAction}
+            onConfirm={() => run({ type: "confirmReceived", bookingId: id })}
+          />
         ) : (
           <View style={{ gap: 4 }}>
             <Button disabled secondary onPress={() => {}}>
@@ -1153,8 +1156,10 @@ export default function RentalDetail() {
             {!!displayDelivery.area && <Row label="Service area" value={displayDelivery.area} />}
             {!!displayDelivery.distanceKm && <Row label="Distance" value={`${displayDelivery.distanceKm} km (Demo Route)`} />}
             {!!displayDelivery.vehicle && <Row label="Vehicle" value={displayDelivery.vehicle} />}
+            {displayDelivery.outboundFee != null && <Row label="Outbound delivery fee" value={money(displayDelivery.outboundFee)} />}
+            {displayDelivery.returnFee != null && <Row label="Return delivery fee" value={money(displayDelivery.returnFee)} />}
             {displayDelivery.fee != null ? (
-              <Row label="Delivery Fee" value={money(displayDelivery.fee)} strong />
+              <Row label="Total two-way delivery fee" value={money(displayDelivery.fee)} strong />
             ) : (
               <Notice text="Delivery Estimate Unavailable" />
             )}
@@ -1162,7 +1167,8 @@ export default function RentalDetail() {
               label="Demo delivery payment status"
               value={
                 displayDelivery.status === "paid_demo" ? "Demo Payment Completed"
-                  : displayDelivery.status === "required" ? "Required"
+                  : displayDelivery.status === "refunded_demo" ? "Refunded (Booking Abandoned, Demo)"
+                  : displayDelivery.status === "required" ? "Awaiting Renter Payment"
                   : "No Delivery Record"
               }
             />

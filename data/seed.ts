@@ -1163,7 +1163,8 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-05T02:00:00Z",
       end: "2026-11-08T02:00:00Z",
       collectionMethod: "Delivery Only",
-      deliveryAddress: "Bayan Lepas, Penang",
+      deliveryAddress: "Damansara Utama, Petaling Jaya, Selangor",
+      deliveryPostcode: "47800",
       status: "upcoming",
       quote: {
         days: 3,
@@ -1223,7 +1224,8 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-10-10T09:00:00Z",
       end: "2026-10-13T09:00:00Z",
       collectionMethod: "Delivery Only",
-      deliveryAddress: "Klang, Selangor",
+      deliveryAddress: "Damansara Utama, Petaling Jaya, Selangor",
+      deliveryPostcode: "47800",
       status: "active",
       quote: {
         days: 3,
@@ -1260,7 +1262,8 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-09-05T10:00:00Z",
       end: "2026-09-08T10:00:00Z",
       collectionMethod: "Delivery Only",
-      deliveryAddress: "Damansara, Selangor",
+      deliveryAddress: "Damansara Utama, Petaling Jaya, Selangor",
+      deliveryPostcode: "47800",
       status: "completed",
       quote: {
         days: 3,

@@ -1,5 +1,5 @@
-import React from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Listing } from "../types";
 import { colors } from "../constants/theme";
@@ -17,6 +17,19 @@ export function ListingCard({
 }) {
   const { user, act } = useMarketplace();
   const saved = user?.favourites.includes(listing.id);
+
+  // Icon Morph: the heart scales up and gives a small rotational flourish when it toggles,
+  // instead of the icon just instantly swapping.
+  const heartMorph = useRef(new Animated.Value(0)).current;
+  const wasSaved = useRef(saved);
+  useEffect(() => {
+    if (wasSaved.current === saved) return;
+    wasSaved.current = saved;
+    heartMorph.setValue(0);
+    Animated.spring(heartMorph, { toValue: 1, friction: 3.5, tension: 180, useNativeDriver: true }).start();
+  }, [saved, heartMorph]);
+  const heartScale = heartMorph.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.35, 1] });
+  const heartRotate = heartMorph.interpolate({ inputRange: [0, 0.5, 1], outputRange: ["0deg", "-12deg", "0deg"] });
 
   const isFeatured =
     listing.featuredUntil &&
@@ -91,11 +104,13 @@ export function ListingCard({
         style={styles.heart}
         hitSlop={8}
       >
-        <Ionicons
-          name={saved ? "heart" : "heart-outline"}
-          size={18}
-          color={saved ? colors.blue : colors.navy}
-        />
+        <Animated.View style={{ transform: [{ scale: heartScale }, { rotate: heartRotate }] }}>
+          <Ionicons
+            name={saved ? "heart" : "heart-outline"}
+            size={18}
+            color={saved ? colors.blue : colors.navy}
+          />
+        </Animated.View>
       </Pressable>
     </View>
   );

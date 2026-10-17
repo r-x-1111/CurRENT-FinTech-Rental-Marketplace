@@ -697,8 +697,13 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Complete identity verification and resolve account restrictions before booking.");
       requireThat((riskFor(state, user).score ?? 0) >= 30, "This rental requires CurRENT platform review.");
       requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery destination.");
-      const deliveryEstimate = estimateAutomaticDelivery(listing.pickupPostcode, action.deliveryPostcode);
-      requireThat(deliveryEstimate, "Enter a valid Malaysian postcode to automatically estimate the delivery fee.");
+      const outboundEstimate = estimateAutomaticDelivery(listing.pickupPostcode, action.deliveryPostcode);
+      const returnEstimate = estimateAutomaticDelivery(action.deliveryPostcode, listing.pickupPostcode);
+      requireThat(outboundEstimate && returnEstimate, "Enter a valid Malaysian postcode to automatically estimate the delivery fee.");
+      const deliveryEstimate = outboundEstimate;
+      // Combined two-way (outbound + return) delivery fee: each leg calculated separately with
+      // the same automatic postcode-distance formula, never assumed equal without calculating it.
+      const twoWayFee = Math.round((outboundEstimate.fee + returnEstimate.fee) * 100) / 100;
       requireThat(!state.bookings.some((booking) => booking.id === action.id), "This checkout already exists.");
       requireThat(!state.bookings.some((booking) => booking.listingId === action.listingId &&
         booking.renterId === user.id && booking.start === action.start && booking.end === action.end &&
@@ -712,6 +717,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         durationMinutes: calculateDurationMinutes(action.start, action.end),
         cancellationCutoff: calculateCancellationCutoff(action.start),
         collectionMethod: "Delivery Only", deliveryAddress: action.deliveryAddress,
+        deliveryPostcode: action.deliveryPostcode,
         status: "payment_required", quote,
         commissionRate: CURRENT_LENDER_COMMISSION_RATE,
         riskScore: riskFor(state, user).score ?? 80,
@@ -719,10 +725,11 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         contextMode: state.mode || "normal",
         deliveryDemo: {
           provider: "GrabExpress (Simulation)", origin: listing.location,
-          destination: action.deliveryAddress, fee: deliveryEstimate.fee, status: "required",
+          destination: action.deliveryAddress, fee: twoWayFee, status: "required",
+          outboundFee: outboundEstimate.fee, returnFee: returnEstimate.fee,
           distanceKm: deliveryEstimate.distanceKm, baseFare: deliveryEstimate.baseFee,
           distanceCharge: deliveryEstimate.distanceCharge, minimumFare: 5,
-          pricingReference: "CurRENT demo formula: MAX(RM5, RM4 + distance x RM1/km)",
+          pricingReference: "CurRENT demo formula: two-way, MAX(RM5, RM4 + distance x RM1/km) per leg",
         },
       });
       break;
@@ -786,6 +793,12 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       booking.status = "cancelled";
       booking.cancelledAt = now;
       booking.cancelledById = user.id;
+      // The rental itself was never confirmed/charged, so any prepaid demo delivery fee is
+      // refunded (simulated) rather than left as a dangling paid record on an abandoned booking.
+      if (booking.deliveryDemo?.status === "paid_demo") {
+        booking.deliveryDemo.status = "refunded_demo";
+        booking.deliveryDemo.refundedAt = now;
+      }
       break;
     }
 

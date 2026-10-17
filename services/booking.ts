@@ -8,6 +8,14 @@ import {
 import { calculateRiskScore, tierForScore } from "./riskScore";
 
 export const money = (value: number) => `RM${value.toFixed(2)}`;
+
+/** Formats a "YYYY-MM-DD" (or any ISO) date string as "8 Oct 2026" for ledger/history display. */
+export function formatShortDate(dateKey: string): string {
+  const [year, month, day] = dateKey.slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return dateKey;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${day} ${months[month - 1]} ${year}`;
+}
 export const LAST_BOOKABLE_DATE = "2026-12-31";
 const DEMO_FIRST_DATE = "2026-10-01";
 const DEMO_SLOTS = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
@@ -247,6 +255,38 @@ export function quoteFor(
       Math.round((rentalFee + serviceFee + deposit + protection) * 100) / 100,
   };
 }
+
+/** Whether rental payment and delivery payment are collected together as one charge.
+ * Defaults to false (current two-step flow: rental paid to CurRENT, delivery paid separately). */
+export const SINGLE_CHECKOUT = false;
+
+export type BookingTotals = {
+  /** rentalFee + serviceFee + protection (if any) + deposit — identical to quote.total. */
+  subtotal: number;
+  /** GrabExpress demo delivery fee, or null when not yet known (no address / unavailable). */
+  deliveryFee: number | null;
+  /** subtotal + deliveryFee, or null when deliveryFee is unknown. */
+  grandTotal: number | null;
+};
+
+/**
+ * Single shared source of truth for the Booking Summary / confirmation / Rental Details totals,
+ * so the rental subtotal, delivery fee and combined total always agree everywhere they're shown.
+ * Never invents a delivery fee: grandTotal is null whenever deliveryFee is null.
+ */
+export function getBookingTotals(
+  quote: { rentalFee: number; serviceFee: number; deposit: number; protection: number; total: number },
+  deliveryFee: number | null,
+): BookingTotals {
+  const subtotal = quote.total;
+  if (deliveryFee == null) return { subtotal, deliveryFee: null, grandTotal: null };
+  return {
+    subtotal,
+    deliveryFee,
+    grandTotal: Math.round((subtotal + deliveryFee) * 100) / 100,
+  };
+}
+
 export function availability(
   state: Marketplace,
   listing: Listing,

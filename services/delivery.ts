@@ -1,3 +1,5 @@
+import { AUTO_DELIVERY_MINIMUM_FEE, estimateAutomaticDelivery } from "./geo";
+
 // Historical GrabExpress Malaysia reference table (May 2023), used only for
 // CurRENT's classroom simulation. Distances are demonstration inputs, not live routes.
 export const DELIVERY_PRICING_REFERENCE = "GrabExpress MY FAQ, May 2023";
@@ -60,7 +62,12 @@ export type StoredDeliveryDemo = {
   provider?: string;
   origin: string;
   destination: string;
+  /** Combined two-way (outbound + return) delivery fee — the actual amount charged. */
   fee: number;
+  /** Outbound leg (pickup → delivery). */
+  outboundFee?: number;
+  /** Return leg (delivery → pickup), calculated separately with the same formula. */
+  returnFee?: number;
   area?: string;
   distanceKm?: number;
   vehicle?: DeliveryVehicle;
@@ -68,9 +75,10 @@ export type StoredDeliveryDemo = {
   distanceCharge?: number;
   minimumFare?: number;
   pricingReference?: string;
-  status: "required" | "paid_demo";
+  status: "required" | "paid_demo" | "refunded_demo";
   receiptReference?: string;
   paidAt?: string;
+  refundedAt?: string;
 };
 
 export type DisplayDelivery = {
@@ -81,10 +89,12 @@ export type DisplayDelivery = {
   distanceKm: number | null;
   vehicle: DeliveryVehicle | null;
   fee: number | null;
+  outboundFee: number | null;
+  returnFee: number | null;
   baseFare: number | null;
   distanceCharge: number | null;
   minimumFare: number | null;
-  status: "paid_demo" | "required" | "unavailable" | "self_pickup";
+  status: "paid_demo" | "required" | "unavailable" | "self_pickup" | "refunded_demo";
   receiptReference?: string;
   paidAt?: string;
 };
@@ -100,39 +110,46 @@ export function deriveDisplayDelivery(params: {
   deliveryDemo?: StoredDeliveryDemo | null;
   pickupLocation: string;
   deliveryAddress?: string;
+  /** Postcodes, when known, let the fallback estimate below reuse the exact same automatic
+   * postcode-distance formula used at renter checkout, instead of a separate guess. */
+  pickupPostcode?: string;
+  deliveryPostcode?: string;
 }): DisplayDelivery {
-  const { collectionMethod, deliveryDemo, pickupLocation, deliveryAddress } = params;
+  const { collectionMethod, deliveryDemo, pickupLocation, deliveryAddress, pickupPostcode, deliveryPostcode } = params;
   if (collectionMethod === "Self-Pickup") {
     return { method: "Self-Pickup", origin: pickupLocation, destination: pickupLocation, area: null,
-      distanceKm: null, vehicle: null, fee: null, baseFare: null, distanceCharge: null, minimumFare: null,
-      status: "self_pickup" };
+      distanceKm: null, vehicle: null, fee: null, outboundFee: null, returnFee: null, baseFare: null,
+      distanceCharge: null, minimumFare: null, status: "self_pickup" };
   }
   if (deliveryDemo) {
     return {
       method: "GrabExpress (Demo)", origin: deliveryDemo.origin, destination: deliveryDemo.destination,
       area: (deliveryDemo.area as DeliveryArea) || null, distanceKm: deliveryDemo.distanceKm ?? null,
-      vehicle: deliveryDemo.vehicle ?? null, fee: deliveryDemo.fee, baseFare: deliveryDemo.baseFare ?? null,
+      vehicle: deliveryDemo.vehicle ?? null, fee: deliveryDemo.fee,
+      outboundFee: deliveryDemo.outboundFee ?? null, returnFee: deliveryDemo.returnFee ?? null,
+      baseFare: deliveryDemo.baseFare ?? null,
       distanceCharge: deliveryDemo.distanceCharge ?? null, minimumFare: deliveryDemo.minimumFare ?? null,
       status: deliveryDemo.status, receiptReference: deliveryDemo.receiptReference, paidAt: deliveryDemo.paidAt,
     };
   }
-  // No saved delivery record yet: derive a read-only estimate from the pickup/delivery addresses where
-  // the route is within a supported demo service area. Never reports a payment as completed.
-  const pickupArea = pickupDeliveryArea(pickupLocation);
-  const destinationArea = deliveryAddress ? pickupDeliveryArea(deliveryAddress) : null;
-  if (pickupArea && destinationArea && pickupArea === destinationArea) {
-    const scenario = DEMO_ROUTE_SCENARIOS.find((s) => s.area === pickupArea);
-    const estimate = scenario ? quoteDemoDelivery(pickupArea, "Motorcycle", scenario.distanceKm) : null;
-    if (estimate) {
-      return { method: "GrabExpress (Demo)", origin: pickupLocation, destination: deliveryAddress || "",
-        area: estimate.area, distanceKm: estimate.distanceKm, vehicle: estimate.vehicle, fee: estimate.fee,
-        baseFare: estimate.baseFare, distanceCharge: estimate.distanceCharge, minimumFare: estimate.minimumFare,
-        status: "required" };
-    }
+  // No saved delivery record yet: derive a read-only estimate using the exact same automatic
+  // postcode-distance formula as the renter-side GrabExpress Delivery (Demo) checkout
+  // (services/geo.ts estimateAutomaticDelivery), applied separately to the outbound and return
+  // legs and summed — never assuming the return trip costs the same without calculating it.
+  // Never reports a payment as completed.
+  const outbound = estimateAutomaticDelivery(pickupPostcode, deliveryPostcode);
+  const inbound = estimateAutomaticDelivery(deliveryPostcode, pickupPostcode);
+  if (outbound && inbound) {
+    return { method: "GrabExpress (Demo)", origin: pickupLocation, destination: deliveryAddress || "",
+      area: null, distanceKm: outbound.distanceKm, vehicle: null,
+      fee: Math.round((outbound.fee + inbound.fee) * 100) / 100,
+      outboundFee: outbound.fee, returnFee: inbound.fee,
+      baseFare: outbound.baseFee, distanceCharge: outbound.distanceCharge, minimumFare: AUTO_DELIVERY_MINIMUM_FEE,
+      status: "required" };
   }
   return { method: "GrabExpress (Demo)", origin: pickupLocation, destination: deliveryAddress || "Not provided",
-    area: null, distanceKm: null, vehicle: null, fee: null, baseFare: null, distanceCharge: null, minimumFare: null,
-    status: "unavailable" };
+    area: null, distanceKm: null, vehicle: null, fee: null, outboundFee: null, returnFee: null, baseFare: null,
+    distanceCharge: null, minimumFare: null, status: "unavailable" };
 }
 
 export function quoteDemoDelivery(area: DeliveryArea, vehicle: DeliveryVehicle, distanceKm: number): DeliveryEstimate | null {

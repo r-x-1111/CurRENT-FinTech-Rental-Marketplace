@@ -20,6 +20,7 @@ import { colors } from "../../constants/theme";
 import { MOBILE_BROWSE_CATEGORIES, MobileBrowseCategory, locations, matchesMarketplaceLocation, mobileBrowseCategoryFor, mobileBrowseCategoryForParam } from "../../constants/categories";
 import { useMarketplace } from "../../context/Marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
+import { MagneticGlow } from "../../components/MagneticGlow";
 
 export default function HomeScreen() {
   const { state, user } = useMarketplace();
@@ -233,15 +234,26 @@ export default function HomeScreen() {
                 </Pressable>
 
                 {/* Search submit button */}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Search marketplace"
-                  onPress={() => router.setParams({ q: searchQuery.trim() })}
-                  style={[styles.searchSubmitBtn, isMobile && styles.mobileSearchSubmitBtn]}
-                >
-                  <Ionicons name="search" size={18} color="white" />
-                  {(isDesktop || isMobile) && <Text style={styles.searchSubmitText}>Search</Text>}
-                </Pressable>
+                {isDesktop ? (
+                  <MagneticGlow
+                    accessibilityLabel="Search marketplace"
+                    onPress={() => router.setParams({ q: searchQuery.trim() })}
+                    style={styles.searchSubmitBtn}
+                  >
+                    <Ionicons name="search" size={18} color="white" />
+                    <Text style={styles.searchSubmitText}>Search</Text>
+                  </MagneticGlow>
+                ) : (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Search marketplace"
+                    onPress={() => router.setParams({ q: searchQuery.trim() })}
+                    style={[styles.searchSubmitBtn, isMobile && styles.mobileSearchSubmitBtn]}
+                  >
+                    <Ionicons name="search" size={18} color="white" />
+                    {isMobile && <Text style={styles.searchSubmitText}>Search</Text>}
+                  </Pressable>
+                )}
                 </View>
               </View>
 
