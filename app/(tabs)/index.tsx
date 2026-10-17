@@ -13,7 +13,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { ListingGrid } from "../../components/ListingGrid";
 import { Empty } from "../../components/ui";
 import { colors } from "../../constants/theme";
@@ -114,44 +113,26 @@ export default function HomeScreen() {
         {/* =========================================================================
             1. HERO SECTION (Canva Page 2 Dark Navy Anchor)
            ========================================================================= */}
-        <LinearGradient
-          colors={["#071B38", "#0B1F3A", "#14346B", "#1D4785"]}
-          locations={[0, 0.4, 0.72, 1]}
-          start={{ x: 0, y: 0.15 }}
-          end={{ x: 1, y: 0.75 }}
-          style={[styles.heroWrapper, isDesktop && styles.desktopHeroWrapper, isMobile && styles.mobileHeroWrapper]}
+        <View
+          style={[styles.heroWrapper, isDesktop && styles.desktopHeroWrapper, isDesktop && { paddingLeft: width >= 1600 ? "22%" : "20%" }, isMobile && styles.mobileHeroWrapper]}
         >
-          {isMobile && width >= 375 && (
-            <View pointerEvents="none" style={styles.mobileHeroProductPhoto}>
-              <Image source={{ uri: "/hero/hero-products.png" }} style={styles.mobileHeroProductPhotoImg} resizeMode="cover" />
-              <LinearGradient
-                colors={["#0B1F3A", "#0B1F3A", "#14346Bcc", "#14346B55", "transparent"]}
-                locations={[0, 0.15, 0.4, 0.65, 1]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </View>
-          )}
-          {isDesktop && (
-            <View pointerEvents="none" style={styles.desktopHeroPhoto}>
-              <Image source={{ uri: "/hero/hero-products.png" }} style={styles.desktopHeroPhotoImg} resizeMode="cover" />
-              <LinearGradient
-                colors={["#0B1F3A", "#0B1F3Aee", "#0B1F3A77", "transparent", "transparent", "#0B1F3A"]}
-                locations={[0, 0.22, 0.48, 0.66, 0.76, 0.9]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={StyleSheet.absoluteFill}
-              />
-            </View>
-          )}
+          {/* Full-bleed hero background photo. Its own composition already keeps ~55% of its
+              left side as clean navy studio background and groups the camera/MacBook/DualSense/
+              projector/plant within the right ~45% — so used edge-to-edge at the hero's own
+              aspect ratio, that same balanced split carries straight through onto the page with
+              no separate panel, letterboxing or visible seam needed. */}
+          <Image
+            source={{ uri: "/hero/hero-products.png" }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
           <View style={[styles.heroContainer, isDesktop && styles.desktopHeroContainer]}>
             <View
               style={[
                 styles.heroContent,
                 isMobile && styles.mobileHeroContent,
                 isDesktop && styles.desktopHeroContent,
-                { width: isDesktop ? "45%" : "100%" },
+                { width: isDesktop ? (width >= 1600 ? "43%" : "52%") : "100%" },
               ]}
             >
               <View style={styles.heroTopRow}>
@@ -166,7 +147,7 @@ export default function HomeScreen() {
                       : "Notifications"
                   }
                   onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
-                  style={[styles.notificationButton, isDesktop && styles.desktopNotificationButton, isDesktop && { left: width * 0.235 - 20 }]}
+                  style={[styles.notificationButton, isDesktop && styles.desktopNotificationButton, isDesktop && { left: width * (width >= 1600 ? 0.2625 : 0.31) - 20 }]}
                 >
                   <Ionicons
                     name="notifications-outline"
@@ -305,9 +286,8 @@ export default function HomeScreen() {
                 </ScrollView>
             </View>
 
-            {isDesktop && <View style={styles.heroShowcase} />}
           </View>
-        </LinearGradient>
+        </View>
 
         {/* =========================================================================
             2. DISCOVERY CATALOGUE SECTION (Merged Explore Functionality)
@@ -385,46 +365,10 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     overflow: "hidden",
   },
-  desktopHeroWrapper: { paddingLeft: "20%", paddingRight: "7.5%", paddingTop: 26, paddingBottom: 26 },
+  // A sensible minimum height keeps the hero from becoming extremely short-and-wide on large
+  // monitors, which would force resizeMode="cover" to crop the product photo too aggressively.
+  desktopHeroWrapper: { paddingLeft: "20%", paddingRight: "7.5%", paddingTop: 26, paddingBottom: 26, minHeight: 460 },
   mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 10, overflow: "hidden" },
-  mobileHeroProductPhoto: {
-    position: "absolute",
-    right: -22,
-    top: 0,
-    bottom: 0,
-    width: 260,
-    overflow: "hidden",
-  },
-  mobileHeroProductPhotoImg: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    right: 0,
-    // Wider than the visible container and right-anchored, so the overflow:hidden parent
-    // crops away the image's own empty left-hand space and keeps the product cluster in view.
-    width: "170%",
-    height: "100%",
-  },
-  desktopHeroPhoto: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: "100%",
-    overflow: "hidden",
-  },
-  desktopHeroPhotoImg: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    right: "8%",
-    width: "78%",
-    height: "100%",
-  },
-  heroShowcase: {
-    width: "38%",
-    height: 320,
-  },
   heroContainer: {
     maxWidth: 1180,
     width: "100%",
@@ -474,7 +418,7 @@ const styles = StyleSheet.create({
   },
   eyebrowBadge: {
     backgroundColor: colors.navy,
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
     paddingVertical: 5,
     borderRadius: 6,
     alignSelf: "flex-start",
