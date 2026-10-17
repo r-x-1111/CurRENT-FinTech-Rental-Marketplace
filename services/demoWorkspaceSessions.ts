@@ -1,6 +1,7 @@
 import { createSeed } from "../data/seed";
 import type { Marketplace } from "../types/marketplace";
 import { withoutRemovedSeedListings } from "./catalogue";
+import { repairDemoDeliveryPayments } from "./repairDemoDeliveryPayments";
 
 const STORAGE_PREFIX = "current:demo-session:";
 const DELIVERY_PREFIX = "current:demo-delivery-history:";
@@ -51,8 +52,8 @@ function savedDeliveryHistory(accountId: string): NonNullable<Marketplace["deliv
 function withPersistentDeliveryHistory(accountId: string, state: Marketplace): Marketplace {
   const existing = state.deliveryHistory || [];
   const ids = new Set(existing.map((entry) => entry.id));
-  return { ...state, deliveryHistory: [...existing, ...savedDeliveryHistory(accountId).filter((entry) => !ids.has(entry.id))]
-    .sort((a, b) => b.paidAt.localeCompare(a.paidAt)) };
+  return repairDemoDeliveryPayments({ ...state, deliveryHistory: [...existing, ...savedDeliveryHistory(accountId).filter((entry) => !ids.has(entry.id))]
+    .sort((a, b) => b.paidAt.localeCompare(a.paidAt)) });
 }
 
 export function loadDemoWorkspaceSession(accountId: string): Marketplace {

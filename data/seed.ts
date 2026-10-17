@@ -11,6 +11,8 @@ import type {
 } from "../types/marketplace";
 import { DEMO_SAVED_DELIVERY_ADDRESSES } from "../services/demoWorkspaceDefaults";
 import { demoDeliverySamples } from "./demoDeliveryHistory";
+import { demoDestinationPostcode } from "../services/demoDeliveryLocations";
+import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
 
 const sampleConditionImages = [
   "/products/sony-a7iii.jpg",
@@ -1371,7 +1373,10 @@ export function createAdminDemoSeed(): Marketplace {
         "demo-lender-upcoming-2",
         "demo-lender-completed-1",
       ].includes(booking.id),
-  );
+  ).map((booking) => ({
+    ...booking,
+    deliveryPostcode: booking.deliveryPostcode || demoDestinationPostcode(booking.deliveryAddress),
+  }));
 
   // --------------------------------------------------------------------------
   // RENTAL-LINKED CONVERSATION THREADS (At least 3 threads, >= 2 messages each)
@@ -1904,5 +1909,5 @@ export function createAdminDemoSeed(): Marketplace {
 export function createSeed(
   mode: "normal" | "admin_demo" = "normal",
 ): Marketplace {
-  return mode === "admin_demo" ? createAdminDemoSeed() : createNormalSeed();
+  return mode === "admin_demo" ? repairDemoDeliveryPayments(createAdminDemoSeed()) : createNormalSeed();
 }

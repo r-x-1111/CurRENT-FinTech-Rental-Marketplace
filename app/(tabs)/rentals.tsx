@@ -4,6 +4,7 @@ import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge, Button, Chips, Empty, Row, Screen, s } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
+import { BookingSummary } from "../../components/BookingSummary";
 import { MorphIcon } from "../../components/MorphIcon";
 import { useMarketplace } from "../../context/Marketplace";
 import {
@@ -25,6 +26,7 @@ export default function RentalsScreen() {
   const [activeTab, setActiveTab] = useState("Upcoming");
   const [now, setNow] = useState(() => Date.now());
   const [expandedLedgerCards, setExpandedLedgerCards] = useState<Set<string>>(new Set());
+  const [expandedLedgerDetails, setExpandedLedgerDetails] = useState<Set<string>>(new Set());
   const [expandedDeliveryBreakdown, setExpandedDeliveryBreakdown] = useState<Set<string>>(new Set());
   const [historyFilter, setHistoryFilter] = useState("All");
   const [historySearch, setHistorySearch] = useState("");
@@ -97,7 +99,7 @@ export default function RentalsScreen() {
 
   function statusChipFor(b: Booking): { text: string; tone: "red" | "grey" | "amber" | "blue" | "green" } {
     if (b.status === "disputed") return { text: "Disputed", tone: "red" };
-    if (b.status === "cancelled" || b.status === "rejected") return { text: "Cancelled · Refunded", tone: "grey" };
+    if (b.status === "cancelled" || b.status === "rejected") return { text: b.payment === "refunded" ? "Cancelled · Refunded" : "Cancelled", tone: "grey" };
     if (b.deposit === "release_pending") return { text: "Deposit release pending", tone: "amber" };
     if (b.deposit === "released") return { text: "Completed · Deposit released", tone: "green" };
     return { text: "Deposit held", tone: "blue" };
@@ -121,12 +123,14 @@ export default function RentalsScreen() {
     const delivery = deriveDisplayDelivery({
       collectionMethod: b.collectionMethod,
       deliveryDemo: b.deliveryDemo || null,
-      pickupLocation: listing?.location || b.deliveryDemo?.origin || "",
+      pickupLocation: listing?.privateMeetingVenue || listing?.location || b.deliveryDemo?.origin || "",
       deliveryAddress: b.deliveryAddress,
       pickupPostcode: listing?.pickupPostcode,
       deliveryPostcode: b.deliveryPostcode,
+      demoBooking: b.contextMode === "admin_demo" && b.id.startsWith("demo-"),
+      listingId: b.listingId,
     });
-    const deliveryPaid = delivery.status === "paid_demo";
+    const deliveryPaid = delivery.status === "paid_demo" || delivery.status === "refunded_demo";
     const totals = getBookingTotals(b.quote, deliveryPaid ? delivery.fee : null);
     const grandTotal = totals.grandTotal ?? totals.subtotal;
 
@@ -149,11 +153,13 @@ export default function RentalsScreen() {
       refundRows.push({
         label: "GrabExpress delivery refund (Demo)",
         amount: delivery.fee ?? 0,
-        date: (b.cancelledAt || b.createdAt).slice(0, 10),
+        date: (b.deliveryDemo?.refundedAt || b.cancelledAt || b.createdAt).slice(0, 10),
       });
     }
     const refundsTotal = Math.round(refundRows.reduce((sum, r) => sum + r.amount, 0) * 100) / 100;
-    const netCost = Math.round((grandTotal - refundsTotal) * 100) / 100;
+    const recordedPaid = (b.payment === "paid" || b.payment === "refunded" ? b.quote.total : 0) +
+      (delivery.status === "paid_demo" || delivery.status === "refunded_demo" ? b.deliveryDemo?.fee || 0 : 0);
+    const netCost = Math.round((recordedPaid - refundsTotal) * 100) / 100;
 
     return { booking: b, listing, delivery, deliveryPaid, totals, grandTotal, refundRows, refundsTotal, netCost, statusChip: statusChipFor(b) };
   }
@@ -177,7 +183,9 @@ export default function RentalsScreen() {
       .sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId) || b.createdAt.localeCompare(a.createdAt))
       .map(buildLedgerCard);
 
-    const totalPaid = Math.round(cards.reduce((sum, c) => sum + c.grandTotal, 0) * 100) / 100;
+    const totalPaid = Math.round(cards.reduce((sum, c) => sum +
+      (c.booking.payment === "paid" || c.booking.payment === "refunded" ? c.booking.quote.total : 0) +
+      (c.booking.deliveryDemo?.status === "paid_demo" || c.booking.deliveryDemo?.status === "refunded_demo" ? c.booking.deliveryDemo.fee : 0), 0) * 100) / 100;
     const totalRefunded = Math.round(cards.reduce((sum, c) => sum + c.refundsTotal, 0) * 100) / 100;
     const depositsInEscrow = Math.round(
       cards.reduce((sum, c) => sum + (c.booking.deposit === "held" || c.booking.deposit === "release_pending" ? c.booking.quote.deposit : 0), 0) * 100,
@@ -261,7 +269,7 @@ export default function RentalsScreen() {
                   </View>
                   <Text style={styles.txDate}>Booked {formatShortDate(b.createdAt)} · via {b.paymentMethod || "FPX"}</Text>
                   <View style={s.row}>
-                    <Text style={styles.txItemTitle}>Total for this rental</Text>
+                    <Text style={styles.txItemTitle}>{card.deliveryPaid ? "Original total for this rental" : "CurRENT subtotal · delivery estimated separately"}</Text>
                     <Text style={styles.txAmount}>{money(card.grandTotal)}</Text>
                   </View>
                   <View style={s.row}>
@@ -274,6 +282,17 @@ export default function RentalsScreen() {
 
               {expanded && (
                 <View style={{ gap: 6, marginTop: 10 }}>
+                  <BookingSummary booking={b} listing={card.listing} />
+                  <Pressable accessibilityRole="button" onPress={() => setExpandedLedgerDetails((previous) => {
+                    const next = new Set(previous);
+                    if (next.has(b.id)) next.delete(b.id); else next.add(b.id);
+                    return next;
+                  })}>
+                    <Text style={{ color: colors.blue, fontWeight: "700" }}>
+                      {expandedLedgerDetails.has(b.id) ? "Hide transaction ledger" : "View transaction ledger"}
+                    </Text>
+                  </Pressable>
+                  {expandedLedgerDetails.has(b.id) && <View style={{ gap: 6 }}>
                   <View style={styles.modalDivider} />
                   <Text style={styles.modalSectionTitle}>Paid to CurRENT</Text>
                   <Row label={`Rental fee · ${b.quote.days ?? ""} days`} value={money(b.quote.rentalFee)} />
@@ -303,10 +322,10 @@ export default function RentalsScreen() {
                         <Text style={s.caption}>
                           {card.delivery.origin} → {card.delivery.destination}{card.delivery.distanceKm ? `, ${card.delivery.distanceKm} km` : ""}
                         </Text>
-                        <Text style={styles.txAmount}>{money(card.delivery.fee)}</Text>
+                        <Text style={styles.txAmount}>{money(b.deliveryDemo ? card.delivery.fee : card.delivery.estimatedTwoWayFee ?? card.delivery.fee)}</Text>
                       </View>
                       <Text style={styles.ledgerLineStatus}>
-                        {card.delivery.status === "paid_demo" ? "Paid" : card.delivery.status === "refunded_demo" ? "Refunded" : "Awaiting payment"}
+                        {card.delivery.status === "paid_demo" ? "Paid" : card.delivery.status === "refunded_demo" ? "Refunded" : b.deliveryDemo?.status === "required" ? "Awaiting payment" : "Two-way estimate only · no delivery payment recorded"}
                       </Text>
                       <Text style={s.caption}>Demo estimate, not a live Grab quotation. Not CurRENT revenue.</Text>
                       <Pressable accessibilityRole="button" onPress={() => setExpandedDeliveryBreakdown((prev) => {
@@ -320,12 +339,15 @@ export default function RentalsScreen() {
                       </Pressable>
                       {showBreakdown && (
                         <View style={styles.feeBreakdownBox}>
-                          {card.delivery.outboundFee != null && <View style={s.row}><Text style={s.caption}>Outbound delivery fee</Text><Text style={s.caption}>{money(card.delivery.outboundFee)}</Text></View>}
-                          {card.delivery.returnFee != null && <View style={s.row}><Text style={s.caption}>Return delivery fee</Text><Text style={s.caption}>{money(card.delivery.returnFee)}</Text></View>}
-                          <View style={s.row}><Text style={s.bold}>Total two-way delivery fee</Text><Text style={s.bold}>{money(card.delivery.fee)}</Text></View>
+                          {(card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee) != null && <View style={s.row}><Text style={s.caption}>Outbound delivery fee{b.deliveryDemo?.status === "required" || card.delivery.outboundFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee)!)}</Text></View>}
+                          {(card.delivery.returnFee ?? card.delivery.estimatedReturnFee) != null && <View style={s.row}><Text style={s.caption}>Return delivery fee{b.deliveryDemo?.status === "required" || card.delivery.returnFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.returnFee ?? card.delivery.estimatedReturnFee)!)}</Text></View>}
+                          {card.deliveryPaid && b.deliveryDemo
+                            ? <View style={s.row}><Text style={s.bold}>Total two-way delivery fee</Text><Text style={s.bold}>{money(b.deliveryDemo.fee)}</Text></View>
+                            : card.delivery.estimatedTwoWayFee != null && <View style={s.row}><Text style={s.bold}>Estimated two-way delivery fee</Text><Text style={s.bold}>{money(card.delivery.estimatedTwoWayFee)}</Text></View>}
+                          <View style={s.row}><Text style={s.caption}>Delivery amount paid</Text><Text style={s.caption}>{money(card.deliveryPaid ? b.deliveryDemo?.fee || 0 : 0)}</Text></View>
                         </View>
                       )}
-                      {card.delivery.status === "paid_demo" && card.delivery.receiptReference && (
+                      {(card.delivery.status === "paid_demo" || card.delivery.status === "refunded_demo") && card.delivery.receiptReference && (
                         <Button secondary onPress={() => router.push({ pathname: "/delivery-receipt/[id]", params: { id: card.delivery.receiptReference! } })}>
                           View Delivery Receipt
                         </Button>
@@ -357,12 +379,13 @@ export default function RentalsScreen() {
                   )}
 
                   <View style={styles.modalDivider} />
-                  <View style={s.row}><Text style={s.bold}>Total paid</Text><Text style={[styles.txAmount, { fontSize: 16 }]}>{money(card.grandTotal)}</Text></View>
+                  <View style={s.row}><Text style={s.bold}>Amount paid (recorded)</Text><Text style={[styles.txAmount, { fontSize: 16 }]}>{money(card.netCost + card.refundsTotal)}</Text></View>
                   {card.refundsTotal > 0 && (
                     <View style={s.row}><Text style={[s.caption, { color: colors.green }]}>Refunded so far</Text><Text style={[styles.txAmount, { color: colors.green }]}>+ {money(card.refundsTotal)}</Text></View>
                   )}
                   <View style={s.row}><Text style={s.bold}>Net cost</Text><Text style={[styles.txAmount, { fontSize: 16 }]}>{money(card.netCost)}</Text></View>
                   <Text style={s.caption}>Includes {money(b.quote.deposit)} refundable deposit ({depositStatusLabel(b.deposit).toLowerCase()})</Text>
+                  </View>}
                 </View>
               )}
             </Pressable>

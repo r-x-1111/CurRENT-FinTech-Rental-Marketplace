@@ -1,4 +1,5 @@
 import { AUTO_DELIVERY_MINIMUM_FEE, estimateAutomaticDelivery } from "./geo";
+import { demoDestinationPostcode, demoPickupLocation } from "./demoDeliveryLocations";
 
 // Historical GrabExpress Malaysia reference table (May 2023), used only for
 // CurRENT's classroom simulation. Distances are demonstration inputs, not live routes.
@@ -97,6 +98,12 @@ export type DisplayDelivery = {
   status: "paid_demo" | "required" | "unavailable" | "self_pickup" | "refunded_demo";
   receiptReference?: string;
   paidAt?: string;
+  /** Read-only two-way quote; never substitutes for a historical paid amount. */
+  estimatedTwoWayFee?: number | null;
+  estimatedOutboundFee?: number | null;
+  estimatedReturnFee?: number | null;
+  returnDistanceKm?: number | null;
+  estimateOnly?: boolean;
 };
 
 /**
@@ -114,22 +121,41 @@ export function deriveDisplayDelivery(params: {
    * postcode-distance formula used at renter checkout, instead of a separate guess. */
   pickupPostcode?: string;
   deliveryPostcode?: string;
+  demoBooking?: boolean;
+  listingId?: string;
 }): DisplayDelivery {
-  const { collectionMethod, deliveryDemo, pickupLocation, deliveryAddress, pickupPostcode, deliveryPostcode } = params;
+  const { collectionMethod, deliveryDemo, deliveryAddress, demoBooking, listingId } = params;
+  const legacyPickup = demoBooking ? demoPickupLocation(listingId) : null;
+  const pickupLocation = params.pickupLocation || legacyPickup?.address || "";
+  const pickupPostcode = params.pickupPostcode || legacyPickup?.postcode;
+  const deliveryPostcode = params.deliveryPostcode || (demoBooking ? demoDestinationPostcode(deliveryAddress) : undefined);
   if (collectionMethod === "Self-Pickup") {
     return { method: "Self-Pickup", origin: pickupLocation, destination: pickupLocation, area: null,
       distanceKm: null, vehicle: null, fee: null, outboundFee: null, returnFee: null, baseFare: null,
       distanceCharge: null, minimumFare: null, status: "self_pickup" };
   }
+  const outbound = estimateAutomaticDelivery(pickupPostcode, deliveryPostcode);
+  const inbound = estimateAutomaticDelivery(deliveryPostcode, pickupPostcode);
+  const estimatedTwoWayFee = outbound && inbound
+    ? Math.round((outbound.fee + inbound.fee) * 100) / 100 : null;
   if (deliveryDemo) {
+    const unpaid = deliveryDemo.status === "required";
     return {
-      method: "GrabExpress (Demo)", origin: deliveryDemo.origin, destination: deliveryDemo.destination,
-      area: (deliveryDemo.area as DeliveryArea) || null, distanceKm: deliveryDemo.distanceKm ?? null,
-      vehicle: deliveryDemo.vehicle ?? null, fee: deliveryDemo.fee,
-      outboundFee: deliveryDemo.outboundFee ?? null, returnFee: deliveryDemo.returnFee ?? null,
-      baseFare: deliveryDemo.baseFare ?? null,
-      distanceCharge: deliveryDemo.distanceCharge ?? null, minimumFare: deliveryDemo.minimumFare ?? null,
+      method: "GrabExpress (Demo)",
+      origin: unpaid ? pickupLocation : deliveryDemo.origin,
+      destination: unpaid ? deliveryAddress || deliveryDemo.destination : deliveryDemo.destination,
+      area: (deliveryDemo.area as DeliveryArea) || null,
+      distanceKm: outbound?.distanceKm ?? deliveryDemo.distanceKm ?? null,
+      vehicle: deliveryDemo.vehicle ?? null,
+      fee: unpaid ? estimatedTwoWayFee ?? deliveryDemo.fee : deliveryDemo.fee,
+      outboundFee: unpaid ? outbound?.fee ?? deliveryDemo.outboundFee ?? null : deliveryDemo.outboundFee ?? null,
+      returnFee: unpaid ? inbound?.fee ?? deliveryDemo.returnFee ?? null : deliveryDemo.returnFee ?? null,
+      baseFare: unpaid ? outbound?.baseFee ?? deliveryDemo.baseFare ?? null : deliveryDemo.baseFare ?? null,
+      distanceCharge: unpaid ? outbound?.distanceCharge ?? deliveryDemo.distanceCharge ?? null : deliveryDemo.distanceCharge ?? null,
+      minimumFare: deliveryDemo.minimumFare ?? null,
       status: deliveryDemo.status, receiptReference: deliveryDemo.receiptReference, paidAt: deliveryDemo.paidAt,
+      estimatedTwoWayFee, estimatedOutboundFee: outbound?.fee ?? null,
+      estimatedReturnFee: inbound?.fee ?? null, returnDistanceKm: inbound?.distanceKm ?? null,
     };
   }
   // No saved delivery record yet: derive a read-only estimate using the exact same automatic
@@ -137,15 +163,14 @@ export function deriveDisplayDelivery(params: {
   // (services/geo.ts estimateAutomaticDelivery), applied separately to the outbound and return
   // legs and summed — never assuming the return trip costs the same without calculating it.
   // Never reports a payment as completed.
-  const outbound = estimateAutomaticDelivery(pickupPostcode, deliveryPostcode);
-  const inbound = estimateAutomaticDelivery(deliveryPostcode, pickupPostcode);
   if (outbound && inbound) {
     return { method: "GrabExpress (Demo)", origin: pickupLocation, destination: deliveryAddress || "",
       area: null, distanceKm: outbound.distanceKm, vehicle: null,
       fee: Math.round((outbound.fee + inbound.fee) * 100) / 100,
       outboundFee: outbound.fee, returnFee: inbound.fee,
       baseFare: outbound.baseFee, distanceCharge: outbound.distanceCharge, minimumFare: AUTO_DELIVERY_MINIMUM_FEE,
-      status: "required" };
+      status: "required", estimatedTwoWayFee, estimatedOutboundFee: outbound.fee,
+      estimatedReturnFee: inbound.fee, returnDistanceKm: inbound.distanceKm, estimateOnly: true };
   }
   return { method: "GrabExpress (Demo)", origin: pickupLocation, destination: deliveryAddress || "Not provided",
     area: null, distanceKm: null, vehicle: null, fee: null, outboundFee: null, returnFee: null, baseFare: null,

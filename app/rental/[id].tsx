@@ -18,7 +18,7 @@ import {
 } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
 import { HoldToConfirmButton } from "../../components/HoldToConfirm";
-import { calculateOwnerPayout, LEGACY_LENDER_COMMISSION_RATE } from "../../services/deposit";
+import { BookingSummary } from "../../components/BookingSummary";
 import { deriveDisplayDelivery } from "../../services/delivery";
 import {
   formatMalaysiaDateTime,
@@ -59,7 +59,8 @@ export default function RentalDetail() {
   const [checkOutOffset, setCheckOutOffset] = useState<number | null>(null);
   const [scrollToY, setScrollToY] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [showRentalFeeBreakdown, setShowRentalFeeBreakdown] = useState(false);
+  const [correctedDeliveryAddress, setCorrectedDeliveryAddress] = useState("");
+  const [correctedDeliveryPostcode, setCorrectedDeliveryPostcode] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -88,6 +89,7 @@ export default function RentalDetail() {
 
   if (b.status === "payment_required" && b.renterId === user.id) {
     return <Screen back title="Finish Rental Checkout">
+      <BookingSummary booking={b} listing={state.listings.find((listing) => listing.id === b.listingId)} />
       <Card>
         <Text style={s.h2}>{b.title}</Text>
         <Row label="Rental payment" value="Not completed" />
@@ -110,17 +112,18 @@ export default function RentalDetail() {
     state.profiles.find((p) => p.id === b.renterId)?.name || "Renter";
   const lenderName =
     state.profiles.find((p) => p.id === b.ownerId)?.name || "Lender";
-  const payout = calculateOwnerPayout(b.quote.rentalFee, b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE);
   const renter = state.profiles.find((profile) => profile.id === b.renterId);
   const currentRisk = renter ? riskFor(state, renter) : null;
   const listing = state.listings.find((l) => l.id === b.listingId);
   const displayDelivery = deriveDisplayDelivery({
     collectionMethod: b.collectionMethod,
     deliveryDemo: b.deliveryDemo || null,
-    pickupLocation: listing?.location || b.deliveryDemo?.origin || "",
+    pickupLocation: listing?.privateMeetingVenue || listing?.location || b.deliveryDemo?.origin || "",
     deliveryAddress: b.deliveryAddress,
     pickupPostcode: listing?.pickupPostcode,
     deliveryPostcode: b.deliveryPostcode,
+    demoBooking: b.contextMode === "admin_demo" && b.id.startsWith("demo-"),
+    listingId: b.listingId,
   });
   const startMs = parseMalaysiaTimestamp(b.start);
   const endMs = parseMalaysiaTimestamp(b.end);
@@ -1098,104 +1101,35 @@ export default function RentalDetail() {
         </Card>
       )}
 
-      {/* PAYMENT BREAKDOWN */}
-      <Section title="Payment breakdown" />
-      <Card>
-        <Row label="Rental fee" value={money(b.quote.rentalFee)} />
-        <Row
-          label="Service fee · 5%, min RM5"
-          value={money(b.quote.serviceFee)}
-        />
-        <Row
-          label="Rental Protection (Demo, Optional)"
-          value={b.insurance?.selected ? money(b.insurance.premium) : "Not Purchased"}
-        />
-        <Row
-          label="Refundable security deposit"
-          value={money(b.quote.deposit)}
-        />
-        <View style={s.divider} />
-        <Row label="Total payable" value={money(b.quote.total)} strong />
-        <Row label="Payment status" value={b.payment} />
-        <Row label="Deposit status" value={b.deposit.replace("_", " ")} />
-        {b.paymentMethod && <Row label="Method" value={b.paymentMethod} />}
-        {owner && (
-          <>
-            <View style={s.divider} />
-            <Row
-              label={`Platform commission · ${Math.round((b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE) * 100)}%`}
-              value={money(payout.commission)}
-            />
-            <Row
-              label={
-                effectiveStatus === "completed"
-                  ? "Net owner payout (Simulated)"
-                  : `Estimated net owner payout (${Math.round((1 - (b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE)) * 100)}%)`
-              }
-              value={money(payout.payout)}
-              strong
-            />
-          </>
-        )}
-      </Card>
-
-      {/* GRABEXPRESS DELIVERY (DEMO) — kept entirely separate from the CurRENT payment breakdown above */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 }}>
-        <Ionicons name="bicycle-outline" size={16} color={colors.navy} />
-        <Text style={s.h2}>GrabExpress Delivery (Demo)</Text>
-      </View>
-      <Card>
-        <Row label="Delivery method" value={displayDelivery.method} />
-        {displayDelivery.status === "self_pickup" ? (
-          <Badge text="Self-Pickup — No Delivery Fee" />
-        ) : (
-          <>
-            <Row label="Rental item" value={b.title} />
-            <Row label="Pickup" value={displayDelivery.origin || "Not provided"} />
-            <Row label="Delivery address" value={displayDelivery.destination || "Not provided"} />
-            {!!displayDelivery.area && <Row label="Service area" value={displayDelivery.area} />}
-            {!!displayDelivery.distanceKm && <Row label="Distance" value={`${displayDelivery.distanceKm} km (Demo Route)`} />}
-            {!!displayDelivery.vehicle && <Row label="Vehicle" value={displayDelivery.vehicle} />}
-            {displayDelivery.outboundFee != null && <Row label="Outbound delivery fee" value={money(displayDelivery.outboundFee)} />}
-            {displayDelivery.returnFee != null && <Row label="Return delivery fee" value={money(displayDelivery.returnFee)} />}
-            {displayDelivery.fee != null ? (
-              <Row label="Total two-way delivery fee" value={money(displayDelivery.fee)} strong />
-            ) : (
-              <Notice text="Delivery Estimate Unavailable" />
-            )}
-            <Row
-              label="Demo delivery payment status"
-              value={
-                displayDelivery.status === "paid_demo" ? "Demo Payment Completed"
-                  : displayDelivery.status === "refunded_demo" ? "Refunded (Booking Abandoned, Demo)"
-                  : displayDelivery.status === "required" ? "Awaiting Renter Payment"
-                  : "No Delivery Record"
-              }
-            />
-            {displayDelivery.fee != null && (
-              <Pressable accessibilityRole="button" onPress={() => setShowRentalFeeBreakdown((v) => !v)}>
-                <Text style={{ color: colors.blue, fontWeight: "700" }}>
-                  {showRentalFeeBreakdown ? "Hide Fee Breakdown" : "View Fee Breakdown"}
-                </Text>
-              </Pressable>
-            )}
-            {showRentalFeeBreakdown && displayDelivery.fee != null && (
-              <>
-                <Row label="Base Fare" value={money(displayDelivery.baseFare || 0)} />
-                <Row label="Additional Distance Charge" value={money(displayDelivery.distanceCharge || 0)} />
-                <Row label="Delivery Fee" value={money(displayDelivery.fee)} strong />
-              </>
-            )}
-            {displayDelivery.status === "paid_demo" && displayDelivery.receiptReference && (
-              <Button secondary onPress={() => router.push({ pathname: "/delivery-receipt/[id]", params: { id: displayDelivery.receiptReference! } })}>
-                View Delivery Receipt
+      <BookingSummary booking={b} listing={listing} lender={owner} />
+      {displayDelivery.estimatedTwoWayFee == null && b.contextMode !== "admin_demo" && !b.deliveryDemo && (
+        <Card>
+          <Text style={s.h2}>Delivery Address Required</Text>
+          {!listing?.pickupPostcode ? (
+            <>
+              <Text style={s.body}>The lender must add a pickup postcode to show a delivery estimate.</Text>
+              {owner && listing && <Button secondary onPress={() => router.push({ pathname: "/owner/edit", params: { id: listing.id } })}>Edit listing address</Button>}
+            </>
+          ) : owner ? (
+            <Text style={s.body}>The renter must add a delivery postcode to show a delivery estimate.</Text>
+          ) : (
+            <>
+              <Field label="Delivery address" value={correctedDeliveryAddress} onChangeText={setCorrectedDeliveryAddress} placeholder={b.deliveryAddress || "Enter delivery address"} />
+              <Field label="Delivery postcode" value={correctedDeliveryPostcode} onChangeText={setCorrectedDeliveryPostcode} keyboardType="number-pad" maxLength={5} placeholder={b.deliveryPostcode || "5-digit postcode"} />
+              <Button onPress={() => run({ type: "correctBookingDeliveryAddress", bookingId: b.id,
+                deliveryAddress: correctedDeliveryAddress.trim() || b.deliveryAddress || "",
+                deliveryPostcode: correctedDeliveryPostcode.trim() || b.deliveryPostcode || "" })}>
+                Update delivery address
               </Button>
-            )}
-            <Text style={s.caption}>GrabExpress delivery fees are separate from CurRENT's rental fee, service fee, security deposit and total paid above.</Text>
-          </>
-        )}
-      </Card>
-
+            </>
+          )}
+        </Card>
+      )}
+      {(displayDelivery.status === "paid_demo" || displayDelivery.status === "refunded_demo") && displayDelivery.receiptReference && (
+        <Button secondary onPress={() => router.push({ pathname: "/delivery-receipt/[id]", params: { id: displayDelivery.receiptReference! } })}>
+          View Delivery Receipt
+        </Button>
+      )}
       {/* ACTIVITY TIMELINE — derived from existing booking/dispute timestamps, no new storage */}
       <Section title="Activity Timeline" />
       <Card>

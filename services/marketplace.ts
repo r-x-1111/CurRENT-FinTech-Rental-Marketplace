@@ -25,6 +25,7 @@ import {
 import { evaluateRentalOutcome, tierForScore } from "./riskScore";
 import { createSeed } from "../data/seed";
 import { estimateAutomaticDelivery } from "./geo";
+import { deriveDisplayDelivery } from "./delivery";
 
 export type Action =
   | { type: "login"; userId: string | null }
@@ -39,6 +40,7 @@ export type Action =
   | { type: "saveListing"; listing: Listing }
   | { type: "startDeliveryCheckout"; id: string; listingId: string; start: string; end: string; deliveryAddress: string;
       deliveryPostcode: string }
+  | { type: "correctBookingDeliveryAddress"; bookingId: string; deliveryAddress: string; deliveryPostcode: string }
   | { type: "payDeliveryDemo"; bookingId: string; receiptReference: string }
   | { type: "completeRentalCheckout"; bookingId: string; paymentMethod: string; insuranceSelected?: boolean }
   | { type: "cancelDeliveryCheckout"; bookingId: string }
@@ -735,12 +737,58 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       break;
     }
 
+    case "correctBookingDeliveryAddress": {
+      const booking = bookingFor(action.bookingId);
+      requireThat(booking.renterId === user.id, "Only the renter can correct the delivery destination.");
+      requireThat(!booking.deliveryDemo || booking.deliveryDemo.status === "required",
+        "A paid delivery address and charge cannot be changed.");
+      const listing = state.listings.find((item) => item.id === booking.listingId);
+      requireThat(listing?.pickupPostcode, "The lender must add a valid pickup postcode first.");
+      requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery address.");
+      const outbound = estimateAutomaticDelivery(listing.pickupPostcode, action.deliveryPostcode);
+      const inbound = estimateAutomaticDelivery(action.deliveryPostcode, listing.pickupPostcode);
+      requireThat(outbound && inbound, "Enter a supported Malaysian delivery postcode.");
+      booking.deliveryAddress = action.deliveryAddress.trim();
+      booking.deliveryPostcode = action.deliveryPostcode.trim();
+      if (booking.deliveryDemo?.status === "required") {
+        booking.deliveryDemo.origin = listing.location;
+        booking.deliveryDemo.destination = booking.deliveryAddress;
+        booking.deliveryDemo.outboundFee = outbound.fee;
+        booking.deliveryDemo.returnFee = inbound.fee;
+        booking.deliveryDemo.fee = Math.round((outbound.fee + inbound.fee) * 100) / 100;
+        booking.deliveryDemo.distanceKm = outbound.distanceKm;
+        booking.deliveryDemo.baseFare = outbound.baseFee;
+        booking.deliveryDemo.distanceCharge = outbound.distanceCharge;
+      }
+      break;
+    }
+
     case "payDeliveryDemo": {
       const booking = bookingFor(action.bookingId);
       requireThat(booking.renterId === user.id && booking.status === "payment_required",
         "Only the renter can complete this delivery demo checkout.");
       requireThat(booking.deliveryDemo, "This booking has no delivery checkout.");
       if (booking.deliveryDemo.status === "paid_demo") break;
+      requireThat(booking.deliveryDemo.status === "required", "This delivery checkout is no longer payable.");
+      const listing = state.listings.find((item) => item.id === booking.listingId);
+      const currentQuote = deriveDisplayDelivery({
+        collectionMethod: booking.collectionMethod,
+        deliveryDemo: booking.deliveryDemo,
+        pickupLocation: listing?.privateMeetingVenue || listing?.location || booking.deliveryDemo.origin,
+        deliveryAddress: booking.deliveryAddress,
+        pickupPostcode: listing?.pickupPostcode,
+        deliveryPostcode: booking.deliveryPostcode,
+        demoBooking: booking.contextMode === "admin_demo" && booking.id.startsWith("demo-"),
+        listingId: booking.listingId,
+      });
+      requireThat(currentQuote.estimatedTwoWayFee != null && currentQuote.estimatedOutboundFee != null && currentQuote.estimatedReturnFee != null,
+        "A valid pickup and delivery postcode are required before delivery payment.");
+      booking.deliveryDemo.origin = currentQuote.origin;
+      booking.deliveryDemo.destination = currentQuote.destination;
+      booking.deliveryDemo.distanceKm = currentQuote.distanceKm ?? undefined;
+      booking.deliveryDemo.outboundFee = currentQuote.estimatedOutboundFee;
+      booking.deliveryDemo.returnFee = currentQuote.estimatedReturnFee;
+      booking.deliveryDemo.fee = currentQuote.estimatedTwoWayFee;
       booking.deliveryDemo.status = "paid_demo";
       booking.deliveryDemo.receiptReference = action.receiptReference;
       booking.deliveryDemo.paidAt = now;
@@ -797,6 +845,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       // refunded (simulated) rather than left as a dangling paid record on an abandoned booking.
       if (booking.deliveryDemo?.status === "paid_demo") {
         booking.deliveryDemo.status = "refunded_demo";
+        booking.deliveryDemo.refundedAt = now;
         booking.deliveryDemo.refundedAt = now;
       }
       break;

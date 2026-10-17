@@ -37,6 +37,7 @@ import {
 import { calculateOwnerPayout } from "../services/deposit";
 import { deriveDisplayDelivery, eligibleDeliveryVehicles, quoteDemoDelivery } from "../services/delivery";
 import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../services/geo";
+import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
 import { evaluateRentalOutcome } from "../services/riskScore";
 import {
   authenticateWithPassword,
@@ -323,15 +324,15 @@ test("historical delivery brackets and parcel limits drive demo quotes, scoped t
   assert.deepEqual(eligibleDeliveryVehicles(60, { length: 70, width: 70, height: 70 }), ["MPV"]);
 
   const seed = createSeed("admin_demo");
-  // 6 delivery records linked to bookings carrying their own paid deliveryDemo (the 4 preserved completed
-  // rentals + 2 Rental Protection demo completions), plus 4 standalone demo samples (2 Klang Valley, 2 Penang)
-  assert.equal(seed.deliveryHistory?.length, 10);
+  // Every paid fictional booking has one linked delivery receipt, alongside four standalone samples.
+  assert.equal(seed.deliveryHistory?.length, seed.bookings.length + 4);
   const linked = seed.deliveryHistory?.filter((entry) => !entry.sample) || [];
-  assert.equal(linked.length, 6, "Expected exactly 6 delivery records linked to bookings with their own paid deliveryDemo");
+  assert.equal(linked.length, seed.bookings.length);
+  assert.equal(new Set(linked.map((entry) => entry.bookingId)).size, linked.length);
   for (const entry of linked) {
     const booking = seed.bookings.find((b) => b.id === entry.bookingId);
     assert.ok(booking, `Delivery record ${entry.id} must link to an existing booking`);
-    assert.equal(booking!.deliveryDemo?.status, "paid_demo");
+    assert.ok(booking!.deliveryDemo?.status === "paid_demo" || booking!.deliveryDemo?.status === "refunded_demo");
     assert.equal(booking!.deliveryDemo?.fee, entry.fee, "Linked delivery record must match its booking's own deliveryDemo fee");
   }
   const penangSamples = (seed.deliveryHistory || []).filter((entry) => entry.sample && entry.area === "Penang");
@@ -412,10 +413,147 @@ test("Lender Rental Details computes the Ergonomic Office Chair delivery fee wit
     assert.equal(display.baseFare, expectedOutbound.baseFee);
     assert.equal(display.distanceCharge, expectedOutbound.distanceCharge);
 
-    // No stored deliveryDemo exists for these seeded bookings, so none can claim a completed
-    // demo payment that never happened.
-    assert.notEqual(display.status, "paid_demo");
+    assert.equal(display.status, "paid_demo");
   }
+});
+
+test("historical demo rentals show separate two-way estimates without changing recorded delivery payments", () => {
+  const seed = createSeed("admin_demo");
+  const categories = new Set<string>();
+  for (const booking of seed.bookings) {
+    const listing = seed.listings.find((item) => item.id === booking.listingId);
+    const delivery = deriveDisplayDelivery({
+      collectionMethod: booking.collectionMethod,
+      deliveryDemo: booking.deliveryDemo,
+      pickupLocation: listing?.location || "",
+      deliveryAddress: booking.deliveryAddress,
+      pickupPostcode: listing?.pickupPostcode,
+      deliveryPostcode: booking.deliveryPostcode,
+      demoBooking: true,
+      listingId: booking.listingId,
+    });
+    assert.ok(delivery.estimatedOutboundFee != null, `${booking.id}: outbound estimate`);
+    assert.ok(delivery.estimatedReturnFee != null, `${booking.id}: return estimate`);
+    assert.equal(delivery.estimatedTwoWayFee,
+      Math.round((delivery.estimatedOutboundFee! + delivery.estimatedReturnFee!) * 100) / 100);
+    if (booking.deliveryDemo && booking.deliveryDemo.status !== "required") {
+      assert.equal(delivery.fee, booking.deliveryDemo.fee, `${booking.id}: historical charge stays unchanged`);
+      assert.equal(delivery.status, booking.deliveryDemo.status, `${booking.id}: payment status stays unchanged`);
+    } else if (booking.deliveryDemo?.status === "required") {
+      assert.equal(delivery.fee, delivery.estimatedTwoWayFee, `${booking.id}: unpaid quote uses current two-way estimate`);
+      assert.equal(delivery.status, "required", `${booking.id}: no payment is invented`);
+    } else {
+      assert.notEqual(delivery.status, "paid_demo", `${booking.id}: estimate is not a payment`);
+    }
+    categories.add(booking.status);
+  }
+  for (const status of ["upcoming", "active", "return_pending", "completed", "cancelled", "disputed"])
+    assert.ok(categories.has(status), `${status} demo category covered`);
+});
+
+test("demo payment repair is idempotent and leaves valid historical and customer payments unchanged", () => {
+  const seeded = createSeed("admin_demo");
+  const example = seeded.bookings.find((booking) => booking.id === "demo-booking-upcoming-1")!;
+  assert.equal(example.deliveryDemo?.outboundFee, 13.4);
+  assert.equal(example.deliveryDemo?.returnFee, 13.4);
+  assert.equal(example.deliveryDemo?.fee, 26.8);
+  assert.equal(example.deliveryDemo?.status, "paid_demo");
+  assert.equal(seeded.deliveryHistory?.find((entry) => entry.bookingId === example.id)?.fee, 26.8);
+
+  const once = repairDemoDeliveryPayments(seeded);
+  const twice = repairDemoDeliveryPayments(once);
+  assert.deepEqual(twice.bookings, once.bookings);
+  assert.deepEqual(twice.deliveryHistory, once.deliveryHistory);
+
+  const customer = { ...example, id: "customer-booking", contextMode: "normal" as const,
+    deliveryDemo: { ...example.deliveryDemo!, fee: 9 } };
+  const withCustomer = { ...seeded, bookings: [...seeded.bookings, customer] };
+  const repaired = repairDemoDeliveryPayments(withCustomer);
+  assert.equal(repaired.bookings.find((booking) => booking.id === customer.id)?.deliveryDemo?.fee, 9);
+});
+
+test("loading an older demo session repairs missing delivery receipts once", () => {
+  const accountId = "delivery-repair-test";
+  const old = createSeed("admin_demo");
+  const booking = old.bookings.find((item) => item.id === "demo-booking-upcoming-1")!;
+  booking.deliveryDemo = undefined;
+  old.deliveryHistory = old.deliveryHistory?.filter((entry) => entry.bookingId !== booking.id);
+  saveDemoWorkspaceSession(accountId, old);
+  const loaded = loadDemoWorkspaceSession(accountId);
+  const repaired = loaded.bookings.find((item) => item.id === booking.id)!;
+  assert.equal(repaired.deliveryDemo?.fee, 26.8);
+  assert.equal(repaired.deliveryDemo?.status, "paid_demo");
+  assert.equal(loaded.deliveryHistory?.filter((entry) => entry.bookingId === booking.id).length, 1);
+  const refreshed = loadDemoWorkspaceSession(accountId);
+  assert.equal(refreshed.deliveryHistory?.filter((entry) => entry.bookingId === booking.id).length, 1);
+  closeDemoWorkspaceSession(accountId);
+});
+
+test("an unpaid booking address can be corrected without changing a paid delivery record", () => {
+  const seed = createSeed("admin_demo");
+  seed.currentUserId = "demo-renter";
+  const unpaid = seed.bookings.find((booking) => booking.id === "demo-booking-upcoming-1")!;
+  unpaid.deliveryAddress = "";
+  unpaid.deliveryPostcode = undefined;
+  unpaid.deliveryDemo = undefined;
+  const corrected = transition(seed, { type: "correctBookingDeliveryAddress", bookingId: unpaid.id,
+    deliveryAddress: "Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480" });
+  const updated = corrected.bookings.find((booking) => booking.id === unpaid.id)!;
+  assert.equal(updated.deliveryPostcode, "50480");
+  assert.equal(updated.deliveryDemo, undefined, "Address correction never creates a payment");
+
+  const pending = seed.bookings.find((booking) => booking.id === "demo-booking-protection-upcoming")!;
+  pending.deliveryDemo!.status = "required";
+  const requoted = transition(seed, { type: "correctBookingDeliveryAddress", bookingId: pending.id,
+    deliveryAddress: "Bangsar, Kuala Lumpur", deliveryPostcode: "59100" });
+  const changed = requoted.bookings.find((booking) => booking.id === pending.id)!;
+  const pickupPostcode = seed.listings.find((listing) => listing.id === pending.listingId)!.pickupPostcode;
+  const outbound = estimateAutomaticDelivery(pickupPostcode, "59100")!;
+  const inbound = estimateAutomaticDelivery("59100", pickupPostcode)!;
+  assert.equal(changed.deliveryDemo?.fee, Math.round((outbound.fee + inbound.fee) * 100) / 100);
+  assert.equal(changed.deliveryDemo?.status, "required");
+
+  const paid = seed.bookings.find((booking) => booking.id === "demo-booking-completed-1")!;
+  assert.throws(() => transition(seed, { type: "correctBookingDeliveryAddress", bookingId: paid.id,
+    deliveryAddress: "Bangsar, Kuala Lumpur", deliveryPostcode: "59100" }), /paid delivery address/);
+});
+
+test("stale RM8 unpaid demo quote uses one route and current two-way fee before payment", () => {
+  const seed = createSeed("admin_demo");
+  const booking = seed.bookings.find((item) => item.id === "demo-booking-protection-upcoming")!;
+  booking.deliveryDemo!.status = "required";
+  booking.deliveryDemo!.fee = 8;
+  booking.deliveryDemo!.outboundFee = undefined;
+  booking.deliveryDemo!.returnFee = undefined;
+  booking.deliveryDemo!.origin = "Kuala Lumpur";
+  booking.deliveryDemo!.destination = "Mont Kiara, Kuala Lumpur";
+  const listing = seed.listings.find((item) => item.id === booking.listingId)!;
+  const display = deriveDisplayDelivery({
+    collectionMethod: booking.collectionMethod, deliveryDemo: booking.deliveryDemo,
+    pickupLocation: listing.privateMeetingVenue || listing.location,
+    deliveryAddress: booking.deliveryAddress,
+    pickupPostcode: listing.pickupPostcode, deliveryPostcode: booking.deliveryPostcode,
+    demoBooking: true, listingId: listing.id,
+  });
+  assert.equal(booking.deliveryDemo?.fee, 8, "synthetic legacy unpaid quote remains identifiable");
+  assert.equal(display.origin, listing.privateMeetingVenue);
+  assert.equal(display.destination, booking.deliveryAddress);
+  assert.equal(display.distanceKm, display.returnDistanceKm);
+  assert.equal(display.outboundFee, estimateAutomaticDelivery(listing.pickupPostcode, booking.deliveryPostcode)!.fee);
+  assert.equal(display.returnFee, estimateAutomaticDelivery(booking.deliveryPostcode, listing.pickupPostcode)!.fee);
+  assert.equal(display.fee, display.estimatedTwoWayFee);
+  assert.notEqual(display.fee, booking.deliveryDemo?.fee);
+
+  seed.currentUserId = booking.renterId;
+  booking.status = "payment_required";
+  booking.payment = "required";
+  seed.deliveryHistory = seed.deliveryHistory?.filter((item) => item.bookingId !== booking.id);
+  const paid = transition(seed, { type: "payDeliveryDemo", bookingId: booking.id, receiptReference: "TEST-TWO-WAY" });
+  const paidBooking = paid.bookings.find((item) => item.id === booking.id)!;
+  assert.equal(paidBooking.deliveryDemo?.fee, display.estimatedTwoWayFee);
+  assert.equal(paidBooking.deliveryDemo?.status, "paid_demo");
+  assert.equal(paidBooking.deliveryDemo?.destination, booking.deliveryAddress);
+  assert.equal(paid.deliveryHistory?.find((item) => item.bookingId === booking.id)?.fee, display.estimatedTwoWayFee);
 });
 
 test("getBookingTotals: subtotal with and without Rental Protection, grand total with delivery, no-address state, deposit-unknown state", () => {
@@ -462,7 +600,7 @@ test("Payment & Transaction History: grouping by booking ID, subtotal/grand tota
       pickupLocation: listing?.location || b.deliveryDemo?.origin || "", deliveryAddress: b.deliveryAddress,
       pickupPostcode: listing?.pickupPostcode, deliveryPostcode: b.deliveryPostcode,
     });
-    const deliveryPaid = delivery.status === "paid_demo";
+    const deliveryPaid = delivery.status === "paid_demo" || delivery.status === "refunded_demo";
     const totals = getBookingTotals(b.quote, deliveryPaid ? delivery.fee : null);
     const grandTotal = totals.grandTotal ?? totals.subtotal;
     let refundsTotal = 0;
@@ -481,20 +619,20 @@ test("Payment & Transaction History: grouping by booking ID, subtotal/grand tota
   const anyFigures = ledgerFigures(anyBooking);
   assert.equal(anyFigures.totals.subtotal, anyBooking.quote.total);
 
-  // Grand total without a paid delivery record equals the subtotal (delivery never added unless paid).
-  const noDeliveryBooking = renterBookings.find((b) => b.deliveryDemo?.status !== "paid_demo")!;
+  // A synthetic unfinished booking has no paid delivery record.
+  const noDeliveryBooking = { ...renterBookings[0], deliveryDemo: undefined };
   const noDeliveryFigures = ledgerFigures(noDeliveryBooking);
   assert.equal(noDeliveryFigures.deliveryPaid, false);
   assert.equal(noDeliveryFigures.grandTotal, noDeliveryFigures.totals.subtotal);
 
-  // The Tabletop Microwave Oven cancellation: RM85 paid (subtotal), RM85 refunded, net RM0.
+  // The Tabletop Microwave Oven cancellation includes the original prepaid delivery and a separate refund.
   const microwave = renterBookings.find((b) => b.id === "demo-booking-cancelled-1")!;
   assert.ok(microwave, "Expected the seeded Tabletop Microwave Oven cancellation booking");
   assert.equal(microwave.title, "Tabletop Microwave Oven");
   const microwaveFigures = ledgerFigures(microwave);
   assert.equal(microwaveFigures.totals.subtotal, 85);
-  assert.equal(microwaveFigures.grandTotal, 85);
-  assert.equal(microwaveFigures.refundsTotal, 85);
+  assert.equal(microwaveFigures.grandTotal, 85 + microwave.deliveryDemo!.fee);
+  assert.equal(microwaveFigures.refundsTotal, 85 + microwave.deliveryDemo!.fee);
   assert.equal(microwaveFigures.netCost, 0);
 
   // Summary tiles: "Total paid" and "Refunded" sum cleanly across every card, and "Deposits held
@@ -2440,7 +2578,7 @@ test("Demo renter account carries 7 Rental Protection demo scenarios, one per st
   assert.equal(upcoming.payment, "paid");
   assert.equal(upcoming.deposit, "held");
   assert.equal(upcoming.insurance?.selected, true);
-  assert.equal(upcoming.deliveryDemo?.status, "required");
+  assert.equal(upcoming.deliveryDemo?.status, "paid_demo");
 
   // 2. Active — Sony ZV-E10 Camera, no insurance
   const active = byId("demo-booking-protection-active");

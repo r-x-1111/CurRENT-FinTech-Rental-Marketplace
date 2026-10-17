@@ -199,6 +199,11 @@ export default function OwnerDashboard() {
                     </View>
                   </View>
                 </View>
+                {bookings.filter((booking) => booking.listingId === l.id).map((booking) => (
+                  <Button key={booking.id} secondary onPress={() => router.push(`/rental/${booking.id}`)}>
+                    View booking summary · {booking.id}
+                  </Button>
+                ))}
                 {l.status === "rejected" && l.rejectionReason && <Notice text={`Rejection reason: ${l.rejectionReason}`} error />}
 
                 {/* Listing Stats Row: Views, Saves, Completed */}
@@ -357,6 +362,7 @@ export default function OwnerDashboard() {
                   value={money(calculateOwnerPayout(b.quote.rentalFee, b.commissionRate ?? LEGACY_LENDER_COMMISSION_RATE).payout)}
                   strong
                 />
+                <Button secondary onPress={() => router.push(`/rental/${b.id}`)}>View booking summary</Button>
               </Card>
             ))
           ) : (
@@ -370,6 +376,13 @@ export default function OwnerDashboard() {
       {tab === "Transaction" && (
         <>
           <Notice text="Listing Boost payments are simulated. No real money was charged." />
+          {bookings.map((b) => (
+            <Card key={b.id}>
+              <Text style={s.h2}>{b.title}</Text>
+              <Row label="Rental payment status" value={b.payment.replace("_", " ")} />
+              <Button secondary onPress={() => router.push(`/rental/${b.id}`)}>View booking summary</Button>
+            </Card>
+          ))}
           {transactions.length ? transactions.map((record) => (
             <Card key={record.id}>
               <Text style={s.h2}>{record.listingName}</Text>

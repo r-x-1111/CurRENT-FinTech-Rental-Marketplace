@@ -6,6 +6,7 @@ import { useMarketplace } from "../../context/Marketplace";
 import { formatMalaysiaDateTime, money } from "../../services/booking";
 import { newId } from "../../services/marketplace";
 import { colors } from "../../constants/theme";
+import { deriveDisplayDelivery } from "../../services/delivery";
 
 export default function DeliveryDemoCheckout() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -15,9 +16,20 @@ export default function DeliveryDemoCheckout() {
   const [error, setError] = useState("");
   const inProgress = useRef(false);
   const delivery = booking?.deliveryDemo;
+  const listing = state.listings.find((item) => item.id === booking?.listingId);
+  const displayDelivery = booking ? deriveDisplayDelivery({
+    collectionMethod: booking.collectionMethod,
+    deliveryDemo: delivery,
+    pickupLocation: listing?.privateMeetingVenue || listing?.location || delivery?.origin || "",
+    deliveryAddress: booking.deliveryAddress,
+    pickupPostcode: listing?.pickupPostcode,
+    deliveryPostcode: booking.deliveryPostcode,
+    demoBooking: booking.contextMode === "admin_demo" && booking.id.startsWith("demo-"),
+    listingId: booking.listingId,
+  }) : null;
 
   async function pay() {
-    if (!booking || !delivery || inProgress.current || delivery.status === "paid_demo") return;
+    if (!booking || !delivery || inProgress.current || delivery.status !== "required") return;
     inProgress.current = true;
     setBusy(true);
     setError("");
@@ -44,12 +56,13 @@ export default function DeliveryDemoCheckout() {
     <Card>
       <Row label="Delivery provider" value="GrabExpress (Simulation)" />
       <Row label="Rental item" value={booking.title} />
-      <Row label="Pickup" value={delivery.origin} />
-      <Row label="Deliver to" value={delivery.destination} />
-      <Row label="Estimated distance" value={delivery.distanceKm ? `${delivery.distanceKm} km (estimated, not a measured route)` : "Unavailable"} />
-      {delivery.outboundFee != null && <Row label="Outbound delivery fee (pickup → you)" value={money(delivery.outboundFee)} />}
-      {delivery.returnFee != null && <Row label="Return delivery fee (you → pickup)" value={money(delivery.returnFee)} />}
-      <Row label="Total two-way delivery fee (Demo)" value={money(delivery.fee)} strong />
+      <Row label="Pickup" value={displayDelivery?.origin || delivery.origin} />
+      <Row label="Deliver to" value={displayDelivery?.destination || delivery.destination} />
+      <Row label="Estimated distance" value={displayDelivery?.distanceKm != null ? `${displayDelivery.distanceKm} km (estimated, not a measured route)` : "Unavailable"} />
+      {displayDelivery?.outboundFee != null && <Row label="Outbound delivery fee (pickup → you)" value={money(displayDelivery.outboundFee)} />}
+      {displayDelivery?.returnFee != null && <Row label="Return delivery fee (you → pickup)" value={money(displayDelivery.returnFee)} />}
+      <Row label="Total two-way delivery fee (Demo)" value={displayDelivery?.fee != null ? money(displayDelivery.fee) : "Unavailable"} strong />
+      <Row label="Amount paid" value={money(delivery.status === "paid_demo" ? delivery.fee : 0)} />
       <Text style={s.caption}>Demo estimate only, calculated automatically from postcodes. Not a live Grab quotation or verified road route.</Text>
       {!!error && <Notice text={error} error />}
       {delivery.status === "paid_demo" ? <>
@@ -62,8 +75,8 @@ export default function DeliveryDemoCheckout() {
         <Button onPress={() => router.replace({ pathname: "/listing/[id]", params: { id: booking.listingId, checkoutId: booking.id } })}>
           Continue to CurRENT Rental Payment
         </Button>
-      </> : <Button disabled={busy} loading={busy} onPress={() => void pay()}>
-        Pay Delivery & Continue · {money(delivery.fee)}
+      </> : <Button disabled={busy || delivery.status !== "required" || displayDelivery?.estimatedTwoWayFee == null} loading={busy} onPress={() => void pay()}>
+        Pay Delivery & Continue · {displayDelivery?.fee != null ? money(displayDelivery.fee) : "Unavailable"}
       </Button>}
     </Card>
   </Screen>;
