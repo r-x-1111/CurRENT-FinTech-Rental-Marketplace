@@ -417,10 +417,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   eyebrowBadge: {
-    backgroundColor: colors.navy,
-    paddingHorizontal: 0,
-    paddingVertical: 5,
-    borderRadius: 6,
     alignSelf: "flex-start",
   },
   eyebrowText: {

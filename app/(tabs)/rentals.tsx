@@ -489,7 +489,7 @@ export default function RentalsScreen() {
   return (
     <Screen
       title="My Rentals"
-      subtitle={mobile ? undefined : "From your first request to your next adventure."}
+      subtitle="From your first request to your next adventure."
       contentStyle={mobile && styles.mobileContent}
       headerGradient
     >
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
     gap: 4,
     marginTop: 4,
   },
-  mobileHeaderBanner: { padding: 10, borderLeftWidth: 0, borderRadius: 16, marginBottom: 12 },
+  mobileHeaderBanner: { padding: 10, borderRadius: 16, marginBottom: 12 },
   headerBanner: {
     backgroundColor: colors.paleBlue,
     borderRadius: 14,

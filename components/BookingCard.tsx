@@ -138,7 +138,7 @@ export function BookingCard({
         <View style={styles.divider} />
       </Pressable>
 
-      <View style={styles.bottomRow}>
+      <View style={[styles.bottomRow, mobile && styles.mobileBottomRow]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`View rental for ${booking.title}`}
@@ -174,17 +174,15 @@ export function BookingCard({
           </Pressable>
         </View>
 
-        {!mobile && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`View booking details for ${booking.title}`}
-            onPress={() => router.push(`/rental/${booking.id}`)}
-            style={styles.viewBookingBtn}
-          >
-            <Text style={styles.viewBookingText}>View booking</Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.blue} />
-          </Pressable>
-        )}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`View booking details for ${booking.title}`}
+          onPress={() => router.push(`/rental/${booking.id}`)}
+          style={[styles.viewBookingBtn, mobile && styles.mobileViewBookingBtn]}
+        >
+          <Text style={styles.viewBookingText}>View booking</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.blue} />
+        </Pressable>
       </View>
     </View>
   );
@@ -202,6 +200,8 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   viewBookingText: { color: colors.blue, fontWeight: "700", fontSize: 13 },
+  mobileViewBookingBtn: { paddingHorizontal: 11, paddingVertical: 7 },
+  mobileBottomRow: { flexWrap: "wrap", gap: 10 },
   mobileCard: { padding: 14, borderRadius: 19, gap: 10, shadowOpacity: 0.07, shadowRadius: 12 },
   mobileTopRow: { alignItems: "flex-start", gap: 11 },
   mobileThumb: { width: 72, height: 72, borderRadius: 12 },
