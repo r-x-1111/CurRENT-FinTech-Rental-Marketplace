@@ -493,15 +493,13 @@ export default function RentalsScreen() {
       contentStyle={mobile && styles.mobileContent}
       headerGradient
     >
-      {!mobile && protectionBanner}
+      {protectionBanner}
 
       <Chips
         options={tabs}
         selected={activeTab}
         onSelect={setActiveTab}
-        segmented={mobile}
       />
-      {mobile && protectionBanner}
 
       {activeTab === "Payment & Transaction History" && renderPaymentHistory()}
 
