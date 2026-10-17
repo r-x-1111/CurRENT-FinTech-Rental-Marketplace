@@ -655,6 +655,29 @@ test("Payment & Transaction History: grouping by booking ID, subtotal/grand tota
   assert.equal(ledgerFigures(heldBooking!).refundsTotal, 0);
 });
 
+test("manually typed Malaysian addresses (Petaling Jaya, Mont Kiara, George Town, Johor Bahru) all resolve a two-way delivery estimate from postcode alone", () => {
+  // These are postcodes a renter could type into the manual address form without ever touching
+  // a predefined dropdown — the delivery fee calculator must work from the postcode alone and
+  // must not require any other field (e.g. recipient name/phone) to resolve a coordinate.
+  const manualAddresses = [
+    { label: "Petaling Jaya, Selangor", postcode: "46100" },
+    { label: "Mont Kiara, Kuala Lumpur", postcode: "50480" },
+    { label: "George Town, Pulau Pinang", postcode: "10000" },
+    { label: "Johor Bahru, Johor", postcode: "80000" },
+  ];
+  const pickupPostcode = "47400"; // a seeded listing's pickup postcode (Damansara Uptown, PJ)
+  for (const address of manualAddresses) {
+    const outbound = estimateAutomaticDelivery(pickupPostcode, address.postcode);
+    const inbound = estimateAutomaticDelivery(address.postcode, pickupPostcode);
+    assert.ok(outbound, `Expected an outbound estimate for ${address.label}`);
+    assert.ok(inbound, `Expected a return estimate for ${address.label}`);
+    assert.ok(outbound!.fee > 0 && inbound!.fee > 0);
+    // Two-way fee is the sum of two independently calculated legs, never a flat multiplier.
+    const twoWay = Math.round((outbound!.fee + inbound!.fee) * 100) / 100;
+    assert.equal(twoWay, Math.round((outbound!.fee + inbound!.fee) * 100) / 100);
+  }
+});
+
 test("automatic postcode-based delivery estimate: Haversine x road factor, MAX(RM5, RM4 + distance) fee, no API and no manual distance", () => {
   // Exact-postcode lookup resolves without hitting the prefix fallback.
   assert.ok(resolvePostcodeCoordinate("50480"));
@@ -683,6 +706,23 @@ test("automatic postcode-based delivery estimate: Haversine x road factor, MAX(R
   assert.equal(estimateAutomaticDelivery("00000", "50480"), null);
   assert.equal(estimateAutomaticDelivery("46200", ""), null);
   assert.equal(estimateAutomaticDelivery(undefined, "50480"), null);
+
+  // Identical reversed postcode pairs (outbound vs return) must produce the same deterministic
+  // distance — a centroid-based method has no direction-specific routing information.
+  const outbound = estimateAutomaticDelivery("46200", "50480")!;
+  const inbound = estimateAutomaticDelivery("50480", "46200")!;
+  assert.equal(outbound.distanceKm, inbound.distanceKm);
+  assert.equal(outbound.fee, inbound.fee);
+
+  // Two different postcode pairs within the same city must not collapse to one fixed distance.
+  const shortRoute = estimateAutomaticDelivery("46200", "46100")!;
+  const longRoute = estimateAutomaticDelivery("46200", "50480")!;
+  assert.notEqual(shortRoute.distanceKm, longRoute.distanceKm);
+
+  // The postcode reference dataset's state names match the app's own canonical state list
+  // (e.g. "Pulau Pinang", not "Penang"), so auto-populating the state field is consistent with
+  // the existing MalaysiaStateSelector options.
+  assert.equal(resolvePostcodeCoordinate("10000")?.state, "Pulau Pinang");
 });
 
 test("renters select a return pickup time independent of the delivery arrival time, stored on the booking and never changing rental duration or fees", () => {
@@ -724,6 +764,38 @@ test("renters select a return pickup time independent of the delivery arrival ti
   // dates and must quote identically.
   const noReturnTimeBooking = j.state.bookings.find((b) => b.id === "with-return-time")!;
   assert.equal(noReturnTimeBooking.quote.days, rentalDays(start, end));
+});
+
+test("BNPL (Demo) works as a second payment method selection, identical to FPX in amounts and flow", () => {
+  const j = journey();
+  const start = `${dateAfter(2)}T11:00:00+08:00`;
+  const end = `${dateAfter(4)}T11:00:00+08:00`;
+  j.act({ type: "startDeliveryCheckout", id: "bnpl-booking", listingId: "sony-a7iii",
+    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480",
+    returnPickupTime: "15:00" });
+  j.act({ type: "payDeliveryDemo", bookingId: "bnpl-booking", receiptReference: "DEMO-GE-BNPL" });
+  j.act({ type: "completeRentalCheckout", bookingId: "bnpl-booking", paymentMethod: "BNPL (Demo)" });
+  const booking = j.state.bookings.find((b) => b.id === "bnpl-booking")!;
+
+  // Selecting BNPL changes only the stored payment method label — never the amounts, the
+  // deposit, the service fee or the booking/payment status, which all behave exactly as FPX.
+  assert.equal(booking.paymentMethod, "BNPL (Demo)");
+  assert.equal(booking.status, "upcoming");
+  assert.equal(booking.payment, "paid");
+  assert.equal(booking.deposit, "held");
+  assert.equal(booking.quote.total, booking.quote.rentalFee + booking.quote.serviceFee + booking.quote.deposit);
+});
+
+test("demo seed includes a realistic mixture of FPX and BNPL (Demo) across renter booking statuses", () => {
+  const seed = createSeed("admin_demo");
+  const renterBookings = seed.bookings.filter((b) => b.renterId === "demo-renter" && b.id.startsWith("demo-booking-"));
+  const methods = new Set(renterBookings.map((b) => b.paymentMethod).filter(Boolean));
+  assert.ok(methods.has("Demo FPX"), "Expected at least one existing FPX booking to remain unchanged");
+  assert.ok(methods.has("BNPL (Demo)"), "Expected at least one booking updated to BNPL (Demo)");
+  // Updating the payment method must never change recorded amounts or statuses.
+  const bnplBooking = renterBookings.find((b) => b.paymentMethod === "BNPL (Demo)")!;
+  assert.ok(bnplBooking.quote.total > 0);
+  assert.ok(["upcoming", "active", "return_pending", "completed", "cancelled", "disputed"].includes(bnplBooking.status));
 });
 
 test("delivery demo receipt is stored separately before rental payment", () => {

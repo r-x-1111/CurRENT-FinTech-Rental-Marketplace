@@ -30,9 +30,9 @@ export const POSTCODE_COORDINATES: Record<string, PostcodeCoordinate> = {
   "60000": { lat: 3.1478, lng: 101.6280, area: "TTDI, Kuala Lumpur", state: "Kuala Lumpur" },
   // Nationwide spread so delivery estimates are not assumed to always be within Klang Valley.
   "62502": { lat: 2.9264, lng: 101.6964, area: "Putrajaya", state: "Putrajaya" },
-  "10000": { lat: 5.4141, lng: 100.3288, area: "George Town", state: "Penang" },
-  "11900": { lat: 5.2945, lng: 100.2680, area: "Bayan Lepas", state: "Penang" },
-  "14000": { lat: 5.3644, lng: 100.4668, area: "Bukit Mertajam", state: "Penang" },
+  "10000": { lat: 5.4141, lng: 100.3288, area: "George Town", state: "Pulau Pinang" },
+  "11900": { lat: 5.2945, lng: 100.2680, area: "Bayan Lepas", state: "Pulau Pinang" },
+  "14000": { lat: 5.3644, lng: 100.4668, area: "Bukit Mertajam", state: "Pulau Pinang" },
   "80000": { lat: 1.4927, lng: 103.7414, area: "Johor Bahru", state: "Johor" },
   "81300": { lat: 1.5333, lng: 103.6500, area: "Skudai", state: "Johor" },
   "30000": { lat: 4.5975, lng: 101.0901, area: "Ipoh", state: "Perak" },

@@ -50,7 +50,7 @@ import { newId } from "../../services/marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
 import { SuccessBurst } from "../../components/SuccessBurst";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
-import { estimateAutomaticDelivery } from "../../services/geo";
+import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../../services/geo";
 
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
@@ -176,7 +176,11 @@ export default function ListingDetailScreen() {
   const [deliveryPhone, setDeliveryPhone] = useState(user?.savedDeliveryAddress?.phone || user?.phone || "");
   const [streetAddress, setStreetAddress] = useState(user?.savedDeliveryAddress?.addressLine1 || "");
   const [unit, setUnit] = useState(user?.savedDeliveryAddress?.addressLine2 || "");
-  const [postcode, setPostcode] = useState(user?.savedDeliveryAddress?.postcode || "");
+  // When resuming an existing checkout, the postcode must start as whatever the paid delivery
+  // fee was actually calculated against — not whatever happens to be in the account's general
+  // saved address — otherwise this field silently disagrees with the paid booking and the
+  // "delivery details changed" guard permanently blocks the rental Pay button.
+  const [postcode, setPostcode] = useState(checkoutBooking?.deliveryPostcode || user?.savedDeliveryAddress?.postcode || "");
   const [city, setCity] = useState(user?.savedDeliveryAddress?.city || "");
   const [stateName, setStateName] = useState(user?.savedDeliveryAddress?.state || "");
   const [deliveryNotes, setDeliveryNotes] = useState(user?.savedDeliveryAddress?.instructions || "");
@@ -194,7 +198,9 @@ export default function ListingDetailScreen() {
   const addressEditedRef = useRef(false);
   const lastSyncedAddressKey = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!user?.id || addressEditedRef.current) return;
+    // Resuming an already-paid delivery checkout: the form must keep showing the address that
+    // was actually charged, never silently drift back to the account's general saved address.
+    if (!user?.id || addressEditedRef.current || checkoutBooking) return;
     const saved = user.savedDeliveryAddress;
     const savedKey = saved ? JSON.stringify(saved) : "";
     if (lastSyncedAddressKey.current === savedKey) return;
@@ -220,7 +226,17 @@ export default function ListingDetailScreen() {
   const onDeliveryPhoneChange = markAddressEdited(setDeliveryPhone);
   const onStreetAddressChange = markAddressEdited(setStreetAddress);
   const onUnitChange = markAddressEdited(setUnit);
-  const onPostcodeChange = markAddressEdited(setPostcode);
+  function onPostcodeChange(value: string) {
+    addressEditedRef.current = true;
+    setPostcode(value);
+    // Auto-populate city/state from the postcode reference dataset — the renter should never
+    // have to type the full address just to see a delivery estimate (Stage 1: postcode only).
+    const resolved = resolvePostcodeCoordinate(value);
+    if (resolved) {
+      setCity(resolved.area);
+      setStateName(resolved.state);
+    }
+  }
   const onCityChange = markAddressEdited(setCity);
   const onStateNameChange = markAddressEdited(setStateName);
   const onDeliveryNotesChange = markAddressEdited(setDeliveryNotes);
@@ -245,20 +261,36 @@ export default function ListingDetailScreen() {
   const currentDeliveryAddress = formatDeliveryAddress(getDeliveryAddress());
   // Fully automatic: no vehicle, parcel or manual distance input — distance and fee come from the
   // lender's listing pickup postcode and the renter's own delivery postcode (no maps API).
-  const deliveryEstimate = deliveryAddressIsComplete() ? estimateAutomaticDelivery(listing.pickupPostcode, postcode) : null;
+  const deliveryEstimate = deliveryLocalityIsComplete() ? estimateAutomaticDelivery(listing.pickupPostcode, postcode) : null;
   // Return leg (delivery address → pickup), calculated separately with the same automatic
   // postcode-distance formula — never assumed to cost the same as the outbound leg.
-  const returnDeliveryEstimate = deliveryAddressIsComplete() ? estimateAutomaticDelivery(postcode, listing.pickupPostcode) : null;
+  const returnDeliveryEstimate = deliveryLocalityIsComplete() ? estimateAutomaticDelivery(postcode, listing.pickupPostcode) : null;
   const twoWayDeliveryFee = deliveryEstimate && returnDeliveryEstimate
     ? Math.round((deliveryEstimate.fee + returnDeliveryEstimate.fee) * 100) / 100
     : null;
-  const deliveryIssue = !deliveryAddressIsComplete()
-    ? { message: "Add your delivery address above to automatically estimate the delivery fee.", action: "" }
-    : { message: "Delivery Estimate Unavailable. Check the delivery postcode is correct.", action: "View Delivery Details" };
-  const deliveryDetailsChanged = !!checkoutBooking?.deliveryDemo && (
-    checkoutBooking.deliveryDemo.origin !== listing.location ||
-    checkoutBooking.deliveryDemo.destination !== currentDeliveryAddress ||
-    (checkoutBooking.deliveryDemo.distanceKm != null && deliveryEstimate != null && checkoutBooking.deliveryDemo.distanceKm !== deliveryEstimate.distanceKm));
+  const deliveryIssue = !postcode.trim()
+    ? { message: "Enter your postcode to estimate delivery.", action: "" }
+    : !/^\d{5}$/.test(postcode.trim())
+    ? { message: "Please enter a valid 5-digit Malaysian postcode.", action: "" }
+    : !listing.pickupPostcode
+    ? { message: "Lender pickup postcode required.", action: "" }
+    : !resolvePostcodeCoordinate(postcode)
+    ? { message: "Postcode not recognised. Please verify your postcode or select your locality.", action: "" }
+    : { message: "Delivery Estimate Unavailable. Verify the postcode is correct.", action: "View Delivery Details" };
+  // Lock the time-slot pickers only once the delivery fee has actually been paid for this
+  // checkout — an in-progress, unpaid checkout record must not block the renter from still
+  // adjusting their pickup/return time before paying.
+  const deliveryTimeSlotsLocked = checkoutBooking?.deliveryDemo?.status === "paid_demo";
+  // Only re-require a delivery payment when the renter's delivery POSTCODE actually changed
+  // from the one the paid delivery checkout was calculated and charged against — compared
+  // directly against the booking's own stored postcode, not a freshly recomputed distance
+  // (which could drift from a paid value due to rounding or a stale live recalculation).
+  // Editing contact fields like recipient name, phone, unit or instructions, or a listing's
+  // pickup location (fixed once published), must never invalidate a paid checkout.
+  const deliveryDetailsChanged = !!checkoutBooking?.deliveryDemo &&
+    checkoutBooking.deliveryDemo.status === "paid_demo" &&
+    !!checkoutBooking.deliveryPostcode && !!postcode.trim() &&
+    checkoutBooking.deliveryPostcode.trim() !== postcode.trim();
   const calendarYear = calendarMonth.getUTCFullYear();
   const calendarMonthIndex = calendarMonth.getUTCMonth();
   const calendarMonthName = calendarMonth.toLocaleString("en-GB", {
@@ -556,6 +588,13 @@ export default function ListingDetailScreen() {
       city,
       stateName,
     ].every((value) => value.trim().length > 0);
+  }
+
+  // Stage 1 (fee estimation) needs only the postcode — the estimator itself resolves city/state/
+  // coordinates from it. Full street address, unit, recipient name and phone are Stage 2
+  // (booking confirmation) requirements and must never block showing a fee estimate.
+  function deliveryLocalityIsComplete() {
+    return postcode.trim().length > 0;
   }
 
   return (
@@ -1017,7 +1056,7 @@ export default function ListingDetailScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={`Delivery at ${opt.label}`}
                         accessibilityState={{ disabled: unavailable }}
-                        disabled={unavailable || Boolean(checkoutBooking)}
+                        disabled={unavailable || deliveryTimeSlotsLocked}
                         onPress={() => setPickupTime(opt.value)}
                         style={[
                           styles.timeSlotBtn,
@@ -1057,7 +1096,7 @@ export default function ListingDetailScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={`Return pickup at ${opt.label}`}
                         accessibilityState={{ disabled: unavailable, selected: isSelected }}
-                        disabled={unavailable || Boolean(checkoutBooking)}
+                        disabled={unavailable || deliveryTimeSlotsLocked}
                         onPress={() => setReturnPickupTime(opt.value)}
                         style={[
                           styles.timeSlotBtn,
@@ -1319,25 +1358,44 @@ export default function ListingDetailScreen() {
               <Pressable style={styles.calendarModalOverlay} onPress={() => setShowInsuranceDetails(false)}>
                 <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
                   <Text style={s.h2}>Rental Protection (Demo)</Text>
-                  {!!quote && (
-                    <>
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Insurance premium</Text>
-                        <Text style={styles.summaryValue}>{money(calculateInsurancePremium(listing.estimatedValue || 0, quote.days))}</Text>
-                      </View>
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Item replacement value</Text>
-                        <Text style={styles.summaryValue}>{money(listing.estimatedValue || 0)}</Text>
-                      </View>
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Rental duration</Text>
-                        <Text style={styles.summaryValue}>{quote.days} {quote.days === 1 ? "day" : "days"}</Text>
-                      </View>
-                      <Text style={s.caption}>
-                        Fee = max(RM5, {money(listing.estimatedValue || 0)} × 0.3% × {Math.ceil(quote.days / 7)} {Math.ceil(quote.days / 7) === 1 ? "period" : "periods"}) = {money(calculateInsurancePremium(listing.estimatedValue || 0, quote.days))}.
-                      </Text>
-                    </>
-                  )}
+                  {!!quote && (() => {
+                    const replacementValue = listing.estimatedValue || 0;
+                    const billablePeriods = Math.ceil(quote.days / 7);
+                    const ratePremium = Math.round(replacementValue * 0.003 * billablePeriods * 100) / 100;
+                    const finalPremium = calculateInsurancePremium(replacementValue, quote.days);
+                    return (
+                      <>
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Insurance premium</Text>
+                          <Text style={styles.summaryValue}>{money(finalPremium)}</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Item replacement value</Text>
+                          <Text style={styles.summaryValue}>{money(replacementValue)}</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Rental duration</Text>
+                          <Text style={styles.summaryValue}>{quote.days} {quote.days === 1 ? "day" : "days"}</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Billable periods</Text>
+                          <Text style={styles.summaryValue}>CEILING({quote.days} ÷ 7) = {billablePeriods}</Text>
+                        </View>
+
+                        <Text style={[s.body, { marginTop: 10, fontWeight: "700" }]}>Premium Calculation</Text>
+                        <Text style={s.caption}>
+                          {money(replacementValue)} × 0.3% × {billablePeriods} = {money(ratePremium)}
+                        </Text>
+                        <Text style={s.caption}>Minimum premium: {money(5)}</Text>
+                        <Text style={[s.body, { fontWeight: "700" }]}>
+                          Final Insurance Premium: {money(finalPremium)}
+                        </Text>
+                        <Text style={s.caption}>
+                          Insurance is calculated per started 7-day period. Any partial period is rounded up. The insurance rate is 0.3% per started seven-day period, and the minimum premium is RM5 — whichever is higher applies.
+                        </Text>
+                      </>
+                    );
+                  })()}
                   <Text style={[s.body, { marginTop: 10 }]}>
                     Proposed protection of up to RM60,000 for eligible items, subject to the item's replacement value, against eligible accidental damage.
                   </Text>
@@ -1355,7 +1413,9 @@ export default function ListingDetailScreen() {
             {/* Booking Summary for eligible direct renters — grouped into "Paid to CurRENT" and
                 "Delivery · GrabExpress (Demo)" so the renter sees one combined total before renting. */}
             {renterRisk?.level !== "very_high" && quote && (() => {
-              const hasAddress = deliveryAddressIsComplete();
+              // The fee preview only needs the locality fields (postcode/city/state); it must
+              // never wait on recipient name/phone, which are unrelated to distance estimation.
+              const hasAddress = deliveryLocalityIsComplete();
               const deliveryFeeValue = hasAddress && deliveryEstimate && returnDeliveryEstimate ? twoWayDeliveryFee : null;
               const totals = getBookingTotals(quote, deliveryFeeValue);
               const depositTierNote = renterRisk?.canDirectBook
@@ -1445,7 +1505,7 @@ export default function ListingDetailScreen() {
                       </Pressable>
                       {showDeliveryDetails && deliveryEstimate && returnDeliveryEstimate && (
                         <View style={styles.deliveryDetails}>
-                          <Row label="Distance used for calculation" value={`${deliveryEstimate.distanceKm} km (estimated, not a measured route)`} />
+                          <Row label="Estimated Distance (Demo)" value={`${deliveryEstimate.distanceKm} km (estimated, not a measured route)`} />
                           <Row label="Outbound delivery fee (pickup → you)" value={money(deliveryEstimate.fee)} />
                           <Row label="Return delivery fee (you → pickup)" value={money(returnDeliveryEstimate.fee)} />
                           <Row label="Total two-way delivery fee" value={money(twoWayDeliveryFee!)} strong />
@@ -1457,7 +1517,7 @@ export default function ListingDetailScreen() {
                       accessibilityRole="button"
                       onPress={() => setScrollToAddressRequestId((n) => n + 1)}
                     >
-                      <Text style={styles.summaryLinkText}>Add address to see fee</Text>
+                      <Text style={styles.summaryLinkText}>Enter your postcode to estimate delivery.</Text>
                     </Pressable>
                   )}
 
@@ -1518,22 +1578,45 @@ export default function ListingDetailScreen() {
                 <Notice text="Demo payment only. No real funds or banking credentials are collected." />
                 <View style={styles.checkoutPanel}>
                   <Text style={styles.checkoutTitle}>CurRENT Rental Payment</Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Select FPX payment method"
-                    accessibilityState={{ selected: selectedPaymentMethod === "Demo FPX" }}
-                    onPress={() => setSelectedPaymentMethod("Demo FPX")}
-                    style={[
-                      styles.fpxBadgeRow,
-                      selectedPaymentMethod === "Demo FPX" && styles.fpxBadgeSelected,
-                    ]}
-                  >
-                    <Ionicons name="card-outline" size={16} color="#0369A1" />
-                    <Text style={styles.fpxBadgeText}>FPX</Text>
-                    {selectedPaymentMethod === "Demo FPX" && (
-                      <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
-                    )}
-                  </Pressable>
+                  <View style={styles.paymentMethodRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Select FPX payment method"
+                      accessibilityState={{ selected: selectedPaymentMethod === "Demo FPX" }}
+                      onPress={() => setSelectedPaymentMethod("Demo FPX")}
+                      style={[
+                        styles.fpxBadgeRow,
+                        selectedPaymentMethod === "Demo FPX" && styles.fpxBadgeSelected,
+                      ]}
+                    >
+                      <Ionicons name="card-outline" size={16} color="#0369A1" />
+                      <Text style={styles.fpxBadgeText}>FPX</Text>
+                      {selectedPaymentMethod === "Demo FPX" && (
+                        <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
+                      )}
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Select BNPL payment method"
+                      accessibilityState={{ selected: selectedPaymentMethod === "BNPL (Demo)" }}
+                      onPress={() => setSelectedPaymentMethod("BNPL (Demo)")}
+                      style={[
+                        styles.fpxBadgeRow,
+                        selectedPaymentMethod === "BNPL (Demo)" && styles.fpxBadgeSelected,
+                      ]}
+                    >
+                      <Ionicons name="wallet-outline" size={16} color="#0369A1" />
+                      <Text style={styles.fpxBadgeText}>BNPL</Text>
+                      {selectedPaymentMethod === "BNPL (Demo)" && (
+                        <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
+                      )}
+                    </Pressable>
+                  </View>
+                  <Text style={s.caption}>
+                    {selectedPaymentMethod === "BNPL (Demo)"
+                      ? "Demo simulation only — pays the same checkout amount as FPX immediately, with no real instalments or credit check."
+                      : "Pay the full checkout amount instantly via demo FPX online banking."}
+                  </Text>
                   <View>
                     <Button
                       disabled={isPaying || checkoutBooking?.deliveryDemo?.status !== "paid_demo" || deliveryDetailsChanged}
@@ -2180,7 +2263,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: colors.navy,
   },
+  paymentMethodRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
   fpxBadgeRow: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

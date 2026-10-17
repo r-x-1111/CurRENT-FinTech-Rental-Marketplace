@@ -121,6 +121,9 @@ export function BookingCard({
               {booking.title}
             </Text>
             <Text style={styles.dateText}>{dateInfo}</Text>
+            {!!booking.paymentMethod && (
+              <Text style={styles.statLabel}>Payment method: {booking.paymentMethod}</Text>
+            )}
             {!isLender && booking.insurance?.selected && (
               <View style={styles.insuranceTag}>
                 <Ionicons name="shield-checkmark-outline" size={11} color={colors.blue} />

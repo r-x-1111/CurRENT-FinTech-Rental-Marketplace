@@ -69,6 +69,9 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
       <Text style={styles.item}>{booking.title} · {booking.quote.days} {booking.quote.days === 1 ? "day" : "days"}</Text>
 
       <Text style={styles.section}>Paid to CurRENT</Text>
+      {!!booking.paymentMethod && (
+        <Row label="Payment method" value={booking.paymentMethod === "BNPL (Demo)" ? "BNPL (Demo)" : booking.paymentMethod} />
+      )}
       <Row label="Rental fee" value={money(booking.quote.rentalFee)} />
       <Row label="CurRENT service fee (5%, min RM5)" value={money(booking.quote.serviceFee)} />
       {booking.quote.protection > 0 && <Row label="Rental Protection (Demo)" value={money(booking.quote.protection)} />}
