@@ -132,8 +132,24 @@ export default function ListingDetailScreen() {
     pickupTime && availableSlots.some((s) => s.value === pickupTime) && !slotUnavailable(pickupTime)
       ? pickupTime
       : availableSlots.find((slot) => !slotUnavailable(slot.value))?.value || availableSlots[0]?.value || "11:00";
-  // Return time is strictly auto-matched and locked to pickup time per 24-hour rental rules
+  // The billed rental duration/fees still use the pickup time for both ends of the 24-hour
+  // cycle, exactly as before — selecting a return pickup time below never changes this.
   const returnTime = effectivePickupTime;
+  // Renter-selected courier collection time, independent of the delivery arrival time above.
+  // Purely a scheduling/display field (see services/booking.ts formatScheduledReturnPickup) —
+  // it never feeds into rental duration or fee calculations.
+  const [returnPickupTime, setReturnPickupTime] = useState(checkoutBooking?.returnPickupTime || "");
+  const returnSlotUnavailable = (slot: string) => {
+    if (state.mode === "admin_demo" && listing && isDemoSeededListing(listing.id) && end &&
+      !demoSlotAvailable(listing.id, end, slot)) return true;
+    // Same-day rental: the courier can't collect before the item has even arrived.
+    if (start && end && start === end && slot <= effectivePickupTime) return true;
+    return false;
+  };
+  const effectiveReturnPickupTime =
+    returnPickupTime && availableSlots.some((s) => s.value === returnPickupTime) && !returnSlotUnavailable(returnPickupTime)
+      ? returnPickupTime
+      : "";
   const [collectionMethod, setCollectionMethod] =
     useState<CollectionMethod>("Delivery");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
@@ -401,6 +417,10 @@ export default function ListingDetailScreen() {
       setError("Complete the required delivery address before continuing.");
       return;
     }
+    if (!checkoutBooking && !effectiveReturnPickupTime) {
+      setError("Select a scheduled return pickup time before continuing.");
+      return;
+    }
     if (checkoutBooking) {
       if (deliveryDetailsChanged) { setError("Delivery details changed. Cancel this checkout and calculate a new demo delivery payment."); return; }
       router.push(`/delivery-demo/${checkoutBooking.id}` as never);
@@ -424,7 +444,7 @@ export default function ListingDetailScreen() {
       const bookingId = newId();
       await actAndPersist({ type: "startDeliveryCheckout", id: bookingId, listingId: id,
         start: startTimestamp, end: endTimestamp, deliveryAddress: formatDeliveryAddress(address),
-        deliveryPostcode: postcode });
+        deliveryPostcode: postcode, returnPickupTime: effectiveReturnPickupTime });
       act({ type: "saveDeliveryAddress", address });
       router.push(`/delivery-demo/${bookingId}` as never);
     } catch (e) {
@@ -1019,17 +1039,60 @@ export default function ListingDetailScreen() {
                 </View>
               </View>
 
-              {/* Return Time: Compact read-only per README V3.23 Section 7.1 */}
-              <View style={styles.returnTimeCard}>
-                <View style={styles.returnTimeRow}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                    <Ionicons name="time-outline" size={14} color={colors.navy} />
-                    <Text style={styles.returnTimeLabel}>Scheduled Return Time</Text>
-                  </View>
-                  <Text style={styles.returnTimeValue}>{formatHourAmPm(returnTime)}</Text>
+              {/* Scheduled Return Pickup Time — selected independently of the delivery arrival
+                  time above; never changes the rental's billed duration or dates. */}
+              <View style={{ marginTop: 8 }}>
+                <Text style={styles.slotSectionTitle}>Scheduled Return Pickup Time</Text>
+                <Text style={styles.slotSectionDescription}>
+                  Select when the courier should collect the item from your address and return it to the owner.
+                </Text>
+                <Text style={styles.slotListLabel}>Available return pickup time slots</Text>
+                <View style={styles.timeSlotsRow}>
+                  {FIXED_DELIVERY_SLOTS.map((opt) => {
+                    const isSelected = returnPickupTime === opt.value;
+                    const unavailable = !availableSlots.some((available) => available.value === opt.value) || returnSlotUnavailable(opt.value);
+                    return (
+                      <Pressable
+                        key={opt.value}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Return pickup at ${opt.label}`}
+                        accessibilityState={{ disabled: unavailable, selected: isSelected }}
+                        disabled={unavailable || Boolean(checkoutBooking)}
+                        onPress={() => setReturnPickupTime(opt.value)}
+                        style={[
+                          styles.timeSlotBtn,
+                          isSelected && styles.timeSlotBtnSelected,
+                          unavailable && { opacity: 0.4 },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.timeSlotText,
+                            isSelected && styles.timeSlotTextSelected,
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
-                <Text style={styles.fieldSubtext}>The time when you must hand the item to the courier.</Text>
+                <Text style={styles.fieldSubtext}>Demo scheduling only — not a live GrabExpress courier availability slot.</Text>
               </View>
+
+              {effectivePickupTime && effectiveReturnPickupTime && start && end && (
+                <View style={styles.returnTimeCard}>
+                  <Text style={styles.returnTimeLabel}>Delivery & Return Schedule</Text>
+                  <View style={styles.returnTimeRow}>
+                    <Text style={styles.fieldSubtext}>Delivery Arrival</Text>
+                    <Text style={styles.returnTimeValue}>{formatDate(start)} · {formatHourAmPm(effectivePickupTime)}</Text>
+                  </View>
+                  <View style={styles.returnTimeRow}>
+                    <Text style={styles.fieldSubtext}>Return Pickup</Text>
+                    <Text style={styles.returnTimeValue}>{formatDate(end)} · {formatHourAmPm(effectiveReturnPickupTime)}</Text>
+                  </View>
+                </View>
+              )}
 
               {/* Collection: Delivery Only (fixed per V3.23 Section 7) */}
               <View style={{ marginTop: 8 }}>
@@ -1065,7 +1128,7 @@ export default function ListingDetailScreen() {
                         style={{
                           paddingHorizontal: 10,
                           paddingVertical: 8,
-                          borderRadius: 8,
+                          borderRadius: 10,
                           borderWidth: 1,
                           borderColor:
                             selectedDemoAddressIndex === index
@@ -1074,7 +1137,7 @@ export default function ListingDetailScreen() {
                           backgroundColor:
                             selectedDemoAddressIndex === index
                               ? colors.paleBlue
-                              : "#FFFFFF",
+                              : colors.white,
                         }}
                       >
                         <Text style={s.caption}>
@@ -1180,7 +1243,7 @@ export default function ListingDetailScreen() {
             {/* Dynamic Cancellation Notice (24h before pickup) */}
             {cancellationNotice !== "" && (
               <View style={styles.cancellationNoticeBox}>
-                <Ionicons name="shield-checkmark" size={16} color="#0284C7" />
+                <Ionicons name="shield-checkmark" size={16} color={PANEL_SUCCESS} />
                 <Text style={styles.cancellationNoticeText}>
                   {cancellationNotice}
                 </Text>
@@ -1377,7 +1440,7 @@ export default function ListingDetailScreen() {
                         onPress={() => setShowDeliveryDetails((open) => !open)}
                       >
                         <Text style={styles.summaryLinkText}>
-                          Demo estimate, not a live Grab quotation. {showDeliveryDetails ? "Hide details" : "How is this calculated?"}
+                          {showDeliveryDetails ? "Hide details" : "How is this calculated?"}
                         </Text>
                       </Pressable>
                       {showDeliveryDetails && deliveryEstimate && returnDeliveryEstimate && (
@@ -1430,7 +1493,7 @@ export default function ListingDetailScreen() {
                 <Row label="Delivery payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Demo Payment Completed" : deliveryDetailsChanged ? "New calculation and payment required" : "Awaiting Payment"} />
                 {checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged
                   ? <Button secondary onPress={() => router.push(`/delivery-demo/${checkoutBooking.id}` as never)}>View Receipt</Button>
-                  : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() || !deliveryEstimate || !returnDeliveryEstimate || !!checkoutBooking} onPress={() => void handleDeliveryDemo()}>
+                  : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() || !deliveryEstimate || !returnDeliveryEstimate || !effectiveReturnPickupTime || !!checkoutBooking} onPress={() => void handleDeliveryDemo()}>
                       {twoWayDeliveryFee != null ? `Pay Delivery & Continue · ${money(twoWayDeliveryFee)}` : "Pay Delivery & Continue"}
                     </Button>}
                 {checkoutBooking && <Button secondary onPress={async () => {
@@ -1558,6 +1621,18 @@ export default function ListingDetailScreen() {
   );
 }
 
+// Shared booking-panel tokens — every section box (calendar, delivery & return, address,
+// Rental Protection, GrabExpress) uses the same fill/border/radius; only Booking Summary is
+// deliberately highlighted differently so it reads as the money summary.
+const PANEL_SECTION_BG = colors.offWhite; // #F7F8FA
+const PANEL_SECTION_BORDER = colors.border; // #D9E3EF
+const PANEL_SECTION_RADIUS = 12;
+const PANEL_NESTED_BG = colors.white;
+const PANEL_NESTED_RADIUS = 10;
+const PANEL_SUMMARY_BG = colors.paleBlue; // #EEF4FF
+const PANEL_SUMMARY_BORDER = "#C7D7FE";
+const PANEL_SUCCESS = "#15803D";
+
 const styles = StyleSheet.create({
   galleryThumb: {
     width: 65,
@@ -1635,12 +1710,12 @@ const styles = StyleSheet.create({
     color: colors.navy,
   },
   calendarContainer: {
-    backgroundColor: colors.paleBlue,
-    borderRadius: 12,
+    backgroundColor: PANEL_SECTION_BG,
+    borderRadius: PANEL_SECTION_RADIUS,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: 10,
-    marginTop: 10,
+    borderColor: PANEL_SECTION_BORDER,
+    padding: 16,
+    marginTop: 12,
   },
   calendarHeaderRow: {
     flexDirection: "row",
@@ -1815,11 +1890,11 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   arrangementSection: {
-    backgroundColor: colors.paleBlue,
+    backgroundColor: PANEL_SECTION_BG,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 10,
+    borderColor: PANEL_SECTION_BORDER,
+    borderRadius: PANEL_SECTION_RADIUS,
+    padding: 16,
     marginTop: 12,
     gap: 8,
   },
@@ -1901,76 +1976,25 @@ const styles = StyleSheet.create({
     color: "white",
     fontWeight: "700",
   },
-  lockedReturnCard: {
-    backgroundColor: "#F0F9FF",
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
-    borderRadius: 8,
-    padding: 8,
-    marginTop: 4,
-    gap: 4,
-  },
-  lockedReturnHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  lockedReturnTitle: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#0369A1",
-  },
-  lockedPill: {
-    backgroundColor: "#E0F2FE",
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  lockedPillText: {
-    fontSize: 9,
-    fontWeight: "700",
-    color: "#0284C7",
-  },
-  lockedReturnBody: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  lockedReturnTimeText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#0C4A6E",
-  },
-  lockedReturnExplanation: {
-    flex: 1,
-    fontSize: 10,
-    color: "#0369A1",
-    lineHeight: 13,
-  },
   cancellationNoticeBox: {
     flexDirection: "row",
     gap: 8,
-    backgroundColor: "#F0F9FF",
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
-    borderRadius: 10,
-    padding: 10,
+    paddingHorizontal: 2,
     marginTop: 12,
     alignItems: "center",
   },
   cancellationNoticeText: {
     flex: 1,
-    fontSize: 11,
-    color: colors.linkBlue,
-    lineHeight: 15,
-    fontWeight: "600",
+    fontSize: 12,
+    color: colors.muted,
+    lineHeight: 16,
   },
   insuranceCard: {
-    backgroundColor: colors.white,
+    backgroundColor: PANEL_SECTION_BG,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
+    borderColor: PANEL_SECTION_BORDER,
+    borderRadius: PANEL_SECTION_RADIUS,
+    padding: 16,
     marginTop: 12,
     gap: 6,
   },
@@ -2006,11 +2030,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   summaryContainer: {
-    backgroundColor: colors.paleBlue,
+    backgroundColor: PANEL_SUMMARY_BG,
     borderWidth: 1,
-    borderColor: colors.softBlue,
-    borderRadius: 12,
-    padding: 14,
+    borderColor: PANEL_SUMMARY_BORDER,
+    borderRadius: PANEL_SECTION_RADIUS,
+    padding: 16,
     marginTop: 12,
   },
   summaryTitle: {
@@ -2116,12 +2140,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   checkoutPanel: {
-    backgroundColor: colors.paleBlue,
+    backgroundColor: PANEL_SECTION_BG,
     borderWidth: 1,
-    borderColor: colors.softBlue,
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 14,
+    borderColor: PANEL_SECTION_BORDER,
+    borderRadius: PANEL_SECTION_RADIUS,
+    padding: 16,
+    marginTop: 12,
     gap: 10,
   },
   deliveryInputs: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
@@ -2139,13 +2163,7 @@ const styles = StyleSheet.create({
   deliverySummaryLabel: { fontSize: 12, color: colors.muted, flexShrink: 0 },
   deliverySummaryValue: { fontSize: 12, fontWeight: "600", color: colors.navy, flexShrink: 1, textAlign: "right" },
   deliveryFeeValue: { fontSize: 14, fontWeight: "800", color: colors.navy },
-  deliveryIssue: {
-    backgroundColor: colors.softBlue,
-    borderRadius: 8,
-    padding: 10,
-    gap: 4,
-  },
-  deliveryIssueText: { fontSize: 12, color: colors.navy },
+  deliveryIssueText: { fontSize: 12, color: colors.muted },
   deliveryIssueAction: { fontSize: 12, fontWeight: "700", color: colors.blue },
   deliveryToggle: {
     flexDirection: "row",
@@ -2202,10 +2220,10 @@ const styles = StyleSheet.create({
     color: colors.blue,
   },
   returnTimeCard: {
-    backgroundColor: colors.paleBlue,
+    backgroundColor: PANEL_NESTED_BG,
     borderWidth: 1,
-    borderColor: colors.softBlue,
-    borderRadius: 8,
+    borderColor: PANEL_SECTION_BORDER,
+    borderRadius: PANEL_NESTED_RADIUS,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginTop: 4,
@@ -2226,11 +2244,11 @@ const styles = StyleSheet.create({
     color: colors.blue,
   },
   deliveryAddressSection: {
-    backgroundColor: "white",
+    backgroundColor: PANEL_SECTION_BG,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 12,
+    borderColor: PANEL_SECTION_BORDER,
+    borderRadius: PANEL_SECTION_RADIUS,
+    padding: 16,
     marginTop: 12,
     gap: 4,
   },

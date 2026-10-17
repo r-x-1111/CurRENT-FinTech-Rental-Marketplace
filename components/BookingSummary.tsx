@@ -1,11 +1,13 @@
-import { StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import type { Booking } from "../types/marketplace";
 import type { Listing } from "../types";
 import { getBookingTotals, money } from "../services/booking";
 import { deriveDisplayDelivery } from "../services/delivery";
 import { calculateOwnerPayout, DEPOSIT_TIERS, LEGACY_LENDER_COMMISSION_RATE } from "../services/deposit";
 import { tierForScore } from "../services/riskScore";
-import { colors, s } from "./ui";
+import { Badge, colors, s } from "./ui";
 
 type Props = { booking: Booking; listing?: Listing; lender?: boolean };
 
@@ -18,6 +20,7 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
 
 /** Read-only summary of the amounts saved on a booking. Never replaces checkout pricing. */
 export function BookingSummary({ booking, listing, lender = false }: Props) {
+  const [showDeliveryBreakdown, setShowDeliveryBreakdown] = useState(false);
   const delivery = deriveDisplayDelivery({
     collectionMethod: booking.collectionMethod,
     deliveryDemo: booking.deliveryDemo,
@@ -43,6 +46,23 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
   const payout = calculateOwnerPayout(booking.quote.rentalFee, rate);
   const cancelled = booking.status === "cancelled" || booking.status === "rejected";
 
+  // Compact GrabExpress Delivery (Demo) summary: one status badge + one total figure,
+  // with the outbound/return split tucked behind "View Delivery Breakdown".
+  const isPaidDelivery = booking.deliveryDemo?.status === "paid_demo";
+  const isRefundedDelivery = booking.deliveryDemo?.status === "refunded_demo";
+  const isAwaitingDelivery = unpaidDeliveryQuote;
+  const isPaidOrRefundedDelivery = isPaidDelivery || isRefundedDelivery;
+  const totalDeliveryFee = summaryDeliveryFee;
+  const deliveryOutboundFee = delivery.outboundFee ?? delivery.estimatedOutboundFee ?? null;
+  const deliveryReturnFee = delivery.returnFee ?? delivery.estimatedReturnFee ?? null;
+  const sameRouteDistance = delivery.distanceKm != null && delivery.returnDistanceKm != null && delivery.distanceKm === delivery.returnDistanceKm;
+  const deliveryStatusLabel = isPaidDelivery ? "Paid (Demo)"
+    : isRefundedDelivery ? "Refunded (Demo)"
+    : isAwaitingDelivery ? "Awaiting Payment"
+    : totalDeliveryFee != null ? "Estimate"
+    : "Not Recorded";
+  const deliveryStatusTone = isPaidDelivery ? "green" : isRefundedDelivery ? "grey" : isAwaitingDelivery ? "amber" : "blue";
+
   return (
     <View style={[s.card, styles.card]}>
       <Text style={styles.title}>Booking Summary</Text>
@@ -57,18 +77,48 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
       <Row label="CurRENT subtotal" value={money(totals.subtotal)} strong />
 
       <View style={styles.divider} />
-      <Text style={styles.section}>Delivery · GrabExpress (Demo)</Text>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.section}>GrabExpress Delivery (Demo)</Text>
+        <Badge text={deliveryStatusLabel} tone={deliveryStatusTone} />
+      </View>
       <Row label="Pickup" value={delivery.origin || "Not recorded"} />
       <Row label="Deliver to" value={delivery.destination || "Not recorded"} />
-      {delivery.estimatedTwoWayFee == null && !booking.deliveryDemo && <Text style={styles.note}>Delivery Address Required</Text>}
-      {delivery.distanceKm != null && <Row label="Outbound distance" value={`${delivery.distanceKm} km (estimate)`} />}
-      {(delivery.outboundFee ?? delivery.estimatedOutboundFee) != null && <Row label={`Outbound delivery fee${unpaidDeliveryQuote || delivery.outboundFee == null ? " (estimate)" : ""}`} value={money((delivery.outboundFee ?? delivery.estimatedOutboundFee)!)} />}
-      {(delivery.returnFee ?? delivery.estimatedReturnFee) != null && delivery.returnDistanceKm != null && <Row label="Return distance" value={`${delivery.returnDistanceKm} km (estimate)`} />}
-      {(delivery.returnFee ?? delivery.estimatedReturnFee) != null && <Row label={`Return delivery fee${unpaidDeliveryQuote || delivery.returnFee == null ? " (estimate)" : ""}`} value={money((delivery.returnFee ?? delivery.estimatedReturnFee)!)} />}
-      {delivery.estimatedTwoWayFee != null && (unpaidDeliveryQuote || delivery.returnFee == null || !booking.deliveryDemo) && <Row label="Estimated two-way delivery fee" value={money(delivery.estimatedTwoWayFee)} strong />}
-      {deliveryPaid && <Row label="Total two-way delivery fee" value={money(recordedDeliveryFee || 0)} strong />}
-      <Row label="Delivery amount paid" value={money(deliveryAmountPaid)} />
-      <Row label="Delivery payment" value={booking.deliveryDemo?.status === "paid_demo" ? "Paid (Demo)" : booking.deliveryDemo?.status === "refunded_demo" ? "Refunded (Demo)" : booking.deliveryDemo?.status === "required" ? "Awaiting payment" : "Not recorded"} />
+      {delivery.distanceKm != null && (
+        <Row
+          label="Round-trip distance"
+          value={
+            sameRouteDistance
+              ? `${delivery.distanceKm} km each way`
+              : `${delivery.distanceKm} km out · ${delivery.returnDistanceKm ?? "—"} km back`
+          }
+        />
+      )}
+      {totalDeliveryFee != null ? (
+        <Row
+          label={isPaidOrRefundedDelivery ? "Total delivery fee" : "Total delivery fee (Estimate)"}
+          value={money(totalDeliveryFee)}
+          strong
+        />
+      ) : (
+        <Text style={styles.note}>Delivery Address Required</Text>
+      )}
+      {isAwaitingDelivery && totalDeliveryFee != null && <Row label="Outstanding" value={money(totalDeliveryFee)} />}
+      {isRefundedDelivery && totalDeliveryFee != null && <Row label="Refunded amount" value={money(totalDeliveryFee)} />}
+      {(deliveryOutboundFee != null || deliveryReturnFee != null) && (
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: showDeliveryBreakdown }} onPress={() => setShowDeliveryBreakdown((v) => !v)}>
+          <View style={styles.breakdownToggleRow}>
+            <Text style={styles.link}>{showDeliveryBreakdown ? "Hide Delivery Breakdown" : "View Delivery Breakdown"}</Text>
+            <Ionicons name={showDeliveryBreakdown ? "chevron-up" : "chevron-down"} size={14} color={colors.blue} />
+          </View>
+        </Pressable>
+      )}
+      {showDeliveryBreakdown && (
+        <View style={styles.breakdownBox}>
+          <Row label="Outbound delivery" value={`${delivery.distanceKm ?? "—"} km · ${money(deliveryOutboundFee ?? 0)}`} />
+          <Row label="Return delivery" value={`${delivery.returnDistanceKm ?? "—"} km · ${money(deliveryReturnFee ?? 0)}`} />
+          <Row label={isPaidDelivery ? "Total paid" : isRefundedDelivery ? "Total refunded" : "Total delivery fee"} value={money(totalDeliveryFee ?? 0)} strong />
+        </View>
+      )}
 
       <View style={styles.divider} />
       <Text style={styles.section}>Total for this rental</Text>
@@ -108,4 +158,8 @@ const styles = StyleSheet.create({
   rowLabel: { ...s.body, flex: 1 },
   rowValue: { ...s.body, flex: 1, textAlign: "right" },
   strong: { fontWeight: "700" },
+  sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  link: { color: colors.blue, fontWeight: "700", fontSize: 12 },
+  breakdownToggleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  breakdownBox: { backgroundColor: colors.paleBlue, borderRadius: 10, padding: 10, gap: 4, marginTop: 4 },
 });

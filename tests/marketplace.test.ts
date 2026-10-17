@@ -23,6 +23,7 @@ import {
   dateAfter,
   demoSlotAvailable,
   formatMalaysiaDateTime,
+  formatScheduledReturnPickup,
   calculateInsurancePremium,
   getBookingTotals,
   getEffectiveBookingStatus,
@@ -684,6 +685,47 @@ test("automatic postcode-based delivery estimate: Haversine x road factor, MAX(R
   assert.equal(estimateAutomaticDelivery(undefined, "50480"), null);
 });
 
+test("renters select a return pickup time independent of the delivery arrival time, stored on the booking and never changing rental duration or fees", () => {
+  const j = journey();
+  const start = `${dateAfter(2)}T11:00:00+08:00`;
+  const end = `${dateAfter(4)}T11:00:00+08:00`;
+
+  // A return pickup time is required to start the delivery checkout.
+  assert.throws(
+    () => j.act({ type: "startDeliveryCheckout", id: "no-return-time", listingId: "sony-a7iii",
+      start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480",
+      returnPickupTime: "" }),
+    /return pickup time/i,
+  );
+
+  j.act({ type: "startDeliveryCheckout", id: "with-return-time", listingId: "sony-a7iii",
+    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480",
+    returnPickupTime: "16:00" });
+  const booking = j.state.bookings.find((b) => b.id === "with-return-time")!;
+
+  // Stored independently from the billing start/end timestamps (which stay anchored to 11:00,
+  // the pickup time, per the existing 24-hour rental billing rule).
+  assert.equal(booking.returnPickupTime, "16:00");
+  assert.equal(booking.start, start);
+  assert.equal(booking.end, end);
+
+  // Display combines the booking's end DATE with the separately-selected return pickup TIME —
+  // not the billing end-timestamp's own (pickup-locked) time-of-day.
+  const displayed = formatScheduledReturnPickup(booking);
+  assert.ok(displayed.includes("04:00 PM") || displayed.includes("4:00 PM"), `Expected 4:00 PM in "${displayed}"`);
+  assert.notEqual(displayed, formatMalaysiaDateTime(booking.end));
+
+  // Historical bookings recorded before this feature existed (no returnPickupTime) keep their
+  // original confirmed schedule — same as formatMalaysiaDateTime(end).
+  const legacyBooking = { end: booking.end };
+  assert.equal(formatScheduledReturnPickup(legacyBooking), formatMalaysiaDateTime(booking.end));
+
+  // Rental duration/fee are unaffected by the return pickup time: both bookings cover the same
+  // dates and must quote identically.
+  const noReturnTimeBooking = j.state.bookings.find((b) => b.id === "with-return-time")!;
+  assert.equal(noReturnTimeBooking.quote.days, rentalDays(start, end));
+});
+
 test("delivery demo receipt is stored separately before rental payment", () => {
   const j = journey();
   const start = `${dateAfter(2)}T11:00:00+08:00`;
@@ -692,7 +734,7 @@ test("delivery demo receipt is stored separately before rental payment", () => {
   const expectedOutbound = estimateAutomaticDelivery(listing.pickupPostcode, "50480")!;
   const expectedReturn = estimateAutomaticDelivery("50480", listing.pickupPostcode)!;
   j.act({ type: "startDeliveryCheckout", id: "delivery-booking", listingId: "sony-a7iii",
-    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480" });
+    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480", returnPickupTime: "15:00" });
   const pending = j.state.bookings.find((booking) => booking.id === "delivery-booking")!;
   assert.equal(pending.payment, "required");
   assert.equal(pending.status, "payment_required");
@@ -720,7 +762,7 @@ test("cancelling an unfinished checkout after delivery is paid refunds the prepa
   const start = `${dateAfter(2)}T11:00:00+08:00`;
   const end = `${dateAfter(4)}T11:00:00+08:00`;
   j.act({ type: "startDeliveryCheckout", id: "abandon-me", listingId: "sony-a7iii",
-    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480" });
+    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480", returnPickupTime: "15:00" });
   j.act({ type: "payDeliveryDemo", bookingId: "abandon-me", receiptReference: "DEMO-GE-ABANDON" });
   const paid = j.state.bookings.find((booking) => booking.id === "abandon-me")!;
   assert.equal(paid.deliveryDemo?.status, "paid_demo");
@@ -736,7 +778,7 @@ test("cancelling an unfinished checkout after delivery is paid refunds the prepa
   // Separately: a rejected rental-payment attempt (e.g. someone else tries to pay it) must leave
   // the booking unconfirmed and retryable, and must never touch — let alone re-charge — delivery.
   j.act({ type: "startDeliveryCheckout", id: "retry-me", listingId: "sony-a7iii",
-    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480" });
+    start, end, deliveryAddress: "12 Jalan Example, Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480", returnPickupTime: "15:00" });
   j.act({ type: "payDeliveryDemo", bookingId: "retry-me", receiptReference: "DEMO-GE-RETRY" });
   j.login("owner-aiman");
   assert.throws(() => j.act({ type: "completeRentalCheckout", bookingId: "retry-me", paymentMethod: "Demo FPX" }));

@@ -22,6 +22,7 @@ import { BookingSummary } from "../../components/BookingSummary";
 import { deriveDisplayDelivery } from "../../services/delivery";
 import {
   formatMalaysiaDateTime,
+  formatScheduledReturnPickup,
   getEffectiveBookingStatus,
   isCancellationEligible,
   money,
@@ -503,7 +504,7 @@ export default function RentalDetail() {
             />
             <Row
               label="Scheduled Return"
-              value={formatMalaysiaDateTime(b.end) || b.end}
+              value={formatScheduledReturnPickup(b) || b.end}
             />
             <Row
               label="Delivery Receipt"
@@ -562,7 +563,7 @@ export default function RentalDetail() {
               />
               <Row
                 label="Scheduled Return"
-                value={formatMalaysiaDateTime(b.end) || b.end}
+                value={formatScheduledReturnPickup(b) || b.end}
                 strong
               />
               <Row

@@ -156,6 +156,10 @@ export interface Booking {
   createdAt: string;
   scheduledPickup?: string;
   scheduledReturn?: string;
+  /** Renter-selected courier collection time ("HH:mm", e.g. "15:00") on the rental end date —
+   * independent of scheduledReturn's time-of-day, which stays anchored to the pickup time for
+   * 24-hour rental billing. Purely a logistics/display field; never changes rental duration or fees. */
+  returnPickupTime?: string;
   durationMinutes?: number;
   cancellationCutoff?: string;
   lenderHandoverAt?: string | null;

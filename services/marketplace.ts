@@ -39,7 +39,7 @@ export type Action =
   | { type: "readChat"; conversationId: string }
   | { type: "saveListing"; listing: Listing }
   | { type: "startDeliveryCheckout"; id: string; listingId: string; start: string; end: string; deliveryAddress: string;
-      deliveryPostcode: string }
+      deliveryPostcode: string; returnPickupTime: string }
   | { type: "correctBookingDeliveryAddress"; bookingId: string; deliveryAddress: string; deliveryPostcode: string }
   | { type: "payDeliveryDemo"; bookingId: string; receiptReference: string }
   | { type: "completeRentalCheckout"; bookingId: string; paymentMethod: string; insuranceSelected?: boolean }
@@ -699,6 +699,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Complete identity verification and resolve account restrictions before booking.");
       requireThat((riskFor(state, user).score ?? 0) >= 30, "This rental requires CurRENT platform review.");
       requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery destination.");
+      requireThat(action.returnPickupTime && action.returnPickupTime.trim().length > 0,
+        "Select a scheduled return pickup time.");
       const outboundEstimate = estimateAutomaticDelivery(listing.pickupPostcode, action.deliveryPostcode);
       const returnEstimate = estimateAutomaticDelivery(action.deliveryPostcode, listing.pickupPostcode);
       requireThat(outboundEstimate && returnEstimate, "Enter a valid Malaysian postcode to automatically estimate the delivery fee.");
@@ -716,6 +718,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         id: action.id, listingId: listing.id, title: listing.title, image: listing.imageUrl,
         ownerId: listing.ownerId, renterId: user.id, start: action.start, end: action.end,
         scheduledPickup: action.start, scheduledReturn: action.end,
+        returnPickupTime: action.returnPickupTime,
         durationMinutes: calculateDurationMinutes(action.start, action.end),
         cancellationCutoff: calculateCancellationCutoff(action.start),
         collectionMethod: "Delivery Only", deliveryAddress: action.deliveryAddress,

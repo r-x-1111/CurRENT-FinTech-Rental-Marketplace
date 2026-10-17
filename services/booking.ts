@@ -151,6 +151,18 @@ export function formatMalaysiaDateTime(timestamp: string | number): string {
   return `${day} ${month} ${year}, ${hourStr}:${min} ${ampm}`;
 }
 
+/**
+ * Displays the renter's scheduled courier collection date and time: the booking's end date,
+ * combined with the separately-selected `returnPickupTime` (never the billing end-timestamp's
+ * own time-of-day, which stays locked to the pickup time for 24-hour rental billing). Falls
+ * back to the booking's existing scheduled end time for historical bookings recorded before
+ * return pickup time selection existed, so their original confirmed schedule is preserved.
+ */
+export function formatScheduledReturnPickup(booking: { end: string; returnPickupTime?: string }): string {
+  if (!booking.returnPickupTime) return formatMalaysiaDateTime(booking.end);
+  return formatMalaysiaDateTime(toMalaysiaUtcTimestamp(malaysiaDateKey(booking.end), booking.returnPickupTime));
+}
+
 export function rentalDays(start: string, end: string) {
   const startTime = parseTimestamp(start);
   const endTime = parseTimestamp(end);

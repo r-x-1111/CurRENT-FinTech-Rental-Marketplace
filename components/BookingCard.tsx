@@ -5,6 +5,7 @@ import type { Booking } from "../types/marketplace";
 import { useMarketplace } from "../context/Marketplace";
 import {
   formatMalaysiaDateTime,
+  formatScheduledReturnPickup,
   getEffectiveBookingStatus,
   money,
 } from "../services/booking";
@@ -84,9 +85,7 @@ export function BookingCard({
   const startFormatted = formatMalaysiaDateTime(
     booking.start,
   );
-  const endFormatted = formatMalaysiaDateTime(
-    booking.end,
-  );
+  const endFormatted = formatScheduledReturnPickup(booking);
 
   let dateInfo = `Scheduled rental start: ${startFormatted}`;
   if (isActive || isReturnPending) {
