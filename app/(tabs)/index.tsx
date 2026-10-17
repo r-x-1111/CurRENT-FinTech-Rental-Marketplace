@@ -119,36 +119,39 @@ export default function HomeScreen() {
           locations={[0, 0.4, 0.72, 1]}
           start={{ x: 0, y: 0.15 }}
           end={{ x: 1, y: 0.75 }}
-          style={[styles.heroWrapper, isMobile && styles.mobileHeroWrapper]}
+          style={[styles.heroWrapper, isDesktop && styles.desktopHeroWrapper, isMobile && styles.mobileHeroWrapper]}
         >
-          {isMobile && (
-            <LinearGradient
-              pointerEvents="none"
-              colors={["#0B1F3A", "#1D4785"]}
-              start={{ x: 0.1, y: 0 }}
-              end={{ x: 0.9, y: 1 }}
-              style={styles.mobileHeroCurve}
-            />
+          {isMobile && width >= 375 && (
+            <View pointerEvents="none" style={styles.mobileHeroProductPhoto}>
+              <Image source={{ uri: "/hero/hero-products.png" }} style={styles.mobileHeroProductPhotoImg} resizeMode="cover" />
+              <LinearGradient
+                colors={["#0B1F3A", "#0B1F3A", "#14346Bcc", "#14346B55", "transparent"]}
+                locations={[0, 0.15, 0.4, 0.65, 1]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
           )}
-          {isMobile && width >= 375 && <View pointerEvents="none" style={styles.mobileHeroProduct}>
-            <Image source={{ uri: "/products/sony-a7iii.jpg" }} style={styles.mobileHeroProductImage} />
-          </View>}
-          {isDesktop && <View pointerEvents="none" style={styles.desktopHeroGlow} />}
           {isDesktop && (
-            <LinearGradient
-              pointerEvents="none"
-              colors={["#071B38", "#1D4785"]}
-              start={{ x: 0.1, y: 0.1 }}
-              end={{ x: 0.9, y: 0.9 }}
-              style={styles.desktopHeroCurve}
-            />
+            <View pointerEvents="none" style={styles.desktopHeroPhoto}>
+              <Image source={{ uri: "/hero/hero-products.png" }} style={styles.desktopHeroPhotoImg} resizeMode="cover" />
+              <LinearGradient
+                colors={["#0B1F3A", "#0B1F3Aee", "#0B1F3A77", "transparent", "transparent", "#0B1F3A"]}
+                locations={[0, 0.22, 0.48, 0.66, 0.76, 0.9]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
           )}
-          <View style={styles.heroContainer}>
+          <View style={[styles.heroContainer, isDesktop && styles.desktopHeroContainer]}>
             <View
               style={[
                 styles.heroContent,
                 isMobile && styles.mobileHeroContent,
-                { width: isDesktop ? "58%" : "100%" },
+                isDesktop && styles.desktopHeroContent,
+                { width: isDesktop ? "45%" : "100%" },
               ]}
             >
               <View style={styles.heroTopRow}>
@@ -163,7 +166,7 @@ export default function HomeScreen() {
                       : "Notifications"
                   }
                   onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
-                  style={styles.notificationButton}
+                  style={[styles.notificationButton, isDesktop && styles.desktopNotificationButton, isDesktop && { left: width * 0.235 - 20 }]}
                 >
                   <Ionicons
                     name="notifications-outline"
@@ -192,7 +195,7 @@ export default function HomeScreen() {
               </Text>
 
               {/* Search Bar Container */}
-              <View style={[styles.searchContainer, isMobile && styles.mobileSearchContainer]}>
+              <View style={[styles.searchContainer, isDesktop && styles.desktopSearchContainer, isMobile && styles.mobileSearchContainer]}>
                 <View style={styles.searchInputRow}>
                   <Ionicons name="search-outline" size={19} color={colors.muted} />
                   <TextInput
@@ -289,7 +292,8 @@ export default function HomeScreen() {
                 </ScrollView>
               )}
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={styles.mobileCategoryScroll} contentContainerStyle={styles.categoryChips}>
+                <Text style={styles.categoryLabel}>Explore by category</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator keyboardShouldPersistTaps="handled" style={styles.mobileCategoryScroll} contentContainerStyle={styles.categoryChips}>
                   {visibleCategories.map((category) => {
                     const selected = mobileCategory === category;
                     return (
@@ -301,42 +305,7 @@ export default function HomeScreen() {
                 </ScrollView>
             </View>
 
-            {isDesktop && (
-              <View style={styles.heroShowcase}>
-                <Pressable
-                  onPress={() => router.push("/listing/sony-a7iii")}
-                  style={[styles.floatingCard, styles.floatCard1]}
-                >
-                  <Image source={{ uri: "/products/sony-a7iii.jpg" }} style={styles.floatImg} />
-                  <View style={styles.floatBody}>
-                    <Text style={styles.floatTitle}>Sony A7 III</Text>
-                    <Text style={styles.floatPrice}>RM45/day · PJ</Text>
-                  </View>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => router.push("/listing/ps5-console")}
-                  style={[styles.floatingCard, styles.floatCard2]}
-                >
-                  <Image source={{ uri: "/products/ps5-console.jpg" }} style={styles.floatImg} />
-                  <View style={styles.floatBody}>
-                    <Text style={styles.floatTitle}>PlayStation 5</Text>
-                    <Text style={styles.floatPrice}>RM35/day · Subang</Text>
-                  </View>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => router.push("/listing/portable-projector")}
-                  style={[styles.floatingCard, styles.floatCard3]}
-                >
-                  <Image source={{ uri: "/products/portable-projector.jpg" }} style={styles.floatImg} />
-                  <View style={styles.floatBody}>
-                    <Text style={styles.floatTitle}>Portable Projector</Text>
-                    <Text style={styles.floatPrice}>RM28/day · KL</Text>
-                  </View>
-                </Pressable>
-              </View>
-            )}
+            {isDesktop && <View style={styles.heroShowcase} />}
           </View>
         </LinearGradient>
 
@@ -414,62 +383,47 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 36,
+    overflow: "hidden",
   },
+  desktopHeroWrapper: { paddingLeft: "20%", paddingRight: "7.5%", paddingTop: 26, paddingBottom: 26 },
   mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 10, overflow: "hidden" },
-  mobileHeroCurve: { position: "absolute", right: -100, top: 0, width: 260, height: 320, borderRadius: 160, opacity: 0.16 },
-  mobileHeroProduct: { position: "absolute", right: 16, top: 150, width: 118, height: 92, borderRadius: 15, backgroundColor: colors.white, padding: 4, transform: [{ rotate: "7deg" }], shadowColor: "#061A38", shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
-  mobileHeroProductImage: { width: "100%", height: "100%", borderRadius: 11 },
-  desktopHeroCurve: { position: "absolute", right: -160, top: -60, width: 520, height: 580, borderRadius: 280, opacity: 0.14 },
-  desktopHeroGlow: { position: "absolute", right: 30, top: 40, width: 420, height: 420, borderRadius: 210, backgroundColor: "#1D4785", opacity: 0.16, shadowColor: "#1D4785", shadowOpacity: 0.5, shadowRadius: 120, shadowOffset: { width: 0, height: 0 } },
+  mobileHeroProductPhoto: {
+    position: "absolute",
+    right: -22,
+    top: 0,
+    bottom: 0,
+    width: 260,
+    overflow: "hidden",
+  },
+  mobileHeroProductPhotoImg: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    right: 0,
+    // Wider than the visible container and right-anchored, so the overflow:hidden parent
+    // crops away the image's own empty left-hand space and keeps the product cluster in view.
+    width: "170%",
+    height: "100%",
+  },
+  desktopHeroPhoto: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: "100%",
+    overflow: "hidden",
+  },
+  desktopHeroPhotoImg: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    right: "8%",
+    width: "78%",
+    height: "100%",
+  },
   heroShowcase: {
     width: "38%",
     height: 320,
-    position: "relative",
-  },
-  floatingCard: {
-    position: "absolute",
-    backgroundColor: "white",
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#061A38",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 18,
-    elevation: 8,
-    width: 175,
-  },
-  floatCard1: {
-    top: 5,
-    left: 10,
-    transform: [{ rotate: "-5deg" }],
-  },
-  floatCard2: {
-    top: 35,
-    right: 10,
-    transform: [{ rotate: "4deg" }],
-  },
-  floatCard3: {
-    bottom: 20,
-    left: 70,
-    transform: [{ rotate: "-3deg" }],
-  },
-  floatImg: {
-    width: "100%",
-    height: 95,
-  },
-  floatBody: {
-    padding: 9,
-    gap: 2,
-  },
-  floatTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.navy,
-  },
-  floatPrice: {
-    fontSize: 11,
-    color: colors.blue,
-    fontWeight: "600",
   },
   heroContainer: {
     maxWidth: 1180,
@@ -479,9 +433,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  desktopHeroContainer: { maxWidth: 1600, alignItems: "flex-start" },
   heroContent: {
     gap: 16,
   },
+  desktopHeroContent: { gap: 10, maxWidth: 620 },
   mobileHeroContent: { gap: 10 },
   heroTopRow: {
     flexDirection: "row",
@@ -497,6 +453,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     position: "relative",
   },
+  desktopNotificationButton: { position: "absolute", top: 0, zIndex: 2 },
   notificationCount: {
     minWidth: 17,
     height: 17,
@@ -557,6 +514,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 3,
   },
+  desktopSearchContainer: { marginTop: 2, maxWidth: 620, padding: 5, gap: 5 },
   mobileSearchContainer: { flexDirection: "column", alignItems: "stretch", gap: 5, marginTop: 2, padding: 7 },
   desktopSearchActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   mobileSearchActions: { flexDirection: "row", alignItems: "stretch", gap: 7 },
@@ -632,6 +590,7 @@ const styles = StyleSheet.create({
     color: colors.navy,
     fontWeight: "500",
   },
+  categoryLabel: { color: colors.white, fontSize: 12, fontWeight: "700" },
   mobileCategoryScroll: { marginTop: 4, flexGrow: 0 },
   categoryChips: { alignItems: "center", gap: 8, paddingVertical: 3, paddingRight: 18 },
   categoryChip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", cursor: "pointer" },
