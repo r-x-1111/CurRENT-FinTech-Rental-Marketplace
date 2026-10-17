@@ -160,27 +160,44 @@ export default function ListingDetailScreen() {
     user?.defaultDeliveryAddressIndex ?? 0,
   );
 
-  // The user's saved address can still be loading (async session restore) when this
-  // screen mounts directly, e.g. a hard refresh landing straight on a listing URL —
-  // the useState initializers above would then lock in as empty forever. Re-sync once
-  // the account's saved address data actually arrives.
-  const hydratedAddressFor = useRef<string | null>(null);
+  // The user's saved address can still be loading (async session restore), or this
+  // screen instance can be reused by the navigator across listings/logins without
+  // remounting, so the useState initializers above can lock in stale or empty values.
+  // Re-sync from the account's saved address whenever it actually changes, but stop
+  // once the renter has started editing the form themselves.
+  const addressEditedRef = useRef(false);
+  const lastSyncedAddressKey = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (!user?.id || hydratedAddressFor.current === user.id) return;
-    hydratedAddressFor.current = user.id;
+    if (!user?.id || addressEditedRef.current) return;
     const saved = user.savedDeliveryAddress;
-    if (saved || user.name || user.phone) {
-      setRecipientName(saved?.recipientName || user.name || "");
-      setDeliveryPhone(saved?.phone || user.phone || "");
-      setStreetAddress(saved?.addressLine1 || "");
-      setUnit(saved?.addressLine2 || "");
-      setPostcode(saved?.postcode || "");
-      setCity(saved?.city || "");
-      setStateName(saved?.state || "");
-      setDeliveryNotes(saved?.instructions || "");
-    }
+    const savedKey = saved ? JSON.stringify(saved) : "";
+    if (lastSyncedAddressKey.current === savedKey) return;
+    lastSyncedAddressKey.current = savedKey;
+    setRecipientName(saved?.recipientName || user.name || "");
+    setDeliveryPhone(saved?.phone || user.phone || "");
+    setStreetAddress(saved?.addressLine1 || "");
+    setUnit(saved?.addressLine2 || "");
+    setPostcode(saved?.postcode || "");
+    setCity(saved?.city || "");
+    setStateName(saved?.state || "");
+    setDeliveryNotes(saved?.instructions || "");
     setSelectedDemoAddressIndex(user.defaultDeliveryAddressIndex ?? 0);
   }, [user?.id, user?.savedDeliveryAddress, user?.name, user?.phone, user?.defaultDeliveryAddressIndex]);
+
+  function markAddressEdited<T>(setter: (value: T) => void) {
+    return (value: T) => {
+      addressEditedRef.current = true;
+      setter(value);
+    };
+  }
+  const onRecipientNameChange = markAddressEdited(setRecipientName);
+  const onDeliveryPhoneChange = markAddressEdited(setDeliveryPhone);
+  const onStreetAddressChange = markAddressEdited(setStreetAddress);
+  const onUnitChange = markAddressEdited(setUnit);
+  const onPostcodeChange = markAddressEdited(setPostcode);
+  const onCityChange = markAddressEdited(setCity);
+  const onStateNameChange = markAddressEdited(setStateName);
+  const onDeliveryNotesChange = markAddressEdited(setDeliveryNotes);
 
   const { width } = useWindowDimensions();
 
@@ -452,6 +469,7 @@ export default function ListingDetailScreen() {
   function selectDemoAddress(index: number) {
     const address = demoSavedAddresses[index];
     if (!address) return;
+    addressEditedRef.current = true;
     setSelectedDemoAddressIndex(index);
     setRecipientName(address.recipientName);
     setDeliveryPhone(address.phone);
@@ -1061,7 +1079,7 @@ export default function ListingDetailScreen() {
                     <TextInput
                       style={styles.addressInput}
                       value={recipientName}
-                      onChangeText={setRecipientName}
+                      onChangeText={onRecipientNameChange}
                       placeholder="Full Name"
                     />
                   </View>
@@ -1070,7 +1088,7 @@ export default function ListingDetailScreen() {
                     <TextInput
                       style={styles.addressInput}
                       value={deliveryPhone}
-                      onChangeText={setDeliveryPhone}
+                      onChangeText={onDeliveryPhoneChange}
                       placeholder="+60 12 345 6789"
                     />
                   </View>
@@ -1081,7 +1099,7 @@ export default function ListingDetailScreen() {
                   <TextInput
                     style={styles.addressInput}
                     value={streetAddress}
-                    onChangeText={setStreetAddress}
+                    onChangeText={onStreetAddressChange}
                     placeholder="Street name & number"
                   />
                 </View>
@@ -1091,7 +1109,7 @@ export default function ListingDetailScreen() {
                   <TextInput
                     style={styles.addressInput}
                     value={unit}
-                    onChangeText={setUnit}
+                    onChangeText={onUnitChange}
                     placeholder="Unit, floor or building"
                   />
                 </View>
@@ -1102,7 +1120,7 @@ export default function ListingDetailScreen() {
                     <TextInput
                       style={styles.addressInput}
                       value={postcode}
-                      onChangeText={setPostcode}
+                      onChangeText={onPostcodeChange}
                       placeholder="47500"
                     />
                   </View>
@@ -1111,20 +1129,26 @@ export default function ListingDetailScreen() {
                     <TextInput
                       style={styles.addressInput}
                       value={city}
-                      onChangeText={setCity}
+                      onChangeText={onCityChange}
                       placeholder="City or district"
                     />
                   </View>
                 </View>
 
-                <MalaysiaStateSelector value={stateName} onChange={setStateName} />
+                <MalaysiaStateSelector
+                  value={stateName}
+                  onChange={onStateNameChange}
+                  labelStyle={styles.inputLabel}
+                  inputStyle={styles.addressInput}
+                  valueStyle={{ fontSize: 12 }}
+                />
 
                 <View>
                   <Text style={styles.inputLabel}>Delivery Instructions (Optional)</Text>
                   <TextInput
                     style={styles.addressInput}
                     value={deliveryNotes}
-                    onChangeText={setDeliveryNotes}
+                    onChangeText={onDeliveryNotesChange}
                     placeholder="Optional delivery instructions"
                   />
                 </View>
