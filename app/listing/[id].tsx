@@ -1080,7 +1080,7 @@ export default function ListingDetailScreen() {
                 <Text style={styles.fieldSubtext}>Demo scheduling only — not a live GrabExpress courier availability slot.</Text>
               </View>
 
-              {effectivePickupTime && effectiveReturnPickupTime && start && end && (
+              {!!(effectivePickupTime && effectiveReturnPickupTime && start && end) && (
                 <View style={styles.returnTimeCard}>
                   <Text style={styles.returnTimeLabel}>Delivery & Return Schedule</Text>
                   <View style={styles.returnTimeRow}>
