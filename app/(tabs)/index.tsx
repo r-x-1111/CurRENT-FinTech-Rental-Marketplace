@@ -113,12 +113,35 @@ export default function HomeScreen() {
         {/* =========================================================================
             1. HERO SECTION (Canva Page 2 Dark Navy Anchor)
            ========================================================================= */}
-        <LinearGradient colors={["#061A38", colors.navy, "#2463FF"]} locations={[0, 0.55, 1]} style={[styles.heroWrapper, isMobile && styles.mobileHeroWrapper]}>
-          {isMobile && <View pointerEvents="none" style={styles.mobileHeroCurve} />}
+        <LinearGradient
+          colors={["#071B38", "#0B1F3A", "#14346B", "#1D4785"]}
+          locations={[0, 0.4, 0.72, 1]}
+          start={{ x: 0, y: 0.15 }}
+          end={{ x: 1, y: 0.75 }}
+          style={[styles.heroWrapper, isMobile && styles.mobileHeroWrapper]}
+        >
+          {isMobile && (
+            <LinearGradient
+              pointerEvents="none"
+              colors={["#0B1F3A", "#1D4785"]}
+              start={{ x: 0.1, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={styles.mobileHeroCurve}
+            />
+          )}
           {isMobile && width >= 375 && <View pointerEvents="none" style={styles.mobileHeroProduct}>
             <Image source={{ uri: "/products/sony-a7iii.jpg" }} style={styles.mobileHeroProductImage} />
           </View>}
-          {isDesktop && <View pointerEvents="none" style={styles.desktopHeroCurve} />}
+          {isDesktop && <View pointerEvents="none" style={styles.desktopHeroGlow} />}
+          {isDesktop && (
+            <LinearGradient
+              pointerEvents="none"
+              colors={["#071B38", "#1D4785"]}
+              start={{ x: 0.1, y: 0.1 }}
+              end={{ x: 0.9, y: 0.9 }}
+              style={styles.desktopHeroCurve}
+            />
+          )}
           <View style={styles.heroContainer}>
             <View
               style={[
@@ -381,10 +404,11 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
   },
   mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 10, overflow: "hidden" },
-  mobileHeroCurve: { position: "absolute", right: -86, top: 10, width: 250, height: 310, borderRadius: 150, backgroundColor: "#2463FF", opacity: 0.28 },
+  mobileHeroCurve: { position: "absolute", right: -100, top: 0, width: 260, height: 320, borderRadius: 160, opacity: 0.16 },
   mobileHeroProduct: { position: "absolute", right: 16, top: 150, width: 118, height: 92, borderRadius: 15, backgroundColor: colors.white, padding: 4, transform: [{ rotate: "7deg" }], shadowColor: "#061A38", shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
   mobileHeroProductImage: { width: "100%", height: "100%", borderRadius: 11 },
-  desktopHeroCurve: { position: "absolute", right: -140, top: -40, width: 460, height: 520, borderRadius: 260, backgroundColor: "#2463FF", opacity: 0.22 },
+  desktopHeroCurve: { position: "absolute", right: -160, top: -60, width: 520, height: 580, borderRadius: 280, opacity: 0.14 },
+  desktopHeroGlow: { position: "absolute", right: 30, top: 40, width: 420, height: 420, borderRadius: 210, backgroundColor: "#1D4785", opacity: 0.16, shadowColor: "#1D4785", shadowOpacity: 0.5, shadowRadius: 120, shadowOffset: { width: 0, height: 0 } },
   heroShowcase: {
     width: "38%",
     height: 320,
