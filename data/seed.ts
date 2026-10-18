@@ -194,7 +194,9 @@ export function createAdminDemoSeed(): Marketplace {
       start: "2026-11-02T02:00:00Z",
       end: "2026-11-04T02:00:00Z",
       collectionMethod: "Delivery Only",
-      deliveryAddress: "Mont Kiara, Kuala Lumpur",
+      // Cross-state (Petaling Jaya -> Penang): demonstrates the Domestic Courier (Demo) path.
+      deliveryAddress: "George Town, Pulau Pinang",
+      deliveryPostcode: "10000",
       status: "upcoming",
       quote: {
         days: 2,
@@ -283,23 +285,25 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-active-1",
-      listingId: "portable-projector",
-      title: "Portable Projector",
-      image: "/products/portable-projector.jpg",
-      ownerId: "owner-daniel",
+      listingId: "ps5-console",
+      title: "PlayStation 5 + Gamepad",
+      image: "/products/ps5-console.jpg",
+      ownerId: "owner-sarah",
       renterId: "demo-renter",
       start: "2026-10-09T14:00:00Z",
       end: "2026-10-15T14:00:00Z",
       collectionMethod: "Delivery Only",
-      deliveryAddress: "Puchong, Selangor",
+      // Local (Subang Jaya -> Kuala Lumpur): stays on the existing GrabExpress path.
+      deliveryAddress: "Kuala Lumpur",
+      deliveryPostcode: "50400",
       status: "active",
       quote: {
         days: 6,
-        rentalFee: 168,
-        serviceFee: 8.4,
-        deposit: 120, // 10% of RM1,200 = RM120
+        rentalFee: 210, // RM35/day x 6 days
+        serviceFee: 10.5,
+        deposit: 240, // Medium Risk: 10% of RM2,400 = RM240
         protection: 0,
-        total: 296.4,
+        total: 460.5,
       },
       riskScore: 78,
       payment: "paid",
@@ -389,23 +393,28 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-return-due-1",
-      listingId: "monitor-27",
-      title: '27" Computer Monitor',
-      image: "/products/monitor-27.jpg",
-      ownerId: "owner-daniel",
+      // Fishing Rod Set's 130cm length exceeds every local vehicle AND the courier's standard
+      // parcel limit (demonstrates the "no quote available" edge case, not a working delivery),
+      // so this uses Pressure Washer instead — still cross-state and courier-eligible.
+      listingId: "pressure-washer",
+      title: "Pressure Washer",
+      image: "/products/pressure-washer.jpg",
+      ownerId: "owner-aiman",
       renterId: "demo-renter",
       start: "2026-10-05T10:00:00Z",
       end: "2026-10-10T10:00:00Z",
       collectionMethod: "Delivery Only",
-      deliveryAddress: "Cheras, Kuala Lumpur",
+      // Cross-state (Kuantan, Pahang -> Petaling Jaya): demonstrates the Domestic Courier (Demo) path.
+      deliveryAddress: "Petaling Jaya, Selangor",
+      deliveryPostcode: "46100",
       status: "return_pending",
       quote: {
         days: 5,
-        rentalFee: 90,
-        serviceFee: 5,
-        deposit: 90,
+        rentalFee: 175, // RM35/day x 5 days
+        serviceFee: 8.75,
+        deposit: 110, // Medium Risk: 10% of RM1,100 = RM110
         protection: 0,
-        total: 185,
+        total: 293.75,
       },
       riskScore: 78,
       payment: "paid",
@@ -501,23 +510,27 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-cancelled-1",
-      listingId: "microwave",
-      title: "Tabletop Microwave Oven",
-      image: "/products/microwave.jpg",
+      // Portable Party Speaker is demo-renter's own listing (can't rent your own item), so this
+      // uses Luxury Watch instead — same Mont Kiara, Kuala Lumpur pickup the task's table specifies.
+      listingId: "luxury-watch",
+      title: "Luxury Watch",
+      image: "/products/luxury-watch.jpg",
       ownerId: "owner-daniel",
       renterId: "demo-renter",
       start: "2026-11-20T10:00:00Z",
       end: "2026-11-22T10:00:00Z",
       collectionMethod: "Delivery Only",
-      deliveryAddress: "Ampang, Kuala Lumpur",
+      // Cross-state (Mont Kiara, KL -> Melaka): demonstrates the Domestic Courier (Demo) path.
+      deliveryAddress: "Melaka, Melaka",
+      deliveryPostcode: "75000",
       status: "cancelled",
       quote: {
         days: 2,
-        rentalFee: 30,
-        serviceFee: 5,
-        deposit: 50,
+        rentalFee: 200, // RM100/day x 2 days
+        serviceFee: 10,
+        deposit: 600, // Medium Risk: 10% of RM6,000 = RM600
         protection: 0,
-        total: 85,
+        total: 810,
       },
       riskScore: 78,
       payment: "refunded",
@@ -593,23 +606,25 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-disputed-1",
-      listingId: "pressure-washer",
-      title: "Pressure Washer",
-      image: "/products/pressure-washer.jpg",
-      ownerId: "owner-aiman",
+      listingId: "monitor-27",
+      title: '27" Computer Monitor',
+      image: "/products/monitor-27.jpg",
+      ownerId: "owner-daniel",
       renterId: "demo-renter",
       start: "2026-09-20T10:00:00Z",
       end: "2026-09-22T10:00:00Z",
       collectionMethod: "Delivery Only",
-      deliveryAddress: "Mont Kiara, Kuala Lumpur",
+      // Local (Kuala Lumpur -> Shah Alam): stays on the existing GrabExpress path.
+      deliveryAddress: "Shah Alam, Selangor",
+      deliveryPostcode: "40000",
       status: "disputed",
       quote: {
         days: 2,
-        rentalFee: 70,
+        rentalFee: 36, // RM18/day x 2 days
         serviceFee: 5,
-        deposit: 110,
+        deposit: 90, // Medium Risk: 10% of RM900 = RM90
         protection: 0,
-        total: 185,
+        total: 131,
       },
       riskScore: 78,
       payment: "paid",
@@ -1233,12 +1248,12 @@ export function createAdminDemoSeed(): Marketplace {
       read: false,
     },
 
-    // Thread 2: Active rental (Portable Projector)
+    // Thread 2: Active rental (PlayStation 5 + Gamepad)
     {
       id: "msg-4",
       bookingId: "demo-booking-active-1",
-      authorId: "owner-daniel",
-      text: "Hi Alex, please confirm the projector arrived safely and HDMI cable is in the pouch.",
+      authorId: "owner-sarah",
+      text: "Hi Alex, please confirm the PS5 arrived safely and both DualSense controllers are in the box.",
       createdAt: "2026-10-09T14:15:00Z",
       read: true,
     },
@@ -1246,25 +1261,25 @@ export function createAdminDemoSeed(): Marketplace {
       id: "msg-5",
       bookingId: "demo-booking-active-1",
       authorId: "demo-renter",
-      text: "Delivered in perfect condition! Tested the 1080p output and speakers, working great.",
+      text: "Delivered in perfect condition! Tested the controllers and HDMI output, working great.",
       createdAt: "2026-10-09T14:20:00Z",
       read: true,
     },
 
-    // Thread 3: Return Due rental (27\" Monitor)
+    // Thread 3: Return Due rental (Pressure Washer)
     {
       id: "msg-6",
       bookingId: "demo-booking-return-due-1",
       authorId: "demo-renter",
-      text: "Hi Daniel, I have submitted the return condition photos and completed check-out.",
+      text: "Hi Aiman, I have submitted the return condition photos and completed check-out.",
       createdAt: "2026-10-10T09:35:00Z",
       read: true,
     },
     {
       id: "msg-7",
       bookingId: "demo-booking-return-due-1",
-      authorId: "owner-daniel",
-      text: "Received notification! Our delivery driver is on the way to collect the package.",
+      authorId: "owner-aiman",
+      text: "Received notification! Our courier driver is on the way to collect the package.",
       createdAt: "2026-10-10T09:40:00Z",
       read: false,
     },
@@ -1387,11 +1402,11 @@ export function createAdminDemoSeed(): Marketplace {
       bookingId: "demo-booking-active-1",
       authorId: "demo-renter",
       kind: "check_in",
-      photo: "/products/portable-projector.jpg",
+      photo: "/products/ps5-console.jpg",
       photos: sampleConditionImages,
       videos: sampleVideos,
       notes:
-        "Projector, remote, and power cord received in excellent working order.",
+        "PS5 console, both controllers, and HDMI cable received in excellent working order.",
       createdAt: "2026-10-09T14:30:00Z",
     },
     {
@@ -1399,10 +1414,10 @@ export function createAdminDemoSeed(): Marketplace {
       bookingId: "demo-booking-return-due-1",
       authorId: "demo-renter",
       kind: "check_in",
-      photo: "/products/monitor-27.jpg",
+      photo: "/products/pressure-washer.jpg",
       photos: sampleConditionImages,
       videos: sampleVideos,
-      notes: "Monitor and cables inspected after delivery with zero scratches.",
+      notes: "Pressure washer and hose attachment inspected after delivery with zero damage.",
       createdAt: "2026-10-07T10:15:00Z",
     },
     {
@@ -1445,22 +1460,22 @@ export function createAdminDemoSeed(): Marketplace {
       bookingId: "demo-booking-return-due-1",
       authorId: "demo-renter",
       kind: "check_out",
-      photo: "/products/monitor-27.jpg",
+      photo: "/products/pressure-washer.jpg",
       photos: sampleConditionImages,
       videos: sampleVideos,
       notes:
-        "Monitor screen flawless, power brick, USB-C and HDMI cables all enclosed in original foam.",
+        "Pressure washer, hose and foam lance all enclosed cleanly with no visible damage.",
       createdAt: "2026-10-10T09:30:00Z",
     },
     {
       id: "ev-4",
       bookingId: "demo-booking-disputed-1",
-      authorId: "owner-aiman",
+      authorId: "owner-daniel",
       kind: "dispute",
-      photo: "/products/pressure-washer.jpg",
+      photo: "/products/monitor-27.jpg",
       photos: sampleConditionImages,
       videos: sampleVideos,
-      notes: "High pressure nozzle tip shows crack upon return inspection.",
+      notes: "Screen shows a hairline crack in the bottom corner upon return inspection.",
       createdAt: "2026-09-22T11:30:00Z",
     },
   ];
@@ -1472,8 +1487,8 @@ export function createAdminDemoSeed(): Marketplace {
     {
       id: "disp-1",
       bookingId: "demo-booking-disputed-1",
-      authorId: "owner-aiman",
-      reason: "High pressure nozzle tip shows crack upon return inspection.",
+      authorId: "owner-daniel",
+      reason: "Screen shows a hairline crack in the bottom corner upon return inspection.",
       category: "minor_damage",
       status: "under_review",
       createdAt: "2026-09-22T11:30:00Z",
@@ -1613,7 +1628,7 @@ export function createAdminDemoSeed(): Marketplace {
       id: "notif-4",
       userId: "demo-renter",
       title:
-        "Lender dispatched item for Portable Projector. Please acknowledge receipt upon delivery.",
+        "Lender dispatched item for PlayStation 5 + Gamepad. Please acknowledge receipt upon delivery.",
       bookingId: "demo-booking-active-1",
       read: true,
       createdAt: "2026-10-09T14:05:00Z",
@@ -1622,7 +1637,7 @@ export function createAdminDemoSeed(): Marketplace {
       id: "notif-5",
       userId: "demo-renter",
       title:
-        'Return inspection pending: Condition evidence submitted for 27" Computer Monitor.',
+        "Return inspection pending: Condition evidence submitted for Pressure Washer.",
       bookingId: "demo-booking-return-due-1",
       read: false,
       createdAt: "2026-10-10T09:35:00Z",

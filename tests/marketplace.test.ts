@@ -38,7 +38,7 @@ import {
   toMalaysiaUtcTimestamp,
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
-import { deriveDisplayDelivery, eligibleDeliveryVehicles, quoteAutomaticVehicleDelivery, quoteDemoDelivery } from "../services/delivery";
+import { calculateChargeableWeightKg, calculateVolumetricWeightKg, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, eligibleDeliveryVehicles, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, quoteDemoDelivery, selectListingDeliveryVehicle } from "../services/delivery";
 import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../services/geo";
 import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
 import { evaluateRentalOutcome } from "../services/riskScore";
@@ -421,15 +421,22 @@ test("Lender Rental Details computes the Ergonomic Office Chair delivery fee wit
     assert.ok(display.fee != null, "Delivery fee must be calculated, not unavailable");
 
     // Must be the exact same figures the renter-side checkout would have calculated —
-    // the same reused formula per leg, combined into a two-way total, not an independent guess.
-    const expectedOutbound = estimateAutomaticDelivery(listing.pickupPostcode, booking.deliveryPostcode)!;
-    const expectedReturn = estimateAutomaticDelivery(booking.deliveryPostcode, listing.pickupPostcode)!;
+    // the same reused formula per leg (quoteAutomaticVehicleDelivery, the GrabExpress-area
+    // vehicle quote actually used at checkout), combined into a two-way total, not a guess.
+    const expectedOutbound = quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode,
+      deliveryPostcode: booking.deliveryPostcode, weightKg: listing.parcelWeightKg,
+      dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
+      title: listing.title, category: listing.category, description: listing.description })!;
+    const expectedReturn = quoteAutomaticVehicleDelivery({ pickupPostcode: booking.deliveryPostcode,
+      deliveryPostcode: listing.pickupPostcode, weightKg: listing.parcelWeightKg,
+      dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
+      title: listing.title, category: listing.category, description: listing.description })!;
     assert.ok(expectedOutbound && expectedReturn);
     assert.equal(display.outboundFee, expectedOutbound.fee);
     assert.equal(display.returnFee, expectedReturn.fee);
     assert.equal(display.fee, Math.round((expectedOutbound.fee + expectedReturn.fee) * 100) / 100);
     assert.equal(display.distanceKm, expectedOutbound.distanceKm);
-    assert.equal(display.baseFare, expectedOutbound.baseFee);
+    assert.equal(display.baseFare, expectedOutbound.baseFare);
     assert.equal(display.distanceCharge, expectedOutbound.distanceCharge);
 
     assert.equal(display.status, "paid_demo");
@@ -481,11 +488,13 @@ test("historical demo rentals show separate two-way estimates without changing r
 test("demo payment repair is idempotent and leaves valid historical and customer payments unchanged", () => {
   const seeded = createSeed("admin_demo");
   const example = seeded.bookings.find((booking) => booking.id === "demo-booking-upcoming-1")!;
-  assert.equal(example.deliveryDemo?.outboundFee, 13.4);
-  assert.equal(example.deliveryDemo?.returnFee, 13.4);
-  assert.equal(example.deliveryDemo?.fee, 26.8);
+  // Cross-state (Petaling Jaya -> Penang): a Domestic Courier (Demo) receipt, not GrabExpress.
+  assert.equal(example.deliveryDemo?.provider, "J&T Express (Demo)");
+  assert.equal(example.deliveryDemo?.outboundFee, 19.5);
+  assert.equal(example.deliveryDemo?.returnFee, 19.5);
+  assert.equal(example.deliveryDemo?.fee, 39);
   assert.equal(example.deliveryDemo?.status, "paid_demo");
-  assert.equal(seeded.deliveryHistory?.find((entry) => entry.bookingId === example.id)?.fee, 26.8);
+  assert.equal(seeded.deliveryHistory?.find((entry) => entry.bookingId === example.id)?.fee, 39);
 
   const once = repairDemoDeliveryPayments(seeded);
   const twice = repairDemoDeliveryPayments(once);
@@ -508,7 +517,7 @@ test("loading an older demo session repairs missing delivery receipts once", () 
   saveDemoWorkspaceSession(accountId, old);
   const loaded = loadDemoWorkspaceSession(accountId);
   const repaired = loaded.bookings.find((item) => item.id === booking.id)!;
-  assert.equal(repaired.deliveryDemo?.fee, 26.8);
+  assert.equal(repaired.deliveryDemo?.fee, 39);
   assert.equal(repaired.deliveryDemo?.status, "paid_demo");
   assert.equal(loaded.deliveryHistory?.filter((entry) => entry.bookingId === booking.id).length, 1);
   const refreshed = loadDemoWorkspaceSession(accountId);
@@ -655,15 +664,15 @@ test("Payment & Transaction History: grouping by booking ID, subtotal/grand tota
   assert.equal(noDeliveryFigures.deliveryPaid, false);
   assert.equal(noDeliveryFigures.grandTotal, noDeliveryFigures.totals.subtotal);
 
-  // The Tabletop Microwave Oven cancellation includes the original prepaid delivery and a separate refund.
-  const microwave = renterBookings.find((b) => b.id === "demo-booking-cancelled-1")!;
-  assert.ok(microwave, "Expected the seeded Tabletop Microwave Oven cancellation booking");
-  assert.equal(microwave.title, "Tabletop Microwave Oven");
-  const microwaveFigures = ledgerFigures(microwave);
-  assert.equal(microwaveFigures.totals.subtotal, 85);
-  assert.equal(microwaveFigures.grandTotal, 85 + microwave.deliveryDemo!.fee);
-  assert.equal(microwaveFigures.refundsTotal, 85 + microwave.deliveryDemo!.fee);
-  assert.equal(microwaveFigures.netCost, 0);
+  // The Luxury Watch cancellation includes the original prepaid delivery and a separate refund.
+  const cancelledWatch = renterBookings.find((b) => b.id === "demo-booking-cancelled-1")!;
+  assert.ok(cancelledWatch, "Expected the seeded Luxury Watch cancellation booking");
+  assert.equal(cancelledWatch.title, "Luxury Watch");
+  const cancelledWatchFigures = ledgerFigures(cancelledWatch);
+  assert.equal(cancelledWatchFigures.totals.subtotal, 810);
+  assert.equal(cancelledWatchFigures.grandTotal, 810 + cancelledWatch.deliveryDemo!.fee);
+  assert.equal(cancelledWatchFigures.refundsTotal, 810 + cancelledWatch.deliveryDemo!.fee);
+  assert.equal(cancelledWatchFigures.netCost, 0);
 
   // Summary tiles: "Total paid" and "Refunded" sum cleanly across every card, and "Deposits held
   // in escrow" only counts deposits currently Held securely or Release pending.
@@ -705,6 +714,54 @@ test("manually typed Malaysian addresses (Petaling Jaya, Mont Kiara, George Town
     const twoWay = Math.round((outbound!.fee + inbound!.fee) * 100) / 100;
     assert.equal(twoWay, Math.round((outbound!.fee + inbound!.fee) * 100) / 100);
   }
+});
+
+test("Domestic Courier (Demo): volumetric weight, chargeable weight, and cross-state zone quoting", () => {
+  // Volumetric Weight (kg) = L x W x H / 6000.
+  assert.equal(calculateVolumetricWeightKg({ length: 60, width: 60, height: 60 }), 36);
+  // Chargeable Weight = MAX(actual, volumetric), rounded up to the nearest 0.5kg.
+  assert.equal(calculateChargeableWeightKg(2, { length: 60, width: 60, height: 60 }), 36);
+  assert.equal(calculateChargeableWeightKg(40, { length: 30, width: 20, height: 15 }), 40);
+  assert.equal(calculateChargeableWeightKg(1.1, { length: 10, width: 10, height: 10 }), 1.5);
+
+  // Same-state routes stay on GrabExpress — the courier quote must not fire for them.
+  assert.equal(quoteAutomaticDomesticCourier({ pickupPostcode: "46100", deliveryPostcode: "50480",
+    weightKg: 2, dimensionsCm: { length: 30, width: 20, height: 20 } }), null);
+
+  // Cross-state West Malaysia route (Petaling Jaya -> George Town, Penang) resolves a courier quote.
+  const west = quoteAutomaticDomesticCourier({ pickupPostcode: "46200", deliveryPostcode: "10000",
+    weightKg: 2, dimensionsCm: { length: 35, width: 25, height: 20 } });
+  assert.ok(west, "Expected a West Malaysia courier quote for a PJ -> Penang route");
+  assert.equal(west!.zone, "West Malaysia");
+  assert.ok(west!.fee > 0);
+  assert.equal(west!.courierName, DOMESTIC_COURIER_NAME);
+
+  // Cross-state East Malaysia route (Kuala Lumpur -> Kuching, Sarawak) uses the pricier zone.
+  const east = quoteAutomaticDomesticCourier({ pickupPostcode: "50400", deliveryPostcode: "93000",
+    weightKg: 12, dimensionsCm: { length: 55, width: 48, height: 38 } });
+  assert.ok(east, "Expected an East Malaysia courier quote for a KL -> Kuching route");
+  assert.equal(east!.zone, "East Malaysia");
+  assert.ok(east!.fee > west!.fee, "East Malaysia should cost more than the equivalent West Malaysia route");
+
+  // Multi-package items (e.g. Photo Booth Setup) price each package independently and combine.
+  const singlePackage = quoteAutomaticDomesticCourier({ pickupPostcode: "30000", deliveryPostcode: "80000",
+    weightKg: 20, dimensionsCm: { length: 85, width: 50, height: 40 } });
+  const twoPackages = quoteAutomaticDomesticCourier({ pickupPostcode: "30000", deliveryPostcode: "80000",
+    packages: [
+      { weightKg: 20, dimensionsCm: { length: 85, width: 50, height: 40 } },
+      { weightKg: 15, dimensionsCm: { length: 65, width: 50, height: 35 } },
+    ] });
+  assert.ok(singlePackage && twoPackages);
+  assert.ok(twoPackages!.fee > singlePackage!.fee, "A second package must add its own charge, not ride free");
+
+  // Oversized parcels (any side > 120cm) exceed every local vehicle AND the courier's standard
+  // parcel size — both paths must return null so the UI shows a quotation-required message
+  // instead of fabricating a vehicle or a postage fee.
+  assert.equal(selectListingDeliveryVehicle({ weightKg: 4, dimensionsCm: { length: 130, width: 20, height: 18 } }), null);
+  assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: "80000", deliveryPostcode: "80000",
+    weightKg: 4, dimensionsCm: { length: 130, width: 20, height: 18 } }), null);
+  assert.equal(quoteAutomaticDomesticCourier({ pickupPostcode: "80000", deliveryPostcode: "46200",
+    weightKg: 4, dimensionsCm: { length: 130, width: 20, height: 18 } }), null);
 });
 
 test("automatic postcode-based delivery estimate: Haversine x road factor, MAX(RM5, RM4 + distance) fee, no API and no manual distance", () => {
@@ -3172,7 +3229,7 @@ test("Section 4.4 & 16: Renter condition evidence requires >= 6 photos and >= 1 
   assert.equal(checkInRecord.videos?.length, 1);
 
   // 2. Lender cannot end rental before renter confirms return
-  state = transition(state, { type: "login", userId: "owner-daniel" });
+  state = transition(state, { type: "login", userId: "owner-sarah" });
   assert.throws(
     () =>
       transition(state, {
@@ -3201,7 +3258,7 @@ test("Section 4.4 & 16: Renter condition evidence requires >= 6 photos and >= 1 
   assert.ok(bReturnPending.renterReturnConfirmedAt);
 
   // 4. Lender confirms return (No Issue - End Rental) WITHOUT requiring photo/video upload
-  state = transition(state, { type: "login", userId: "owner-daniel" });
+  state = transition(state, { type: "login", userId: "owner-sarah" });
   state = transition(state, {
     type: "returnConfirm",
     bookingId: "demo-booking-active-1",

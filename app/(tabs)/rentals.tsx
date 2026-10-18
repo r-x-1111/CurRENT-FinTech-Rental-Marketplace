@@ -128,6 +128,7 @@ export default function RentalsScreen() {
       pickupPostcode: listing?.pickupPostcode,
       parcelWeightKg: listing?.parcelWeightKg,
       parcelDimensionsCm: listing?.parcelDimensionsCm,
+      parcelPackages: listing?.parcelPackages,
       deliveryRequirement: listing?.deliveryRequirement,
       title: listing?.title || b.title,
       category: listing?.category,
@@ -157,7 +158,7 @@ export default function RentalsScreen() {
     }
     if (delivery.status === "refunded_demo") {
       refundRows.push({
-        label: "GrabExpress delivery refund (Demo)",
+        label: delivery.method === "Domestic Courier (Demo)" ? "Domestic Courier postage refund (Demo)" : "GrabExpress delivery refund (Demo)",
         amount: delivery.fee ?? 0,
         date: (b.deliveryDemo?.refundedAt || b.cancelledAt || b.createdAt).slice(0, 10),
       });
@@ -317,15 +318,18 @@ export default function RentalsScreen() {
 
                   <View style={styles.modalDivider} />
                   <View style={styles.deliverySectionHeader}>
-                    <Ionicons name="bicycle-outline" size={16} color={colors.navy} />
-                    <Text style={styles.modalSectionTitle}>Delivery · GrabExpress (Demo)</Text>
+                    <Ionicons name={card.delivery.method === "Domestic Courier (Demo)" ? "cube-outline" : "bicycle-outline"} size={16} color={colors.navy} />
+                    <Text style={styles.modalSectionTitle}>
+                      {card.delivery.method === "Domestic Courier (Demo)" ? "Domestic Courier (Demo)" : "Delivery · GrabExpress (Demo)"}
+                    </Text>
                   </View>
                   {card.delivery.status === "self_pickup" ? (
                     <Badge text="Self-Pickup — No Delivery Fee" />
                   ) : card.delivery.fee != null ? (
                     <>
-                      <Row label="Calculated Delivery Fee (two-way)" value={money(b.deliveryDemo ? card.delivery.fee : card.delivery.estimatedTwoWayFee ?? card.delivery.fee)} />
-                      <Row label="Automatically Selected Vehicle" value={card.delivery.vehicle || "Unavailable"} />
+                      <Row label={card.delivery.method === "Domestic Courier (Demo)" ? "Calculated Two-Way Postage" : "Calculated Delivery Fee (two-way)"} value={money(b.deliveryDemo ? card.delivery.fee : card.delivery.estimatedTwoWayFee ?? card.delivery.fee)} />
+                      <Row label={card.delivery.method === "Domestic Courier (Demo)" ? "Automatically Selected Courier" : "Automatically Selected Vehicle"}
+                        value={card.delivery.method === "Domestic Courier (Demo)" ? (card.delivery.courierName || "Unavailable") : (card.delivery.vehicle || "Unavailable")} />
                       <Row label="Payment Status" value={card.delivery.status === "paid_demo" ? "Paid (Demo)" : card.delivery.status === "refunded_demo" ? "Refunded (Demo)" : "Awaiting Payment"} />
                       <Pressable accessibilityRole="button" onPress={() => setExpandedDeliveryBreakdown((prev) => {
                         const next = new Set(prev);
@@ -333,10 +337,32 @@ export default function RentalsScreen() {
                         return next;
                       })}>
                         <Text style={{ color: colors.blue, fontWeight: "700", marginTop: 2 }}>
-                          {showBreakdown ? "Hide Delivery Details" : "View Delivery Details"}
+                          {showBreakdown ? "Hide Postage Details" : "View Postage Details"}
                         </Text>
                       </Pressable>
-                      {showBreakdown && (
+                      {showBreakdown && card.delivery.method === "Domestic Courier (Demo)" && (
+                        <View style={styles.feeBreakdownBox}>
+                          <Row label="Pickup Location" value={card.delivery.origin || "Not recorded"} />
+                          <Row label="Delivery Address" value={card.delivery.destination || "Not recorded"} />
+                          <Row label="Courier" value={card.delivery.courierName || "Unavailable"} />
+                          <Row label="Shipping Zone" value={card.delivery.shippingZone || "Unavailable"} />
+                          <Row label="Chargeable Weight" value={card.delivery.chargeableWeightKg != null ? `${card.delivery.chargeableWeightKg} kg` : "Unavailable"} />
+                          {!!card.delivery.dispatchDate && <Row label="Planned Dispatch Date" value={card.delivery.dispatchDate} />}
+                          {!!(card.delivery.estimatedDeliveryRangeStart && card.delivery.estimatedDeliveryRangeEnd) &&
+                            <Row label="Estimated Delivery" value={`${card.delivery.estimatedDeliveryRangeStart} – ${card.delivery.estimatedDeliveryRangeEnd}`} />}
+                          {!!card.delivery.returnDispatchDeadline && <Row label="Return Dispatch Date" value={card.delivery.returnDispatchDeadline} />}
+                          {!!(card.delivery.estimatedReturnRangeStart && card.delivery.estimatedReturnRangeEnd) &&
+                            <Row label="Estimated Return Arrival" value={`${card.delivery.estimatedReturnRangeStart} – ${card.delivery.estimatedReturnRangeEnd}`} />}
+                          {(card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee) != null && <View style={s.row}><Text style={s.caption}>Outbound postage{b.deliveryDemo?.status === "required" || card.delivery.outboundFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee)!)}</Text></View>}
+                          {(card.delivery.returnFee ?? card.delivery.estimatedReturnFee) != null && <View style={s.row}><Text style={s.caption}>Return postage{b.deliveryDemo?.status === "required" || card.delivery.returnFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.returnFee ?? card.delivery.estimatedReturnFee)!)}</Text></View>}
+                          {card.deliveryPaid && b.deliveryDemo
+                            ? <View style={s.row}><Text style={s.bold}>Total two-way postage</Text><Text style={s.bold}>{money(b.deliveryDemo.fee)}</Text></View>
+                            : card.delivery.estimatedTwoWayFee != null && <View style={s.row}><Text style={s.bold}>Estimated two-way postage</Text><Text style={s.bold}>{money(card.delivery.estimatedTwoWayFee)}</Text></View>}
+                          <View style={s.row}><Text style={s.caption}>Postage amount paid</Text><Text style={s.caption}>{money(card.deliveryPaid ? b.deliveryDemo?.fee || 0 : 0)}</Text></View>
+                          <Row label="Payment status" value={card.delivery.status === "paid_demo" ? "Paid (Demo)" : card.delivery.status === "refunded_demo" ? "Refunded (Demo)" : "Awaiting Payment"} />
+                        </View>
+                      )}
+                      {showBreakdown && card.delivery.method !== "Domestic Courier (Demo)" && (
                         <View style={styles.feeBreakdownBox}>
                           <Row label="Pickup Location" value={card.delivery.origin || "Not recorded"} />
                           <Row label="Delivery Address" value={card.delivery.destination || "Not recorded"} />

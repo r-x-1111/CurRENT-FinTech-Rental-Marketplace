@@ -113,7 +113,7 @@ export interface Booking {
   /** Optional Shopee-inspired Rental Protection (demo), chosen and priced at CurRENT rental payment time. */
   insurance?: { selected: true; premium: number; referralIncome: number } | null;
   deliveryDemo?: {
-    provider: "GrabExpress (Simulation)";
+    provider: "GrabExpress (Simulation)" | "J&T Express (Demo)";
     origin: string;
     destination: string;
     /** Combined two-way (outbound + return) delivery fee — the actual amount charged. */
@@ -131,6 +131,18 @@ export interface Booking {
     distanceCharge?: number;
     minimumFare?: number;
     pricingReference?: string;
+    // Domestic Courier (Demo) fields — set only when provider is "J&T Express (Demo)".
+    shippingZone?: "West Malaysia" | "East Malaysia";
+    chargeableWeightKg?: number;
+    volumetricWeightKg?: number;
+    dispatchDate?: string;
+    estimatedDeliveryRangeStart?: string;
+    estimatedDeliveryRangeEnd?: string;
+    returnDispatchDeadline?: string;
+    estimatedReturnRangeStart?: string;
+    estimatedReturnRangeEnd?: string;
+    outboundTrackingRef?: string;
+    returnTrackingRef?: string;
     status: "required" | "paid_demo" | "refunded_demo";
     receiptReference?: string;
     paidAt?: string;
@@ -160,6 +172,10 @@ export interface Booking {
    * independent of scheduledReturn's time-of-day, which stays anchored to the pickup time for
    * 24-hour rental billing. Purely a logistics/display field; never changes rental duration or fees. */
   returnPickupTime?: string;
+  /** Domestic Courier (Demo) equivalent of returnPickupTime — a renter-selected return dispatch
+   * date ("YYYY-MM-DD") instead of an hourly slot. Courier bookings use this field; GrabExpress
+   * bookings use returnPickupTime. Never both. */
+  returnDispatchDate?: string;
   durationMinutes?: number;
   cancellationCutoff?: string;
   lenderHandoverAt?: string | null;

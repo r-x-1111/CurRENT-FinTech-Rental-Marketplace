@@ -124,6 +124,7 @@ export default function RentalDetail() {
     pickupPostcode: listing?.pickupPostcode,
     parcelWeightKg: listing?.parcelWeightKg,
     parcelDimensionsCm: listing?.parcelDimensionsCm,
+    parcelPackages: listing?.parcelPackages,
     deliveryRequirement: listing?.deliveryRequirement,
     title: listing?.title || b.title,
     category: listing?.category,

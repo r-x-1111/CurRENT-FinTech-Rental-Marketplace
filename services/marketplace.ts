@@ -24,7 +24,7 @@ import {
 } from "./deposit";
 import { evaluateRentalOutcome, tierForScore } from "./riskScore";
 import { createSeed } from "../data/seed";
-import { deriveDisplayDelivery, quoteAutomaticVehicleDelivery } from "./delivery";
+import { addDaysToDateString, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery } from "./delivery";
 
 export type Action =
   | { type: "login"; userId: string | null }
@@ -38,7 +38,7 @@ export type Action =
   | { type: "readChat"; conversationId: string }
   | { type: "saveListing"; listing: Listing }
   | { type: "startDeliveryCheckout"; id: string; listingId: string; start: string; end: string; deliveryAddress: string;
-      deliveryPostcode: string; returnPickupTime: string }
+      deliveryPostcode: string; returnPickupTime?: string; dispatchDate?: string; returnDispatchDate?: string }
   | { type: "correctBookingDeliveryAddress"; bookingId: string; deliveryAddress: string; deliveryPostcode: string }
   | { type: "payDeliveryDemo"; bookingId: string; receiptReference: string }
   | { type: "completeRentalCheckout"; bookingId: string; paymentMethod: string; insuranceSelected?: boolean }
@@ -698,28 +698,72 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Complete identity verification and resolve account restrictions before booking.");
       requireThat((riskFor(state, user).score ?? 0) >= 30, "This rental requires CurRENT platform review.");
       requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery destination.");
-      requireThat(action.returnPickupTime && action.returnPickupTime.trim().length > 0,
-        "Select a scheduled return pickup time.");
       const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
         title: listing.title, category: listing.category, description: listing.description };
       const outboundEstimate = quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: action.deliveryPostcode, ...parcel });
       const returnEstimate = quoteAutomaticVehicleDelivery({ pickupPostcode: action.deliveryPostcode, deliveryPostcode: listing.pickupPostcode, ...parcel });
-      requireThat(outboundEstimate && returnEstimate, "Delivery estimate unavailable. Check the pickup and delivery postcodes and route.");
-      const deliveryEstimate = outboundEstimate;
-      // Combined two-way (outbound + return) delivery fee: each leg calculated separately with
-      // the same automatic postcode-distance formula, never assumed equal without calculating it.
-      const twoWayFee = Math.round((outboundEstimate.fee + returnEstimate.fee) * 100) / 100;
+      // GrabExpress covers same-state routes; otherwise fall back to the Domestic Courier
+      // (cross-state) quote before giving up with "Delivery estimate unavailable".
+      const courierParcel = { pickupPostcode: listing.pickupPostcode, deliveryPostcode: action.deliveryPostcode,
+        weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, packages: listing.parcelPackages };
+      const courierOutbound = !outboundEstimate ? quoteAutomaticDomesticCourier(courierParcel) : null;
+      const courierReturn = !returnEstimate ? quoteAutomaticDomesticCourier({ ...courierParcel,
+        pickupPostcode: action.deliveryPostcode, deliveryPostcode: listing.pickupPostcode }) : null;
+      const isCourier = !outboundEstimate && !!courierOutbound;
+      requireThat((outboundEstimate && returnEstimate) || (courierOutbound && courierReturn),
+        "Delivery estimate unavailable. Check the pickup and delivery postcodes and route.");
       requireThat(!state.bookings.some((booking) => booking.id === action.id), "This checkout already exists.");
       requireThat(!state.bookings.some((booking) => booking.listingId === action.listingId &&
         booking.renterId === user.id && booking.start === action.start && booking.end === action.end &&
         booking.status === "payment_required"), "Resume your existing checkout for these dates.");
       availability(state, listing, action.start, action.end);
       const quote = quoteFor(state, user, listing, action.start, action.end);
+      const deliveryDemo = isCourier
+        ? (() => {
+            const twoWayFee = Math.round((courierOutbound!.fee + courierReturn!.fee) * 100) / 100;
+            requireThat(action.dispatchDate && action.dispatchDate.trim().length > 0,
+              "Select a planned dispatch date.");
+            requireThat(action.returnDispatchDate && action.returnDispatchDate.trim().length > 0,
+              "Select a scheduled return dispatch date.");
+            const transit = estimatedCourierTransitDays(courierOutbound!.zone);
+            return {
+              provider: DOMESTIC_COURIER_NAME as "J&T Express (Demo)", origin: listing.location,
+              destination: action.deliveryAddress, fee: twoWayFee, status: "required" as const,
+              outboundFee: courierOutbound!.fee, returnFee: courierReturn!.fee,
+              shippingZone: courierOutbound!.zone, chargeableWeightKg: courierOutbound!.chargeableWeightKg,
+              volumetricWeightKg: courierOutbound!.volumetricWeightKg,
+              dispatchDate: action.dispatchDate,
+              estimatedDeliveryRangeStart: addDaysToDateString(action.dispatchDate!, transit.min),
+              estimatedDeliveryRangeEnd: addDaysToDateString(action.dispatchDate!, transit.max),
+              returnDispatchDeadline: action.returnDispatchDate,
+              estimatedReturnRangeStart: addDaysToDateString(action.returnDispatchDate!, transit.min),
+              estimatedReturnRangeEnd: addDaysToDateString(action.returnDispatchDate!, transit.max),
+              pricingReference: courierOutbound!.reference,
+            };
+          })()
+        : (() => {
+            requireThat(action.returnPickupTime && action.returnPickupTime.trim().length > 0,
+              "Select a scheduled return pickup time.");
+            // Combined two-way (outbound + return) delivery fee: each leg calculated separately
+            // with the same automatic postcode-distance formula, never assumed equal without calculating it.
+            const twoWayFee = Math.round((outboundEstimate!.fee + returnEstimate!.fee) * 100) / 100;
+            return {
+              provider: "GrabExpress (Simulation)" as const, origin: listing.location,
+              destination: action.deliveryAddress, fee: twoWayFee, status: "required" as const,
+              outboundFee: outboundEstimate!.fee, returnFee: returnEstimate!.fee,
+              area: outboundEstimate!.area, vehicle: outboundEstimate!.vehicle,
+              weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm,
+              distanceKm: outboundEstimate!.distanceKm, baseFare: outboundEstimate!.baseFare,
+              distanceCharge: outboundEstimate!.distanceCharge, minimumFare: outboundEstimate!.minimumFare,
+              pricingReference: outboundEstimate!.reference,
+            };
+          })();
       state.bookings.unshift({
         id: action.id, listingId: listing.id, title: listing.title, image: listing.imageUrl,
         ownerId: listing.ownerId, renterId: user.id, start: action.start, end: action.end,
         scheduledPickup: action.start, scheduledReturn: action.end,
-        returnPickupTime: action.returnPickupTime,
+        returnPickupTime: isCourier ? undefined : action.returnPickupTime,
+        returnDispatchDate: isCourier ? action.returnDispatchDate : undefined,
         durationMinutes: calculateDurationMinutes(action.start, action.end),
         cancellationCutoff: calculateCancellationCutoff(action.start),
         collectionMethod: "Delivery Only", deliveryAddress: action.deliveryAddress,
@@ -729,16 +773,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         riskScore: riskFor(state, user).score ?? 80,
         payment: "required", deposit: "required", createdAt: now,
         contextMode: state.mode || "normal",
-        deliveryDemo: {
-          provider: "GrabExpress (Simulation)", origin: listing.location,
-          destination: action.deliveryAddress, fee: twoWayFee, status: "required",
-          outboundFee: outboundEstimate.fee, returnFee: returnEstimate.fee,
-          area: deliveryEstimate.area, vehicle: deliveryEstimate.vehicle,
-          weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm,
-          distanceKm: deliveryEstimate.distanceKm, baseFare: deliveryEstimate.baseFare,
-          distanceCharge: deliveryEstimate.distanceCharge, minimumFare: deliveryEstimate.minimumFare,
-          pricingReference: deliveryEstimate.reference,
-        },
+        deliveryDemo,
       });
       break;
     }
@@ -755,22 +790,46 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         title: listing.title, category: listing.category, description: listing.description };
       const outbound = quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: action.deliveryPostcode, ...parcel });
       const inbound = quoteAutomaticVehicleDelivery({ pickupPostcode: action.deliveryPostcode, deliveryPostcode: listing.pickupPostcode, ...parcel });
-      requireThat(outbound && inbound, "A valid local pickup and delivery route is required.");
+      const courierParcel = { pickupPostcode: listing.pickupPostcode, deliveryPostcode: action.deliveryPostcode,
+        weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, packages: listing.parcelPackages };
+      const courierOutbound = !outbound ? quoteAutomaticDomesticCourier(courierParcel) : null;
+      const courierInbound = !inbound ? quoteAutomaticDomesticCourier({ ...courierParcel,
+        pickupPostcode: action.deliveryPostcode, deliveryPostcode: listing.pickupPostcode }) : null;
+      requireThat((outbound && inbound) || (courierOutbound && courierInbound),
+        "A valid local pickup/delivery route or domestic courier route is required.");
       booking.deliveryAddress = action.deliveryAddress.trim();
       booking.deliveryPostcode = action.deliveryPostcode.trim();
       if (booking.deliveryDemo?.status === "required") {
         booking.deliveryDemo.origin = listing.location;
         booking.deliveryDemo.destination = booking.deliveryAddress;
-        booking.deliveryDemo.outboundFee = outbound.fee;
-        booking.deliveryDemo.returnFee = inbound.fee;
-        booking.deliveryDemo.fee = Math.round((outbound.fee + inbound.fee) * 100) / 100;
-        booking.deliveryDemo.distanceKm = outbound.distanceKm;
-        booking.deliveryDemo.baseFare = outbound.baseFare;
-        booking.deliveryDemo.distanceCharge = outbound.distanceCharge;
-        booking.deliveryDemo.minimumFare = outbound.minimumFare;
-        booking.deliveryDemo.area = outbound.area;
-        booking.deliveryDemo.vehicle = outbound.vehicle;
-        booking.deliveryDemo.pricingReference = outbound.reference;
+        if (outbound && inbound) {
+          booking.deliveryDemo.provider = "GrabExpress (Simulation)";
+          booking.deliveryDemo.outboundFee = outbound.fee;
+          booking.deliveryDemo.returnFee = inbound.fee;
+          booking.deliveryDemo.fee = Math.round((outbound.fee + inbound.fee) * 100) / 100;
+          booking.deliveryDemo.distanceKm = outbound.distanceKm;
+          booking.deliveryDemo.baseFare = outbound.baseFare;
+          booking.deliveryDemo.distanceCharge = outbound.distanceCharge;
+          booking.deliveryDemo.minimumFare = outbound.minimumFare;
+          booking.deliveryDemo.area = outbound.area;
+          booking.deliveryDemo.vehicle = outbound.vehicle;
+          booking.deliveryDemo.pricingReference = outbound.reference;
+          // Switching from a courier route to a local one: the hourly return slot takes over
+          // from the courier's return dispatch date, which no longer applies.
+          booking.returnDispatchDate = undefined;
+        } else if (courierOutbound && courierInbound) {
+          booking.deliveryDemo.provider = "J&T Express (Demo)";
+          booking.deliveryDemo.outboundFee = courierOutbound.fee;
+          booking.deliveryDemo.returnFee = courierInbound.fee;
+          booking.deliveryDemo.fee = Math.round((courierOutbound.fee + courierInbound.fee) * 100) / 100;
+          booking.deliveryDemo.shippingZone = courierOutbound.zone;
+          booking.deliveryDemo.chargeableWeightKg = courierOutbound.chargeableWeightKg;
+          booking.deliveryDemo.volumetricWeightKg = courierOutbound.volumetricWeightKg;
+          booking.deliveryDemo.pricingReference = courierOutbound.reference;
+          // Switching from a local route to a courier one: the hourly return slot no longer
+          // applies. The renter re-selects a return dispatch date before paying.
+          booking.returnPickupTime = undefined;
+        }
       }
       break;
     }
@@ -792,6 +851,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         deliveryPostcode: booking.deliveryPostcode,
         parcelWeightKg: listing?.parcelWeightKg,
         parcelDimensionsCm: listing?.parcelDimensionsCm,
+        parcelPackages: listing?.parcelPackages,
         deliveryRequirement: listing?.deliveryRequirement,
         title: listing?.title,
         category: listing?.category,
@@ -803,20 +863,32 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "A valid pickup and delivery postcode are required before delivery payment.");
       booking.deliveryDemo.origin = currentQuote.origin;
       booking.deliveryDemo.destination = currentQuote.destination;
-      booking.deliveryDemo.distanceKm = currentQuote.distanceKm ?? undefined;
-      booking.deliveryDemo.area = currentQuote.area ?? undefined;
-      booking.deliveryDemo.vehicle = currentQuote.vehicle ?? undefined;
-      booking.deliveryDemo.weightKg = listing?.parcelWeightKg;
-      booking.deliveryDemo.dimensionsCm = listing?.parcelDimensionsCm;
-      booking.deliveryDemo.baseFare = currentQuote.baseFare ?? undefined;
-      booking.deliveryDemo.distanceCharge = currentQuote.distanceCharge ?? undefined;
-      booking.deliveryDemo.minimumFare = currentQuote.minimumFare ?? undefined;
-      booking.deliveryDemo.pricingReference = quoteAutomaticVehicleDelivery({
-        pickupPostcode: listing?.pickupPostcode, deliveryPostcode: booking.deliveryPostcode,
-        weightKg: listing?.parcelWeightKg, dimensionsCm: listing?.parcelDimensionsCm,
-        requirement: listing?.deliveryRequirement,
-        title: listing?.title, category: listing?.category, description: listing?.description,
-      })?.reference;
+      if (currentQuote.method === "Domestic Courier (Demo)") {
+        booking.deliveryDemo.provider = DOMESTIC_COURIER_NAME;
+        booking.deliveryDemo.shippingZone = currentQuote.shippingZone ?? undefined;
+        booking.deliveryDemo.chargeableWeightKg = currentQuote.chargeableWeightKg ?? undefined;
+        booking.deliveryDemo.volumetricWeightKg = currentQuote.volumetricWeightKg ?? undefined;
+        booking.deliveryDemo.pricingReference = quoteAutomaticDomesticCourier({
+          pickupPostcode: listing?.pickupPostcode, deliveryPostcode: booking.deliveryPostcode,
+          weightKg: listing?.parcelWeightKg, dimensionsCm: listing?.parcelDimensionsCm,
+          packages: listing?.parcelPackages,
+        })?.reference;
+      } else {
+        booking.deliveryDemo.distanceKm = currentQuote.distanceKm ?? undefined;
+        booking.deliveryDemo.area = currentQuote.area ?? undefined;
+        booking.deliveryDemo.vehicle = currentQuote.vehicle ?? undefined;
+        booking.deliveryDemo.weightKg = listing?.parcelWeightKg;
+        booking.deliveryDemo.dimensionsCm = listing?.parcelDimensionsCm;
+        booking.deliveryDemo.baseFare = currentQuote.baseFare ?? undefined;
+        booking.deliveryDemo.distanceCharge = currentQuote.distanceCharge ?? undefined;
+        booking.deliveryDemo.minimumFare = currentQuote.minimumFare ?? undefined;
+        booking.deliveryDemo.pricingReference = quoteAutomaticVehicleDelivery({
+          pickupPostcode: listing?.pickupPostcode, deliveryPostcode: booking.deliveryPostcode,
+          weightKg: listing?.parcelWeightKg, dimensionsCm: listing?.parcelDimensionsCm,
+          requirement: listing?.deliveryRequirement,
+          title: listing?.title, category: listing?.category, description: listing?.description,
+        })?.reference;
+      }
       booking.deliveryDemo.outboundFee = currentQuote.estimatedOutboundFee;
       booking.deliveryDemo.returnFee = currentQuote.estimatedReturnFee;
       booking.deliveryDemo.fee = currentQuote.estimatedTwoWayFee;

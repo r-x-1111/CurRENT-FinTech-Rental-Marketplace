@@ -29,6 +29,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
     pickupPostcode: listing?.pickupPostcode,
     parcelWeightKg: listing?.parcelWeightKg,
     parcelDimensionsCm: listing?.parcelDimensionsCm,
+    parcelPackages: listing?.parcelPackages,
     deliveryRequirement: listing?.deliveryRequirement,
     title: listing?.title || booking.title,
     category: listing?.category,
@@ -67,6 +68,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
     : totalDeliveryFee != null ? "Estimate"
     : "Not Recorded";
   const deliveryStatusTone = isPaidDelivery ? "green" : isRefundedDelivery ? "grey" : isAwaitingDelivery ? "amber" : "blue";
+  const isCourier = delivery.method === "Domestic Courier (Demo)";
 
   return (
     <View style={[s.card, styles.card]}>
@@ -86,19 +88,20 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
 
       <View style={styles.divider} />
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.section}>GrabExpress Delivery (Demo)</Text>
+        <Text style={styles.section}>{isCourier ? "Domestic Courier (Demo)" : "GrabExpress Delivery (Demo)"}</Text>
         <Badge text={deliveryStatusLabel} tone={deliveryStatusTone} />
       </View>
       {totalDeliveryFee != null ? (
         <Row
-          label="Calculated Delivery Fee (two-way)"
+          label={isCourier ? "Calculated Two-Way Postage" : "Calculated Delivery Fee (two-way)"}
           value={money(totalDeliveryFee)}
           strong
         />
       ) : (
         <Text style={styles.note}>Delivery Address Required</Text>
       )}
-      <Row label="Automatically Selected Vehicle" value={delivery.vehicle || "Unavailable"} />
+      <Row label={isCourier ? "Automatically Selected Courier" : "Automatically Selected Vehicle"}
+        value={isCourier ? (delivery.courierName || "Unavailable") : (delivery.vehicle || "Unavailable")} />
       <Row label="Payment Status" value={deliveryStatusLabel} />
       {(deliveryOutboundFee != null || deliveryReturnFee != null || delivery.origin || delivery.destination) && (
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: showDeliveryBreakdown }} onPress={() => setShowDeliveryBreakdown((v) => !v)}>
@@ -108,7 +111,26 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
           </View>
         </Pressable>
       )}
-      {showDeliveryBreakdown && (
+      {showDeliveryBreakdown && isCourier && (
+        <View style={styles.breakdownBox}>
+          <Row label="Pickup Location" value={delivery.origin || "Not recorded"} />
+          <Row label="Delivery Address" value={delivery.destination || "Not recorded"} />
+          <Row label="Courier" value={delivery.courierName || "Unavailable"} />
+          <Row label="Shipping Zone" value={delivery.shippingZone || "Unavailable"} />
+          <Row label="Chargeable Weight" value={delivery.chargeableWeightKg != null ? `${delivery.chargeableWeightKg} kg` : "Unavailable"} />
+          {!!delivery.dispatchDate && <Row label="Planned Dispatch Date" value={delivery.dispatchDate} />}
+          {!!(delivery.estimatedDeliveryRangeStart && delivery.estimatedDeliveryRangeEnd) &&
+            <Row label="Estimated Delivery" value={`${delivery.estimatedDeliveryRangeStart} – ${delivery.estimatedDeliveryRangeEnd}`} />}
+          {!!delivery.returnDispatchDeadline && <Row label="Return Dispatch Date" value={delivery.returnDispatchDeadline} />}
+          {!!(delivery.estimatedReturnRangeStart && delivery.estimatedReturnRangeEnd) &&
+            <Row label="Estimated Return Arrival" value={`${delivery.estimatedReturnRangeStart} – ${delivery.estimatedReturnRangeEnd}`} />}
+          <Row label="Outbound postage" value={money(deliveryOutboundFee ?? 0)} />
+          <Row label="Return postage" value={money(deliveryReturnFee ?? 0)} />
+          <Row label="Total two-way postage" value={totalDeliveryFee != null ? money(totalDeliveryFee) : "Unavailable"} strong />
+          <Row label="Payment status" value={deliveryStatusLabel} />
+        </View>
+      )}
+      {showDeliveryBreakdown && !isCourier && (
         <View style={styles.breakdownBox}>
           <Row label="Pickup Location" value={delivery.origin || "Not recorded"} />
           <Row label="Delivery Address" value={delivery.destination || "Not recorded"} />

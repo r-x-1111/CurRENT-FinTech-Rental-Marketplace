@@ -54,7 +54,7 @@ import { GuestAuthPrompt } from "../../components/GuestAuth";
 import { SuccessBurst } from "../../components/SuccessBurst";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 import { resolvePostcodeCoordinate } from "../../services/geo";
-import { deliveryRateDescription, quoteAutomaticVehicleDelivery } from "../../services/delivery";
+import { addDaysToDateString, deliveryRateDescription, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery } from "../../services/delivery";
 
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
@@ -154,6 +154,10 @@ export default function ListingDetailScreen() {
     returnPickupTime && availableSlots.some((s) => s.value === returnPickupTime) && !returnSlotUnavailable(returnPickupTime)
       ? returnPickupTime
       : "";
+  // Domestic Courier (Demo) scheduling — used instead of the hourly slots above when the
+  // resolved delivery method is the cross-state courier, not GrabExpress.
+  const [dispatchDate, setDispatchDate] = useState(checkoutBooking?.deliveryDemo?.dispatchDate || "");
+  const [returnDispatchDate, setReturnDispatchDate] = useState(checkoutBooking?.returnDispatchDate || "");
   const [collectionMethod, setCollectionMethod] =
     useState<CollectionMethod>("Delivery");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
@@ -271,8 +275,26 @@ export default function ListingDetailScreen() {
   // Return leg (delivery address → pickup), calculated separately with the same automatic
   // postcode-distance formula — never assumed to cost the same as the outbound leg.
   const returnDeliveryEstimate = deliveryLocalityIsComplete() ? quoteAutomaticVehicleDelivery({ pickupPostcode: postcode, deliveryPostcode: listing.pickupPostcode, ...parcel }) : null;
+  // GrabExpress only covers same-state routes. When it doesn't resolve, try the Domestic
+  // Courier (cross-state) quote instead, before showing "estimate unavailable".
+  const courierParcel = { pickupPostcode: listing.pickupPostcode, deliveryPostcode: postcode,
+    weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, packages: listing.parcelPackages };
+  const courierEstimate = deliveryLocalityIsComplete() && !deliveryEstimate ? quoteAutomaticDomesticCourier(courierParcel) : null;
+  const returnCourierEstimate = deliveryLocalityIsComplete() && !returnDeliveryEstimate
+    ? quoteAutomaticDomesticCourier({ ...courierParcel, pickupPostcode: postcode, deliveryPostcode: listing.pickupPostcode })
+    : null;
+  const isCourierDelivery = !deliveryEstimate && !!courierEstimate;
   const twoWayDeliveryFee = deliveryEstimate && returnDeliveryEstimate
     ? Math.round((deliveryEstimate.fee + returnDeliveryEstimate.fee) * 100) / 100
+    : courierEstimate && returnCourierEstimate
+    ? Math.round((courierEstimate.fee + returnCourierEstimate.fee) * 100) / 100
+    : null;
+  const courierTransit = courierEstimate ? estimatedCourierTransitDays(courierEstimate.zone) : null;
+  const estimatedDeliveryRange = courierTransit && dispatchDate
+    ? { start: addDaysToDateString(dispatchDate, courierTransit.min), end: addDaysToDateString(dispatchDate, courierTransit.max) }
+    : null;
+  const estimatedReturnRange = courierTransit && returnDispatchDate
+    ? { start: addDaysToDateString(returnDispatchDate, courierTransit.min), end: addDaysToDateString(returnDispatchDate, courierTransit.max) }
     : null;
   const deliveryIssue = !postcode.trim()
     ? { message: "Enter your postcode to estimate delivery.", action: "" }
@@ -282,7 +304,7 @@ export default function ListingDetailScreen() {
     ? { message: "Lender pickup postcode required.", action: "" }
     : !resolvePostcodeCoordinate(postcode)
     ? { message: "Postcode not recognised. Please verify your postcode or select your locality.", action: "" }
-    : { message: "Delivery estimate unavailable for this route or parcel. This is not an interstate courier quote.", action: "View Delivery Details" };
+    : { message: "Special Delivery Quotation Required for this route or parcel — it exceeds the local vehicle and standard courier parcel limits.", action: "View Delivery Details" };
   // Lock the time-slot pickers only once the delivery fee has actually been paid for this
   // checkout — an in-progress, unpaid checkout record must not block the renter from still
   // adjusting their pickup/return time before paying.
@@ -450,13 +472,19 @@ export default function ListingDetailScreen() {
   // Handle Instant Booking checkout confirmation
   async function handleDeliveryDemo() {
     if (!user || payInProgress.current) return;
-    if (!deliveryEstimate || !returnDeliveryEstimate) { setError("Delivery Estimate Unavailable. Enter a complete delivery address with a valid Malaysian postcode."); return; }
+    const hasGrab = !!deliveryEstimate && !!returnDeliveryEstimate;
+    const hasCourier = !!courierEstimate && !!returnCourierEstimate;
+    if (!hasGrab && !hasCourier) { setError("Delivery Estimate Unavailable. Enter a complete delivery address with a valid Malaysian postcode."); return; }
     if (!checkoutBooking && !deliveryAddressIsComplete()) {
       setError("Complete the required delivery address before continuing.");
       return;
     }
-    if (!checkoutBooking && !effectiveReturnPickupTime) {
+    if (!checkoutBooking && !isCourierDelivery && !effectiveReturnPickupTime) {
       setError("Select a scheduled return pickup time before continuing.");
+      return;
+    }
+    if (!checkoutBooking && isCourierDelivery && (!dispatchDate || !returnDispatchDate)) {
+      setError("Select a planned dispatch date and a scheduled return dispatch date before continuing.");
       return;
     }
     if (checkoutBooking) {
@@ -468,7 +496,10 @@ export default function ListingDetailScreen() {
       booking.listingId === id && booking.start === startTimestamp && booking.end === endTimestamp &&
       booking.status === "payment_required");
     if (existing) {
-      if (existing.deliveryDemo?.destination !== currentDeliveryAddress || existing.deliveryDemo?.distanceKm !== deliveryEstimate.distanceKm) {
+      const unchanged = isCourierDelivery
+        ? existing.deliveryDemo?.destination === currentDeliveryAddress
+        : existing.deliveryDemo?.destination === currentDeliveryAddress && existing.deliveryDemo?.distanceKm === deliveryEstimate?.distanceKm;
+      if (!unchanged) {
         setError("An unfinished checkout already exists for these dates. Reopen or cancel it before calculating a new delivery quote.");
         return;
       }
@@ -482,7 +513,10 @@ export default function ListingDetailScreen() {
       const bookingId = newId();
       await actAndPersist({ type: "startDeliveryCheckout", id: bookingId, listingId: id,
         start: startTimestamp, end: endTimestamp, deliveryAddress: formatDeliveryAddress(address),
-        deliveryPostcode: postcode, returnPickupTime: effectiveReturnPickupTime });
+        deliveryPostcode: postcode,
+        ...(isCourierDelivery
+          ? { dispatchDate, returnDispatchDate }
+          : { returnPickupTime: effectiveReturnPickupTime }) });
       act({ type: "saveDeliveryAddress", address });
       router.push(`/delivery-demo/${bookingId}` as never);
     } catch (e) {
@@ -1045,85 +1079,137 @@ export default function ListingDetailScreen() {
                 </Text>
               </View>
 
-              {/* Scheduled Delivery Time Slots */}
-              <View style={{ marginTop: 8 }}>
-                <Text style={styles.slotSectionTitle}>Scheduled Delivery Arrival Time</Text>
-                <Text style={styles.slotSectionDescription}>
-                  Select the time when the item should arrive at your delivery address.
-                </Text>
-                <Text style={styles.slotListLabel}>Available delivery time slots</Text>
-                <View style={styles.timeSlotsRow}>
-                  {FIXED_DELIVERY_SLOTS.map((opt) => {
-                    const isSelected = effectivePickupTime === opt.value;
-                    const unavailable = !availableSlots.some((available) => available.value === opt.value) || slotUnavailable(opt.value);
-                    return (
-                      <Pressable
-                        key={opt.value}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Delivery at ${opt.label}`}
-                        accessibilityState={{ disabled: unavailable }}
-                        disabled={unavailable || deliveryTimeSlotsLocked}
-                        onPress={() => setPickupTime(opt.value)}
-                        style={[
-                          styles.timeSlotBtn,
-                          isSelected && styles.timeSlotBtnSelected,
-                          unavailable && { opacity: 0.4 },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.timeSlotText,
-                            isSelected && styles.timeSlotTextSelected,
-                          ]}
-                        >
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
+              {isCourierDelivery ? (
+                <>
+                  {/* Outbound Shipping — date-based scheduling replaces the hourly slots above,
+                      since a domestic courier only ever promises a dispatch date and an
+                      estimated delivery date range, never an exact arrival hour. */}
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={styles.slotSectionTitle}>Planned Dispatch Date</Text>
+                    <Text style={styles.slotSectionDescription}>
+                      Select the date the courier should collect the item from the lender.
+                    </Text>
+                    <TextInput
+                      accessibilityLabel="Planned dispatch date"
+                      placeholder="YYYY-MM-DD"
+                      value={dispatchDate}
+                      onChangeText={setDispatchDate}
+                      editable={!deliveryTimeSlotsLocked}
+                      style={styles.addressInput}
+                    />
+                    {!!estimatedDeliveryRange && (
+                      <Text style={styles.fieldSubtext}>
+                        Estimated delivery: {estimatedDeliveryRange.start} – {estimatedDeliveryRange.end}
+                      </Text>
+                    )}
+                  </View>
 
-              {/* Scheduled Return Pickup Time — selected independently of the delivery arrival
-                  time above; never changes the rental's billed duration or dates. */}
-              <View style={{ marginTop: 8 }}>
-                <Text style={styles.slotSectionTitle}>Scheduled Return Pickup Time</Text>
-                <Text style={styles.slotSectionDescription}>
-                  Select when the courier should collect the item from your address and return it to the owner.
-                </Text>
-                <Text style={styles.slotListLabel}>Available return pickup time slots</Text>
-                <View style={styles.timeSlotsRow}>
-                  {FIXED_DELIVERY_SLOTS.map((opt) => {
-                    const isSelected = returnPickupTime === opt.value;
-                    const unavailable = !availableSlots.some((available) => available.value === opt.value) || returnSlotUnavailable(opt.value);
-                    return (
-                      <Pressable
-                        key={opt.value}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Return pickup at ${opt.label}`}
-                        accessibilityState={{ disabled: unavailable, selected: isSelected }}
-                        disabled={unavailable || deliveryTimeSlotsLocked}
-                        onPress={() => setReturnPickupTime(opt.value)}
-                        style={[
-                          styles.timeSlotBtn,
-                          isSelected && styles.timeSlotBtnSelected,
-                          unavailable && { opacity: 0.4 },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.timeSlotText,
-                            isSelected && styles.timeSlotTextSelected,
-                          ]}
-                        >
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <Text style={styles.fieldSubtext}>Demo scheduling only — not a live GrabExpress courier availability slot.</Text>
-              </View>
+                  {/* Return Shipping — selected independently of the dispatch date above; never
+                      changes the rental's billed duration or dates. */}
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={styles.slotSectionTitle}>Scheduled Return Dispatch Date</Text>
+                    <Text style={styles.slotSectionDescription}>
+                      Select the date you'll dispatch the item back to the courier for return.
+                    </Text>
+                    <TextInput
+                      accessibilityLabel="Scheduled return dispatch date"
+                      placeholder="YYYY-MM-DD"
+                      value={returnDispatchDate}
+                      onChangeText={setReturnDispatchDate}
+                      editable={!deliveryTimeSlotsLocked}
+                      style={styles.addressInput}
+                    />
+                    {!!estimatedReturnRange && (
+                      <Text style={styles.fieldSubtext}>
+                        Estimated return arrival: {estimatedReturnRange.start} – {estimatedReturnRange.end}
+                      </Text>
+                    )}
+                    <Text style={styles.fieldSubtext}>Demo scheduling only — not a live J&T Express tracking status.</Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  {/* Scheduled Delivery Time Slots */}
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={styles.slotSectionTitle}>Scheduled Delivery Arrival Time</Text>
+                    <Text style={styles.slotSectionDescription}>
+                      Select the time when the item should arrive at your delivery address.
+                    </Text>
+                    <Text style={styles.slotListLabel}>Available delivery time slots</Text>
+                    <View style={styles.timeSlotsRow}>
+                      {FIXED_DELIVERY_SLOTS.map((opt) => {
+                        const isSelected = effectivePickupTime === opt.value;
+                        const unavailable = !availableSlots.some((available) => available.value === opt.value) || slotUnavailable(opt.value);
+                        return (
+                          <Pressable
+                            key={opt.value}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Delivery at ${opt.label}`}
+                            accessibilityState={{ disabled: unavailable }}
+                            disabled={unavailable || deliveryTimeSlotsLocked}
+                            onPress={() => setPickupTime(opt.value)}
+                            style={[
+                              styles.timeSlotBtn,
+                              isSelected && styles.timeSlotBtnSelected,
+                              unavailable && { opacity: 0.4 },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.timeSlotText,
+                                isSelected && styles.timeSlotTextSelected,
+                              ]}
+                            >
+                              {opt.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Scheduled Return Pickup Time — selected independently of the delivery arrival
+                      time above; never changes the rental's billed duration or dates. */}
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={styles.slotSectionTitle}>Scheduled Return Pickup Time</Text>
+                    <Text style={styles.slotSectionDescription}>
+                      Select when the courier should collect the item from your address and return it to the owner.
+                    </Text>
+                    <Text style={styles.slotListLabel}>Available return pickup time slots</Text>
+                    <View style={styles.timeSlotsRow}>
+                      {FIXED_DELIVERY_SLOTS.map((opt) => {
+                        const isSelected = returnPickupTime === opt.value;
+                        const unavailable = !availableSlots.some((available) => available.value === opt.value) || returnSlotUnavailable(opt.value);
+                        return (
+                          <Pressable
+                            key={opt.value}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Return pickup at ${opt.label}`}
+                            accessibilityState={{ disabled: unavailable, selected: isSelected }}
+                            disabled={unavailable || deliveryTimeSlotsLocked}
+                            onPress={() => setReturnPickupTime(opt.value)}
+                            style={[
+                              styles.timeSlotBtn,
+                              isSelected && styles.timeSlotBtnSelected,
+                              unavailable && { opacity: 0.4 },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.timeSlotText,
+                                isSelected && styles.timeSlotTextSelected,
+                              ]}
+                            >
+                              {opt.label}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <Text style={styles.fieldSubtext}>Demo scheduling only — not a live GrabExpress courier availability slot.</Text>
+                  </View>
+                </>
+              )}
 
               {!!(effectivePickupTime && effectiveReturnPickupTime && start && end) && (
                 <View style={styles.returnTimeCard}>
@@ -1428,7 +1514,7 @@ export default function ListingDetailScreen() {
               // The fee preview only needs the locality fields (postcode/city/state); it must
               // never wait on recipient name/phone, which are unrelated to distance estimation.
               const hasAddress = deliveryLocalityIsComplete();
-              const deliveryFeeValue = hasAddress && deliveryEstimate && returnDeliveryEstimate ? twoWayDeliveryFee : null;
+              const deliveryFeeValue = hasAddress && ((deliveryEstimate && returnDeliveryEstimate) || (courierEstimate && returnCourierEstimate)) ? twoWayDeliveryFee : null;
               const totals = getBookingTotals(quote, deliveryFeeValue);
               const depositTierNote = renterRisk?.canDirectBook
                 ? `Your ${renterRisk.label} tier sets a ${
@@ -1491,18 +1577,29 @@ export default function ListingDetailScreen() {
                   </View>
 
                   <View style={styles.summaryDivider} />
-                  <Text style={styles.summarySectionLabel}>Delivery · GrabExpress (Demo)</Text>
+                  <Text style={styles.summarySectionLabel}>
+                    {isCourierDelivery ? "Domestic Courier (Demo)" : "Delivery · GrabExpress (Demo)"}
+                  </Text>
                   {hasAddress ? (
                     <>
                       <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Calculated Delivery Fee (two-way)</Text>
+                        <Text style={styles.summaryLabel}>
+                          {isCourierDelivery ? "Calculated Two-Way Postage" : "Calculated Delivery Fee (two-way)"}
+                        </Text>
                         <Text style={styles.summaryValue}>
                           {deliveryFeeValue != null ? money(deliveryFeeValue) : "—"}
                         </Text>
                       </View>
-                      <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Automatically Selected Vehicle</Text><Text style={styles.summaryValue}>{deliveryEstimate?.vehicle || "Unavailable"}</Text></View>
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>
+                          {isCourierDelivery ? "Automatically Selected Courier" : "Automatically Selected Vehicle"}
+                        </Text>
+                        <Text style={styles.summaryValue}>
+                          {isCourierDelivery ? (courierEstimate ? DOMESTIC_COURIER_NAME : "Unavailable") : (deliveryEstimate?.vehicle || "Unavailable")}
+                        </Text>
+                      </View>
                       <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Payment Status</Text><Text style={styles.summaryValue}>{checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Paid (Demo)" : "Awaiting Payment"}</Text></View>
-                      {!deliveryEstimate && (
+                      {!deliveryEstimate && !courierEstimate && (
                         <Text style={styles.deliveryIssueText}>{deliveryIssue.message}</Text>
                       )}
                       <Pressable
@@ -1511,7 +1608,7 @@ export default function ListingDetailScreen() {
                         onPress={() => setShowDeliveryDetails((open) => !open)}
                       >
                         <Text style={styles.summaryLinkText}>
-                          {showDeliveryDetails ? "Hide Delivery Details" : "View Delivery Details"}
+                          {showDeliveryDetails ? "Hide Postage Details" : "View Postage Details"}
                         </Text>
                       </Pressable>
                       {showDeliveryDetails && deliveryEstimate && returnDeliveryEstimate && (
@@ -1528,6 +1625,23 @@ export default function ListingDetailScreen() {
                           <Row label="Outbound delivery fee (pickup → you)" value={money(deliveryEstimate.fee)} />
                           <Row label="Return delivery fee (you → pickup)" value={money(returnDeliveryEstimate.fee)} />
                           <Row label="Total two-way delivery fee" value={money(twoWayDeliveryFee!)} strong />
+                        </View>
+                      )}
+                      {showDeliveryDetails && courierEstimate && returnCourierEstimate && (
+                        <View style={styles.deliveryDetails}>
+                          <Row label="Pickup Location" value={listing.privateMeetingVenue || listing.location} />
+                          <Row label="Delivery Address" value={currentDeliveryAddress} />
+                          <Row label="Courier" value={DOMESTIC_COURIER_NAME} />
+                          <Row label="Shipping Zone" value={courierEstimate.zone} />
+                          <Row label="Chargeable Weight" value={`${courierEstimate.chargeableWeightKg} kg (volumetric: ${courierEstimate.volumetricWeightKg} kg)`} />
+                          {!!listing.parcelPackages?.length && (
+                            <Row label="Packages" value={`${listing.parcelPackages.length} packages, priced independently and combined`} />
+                          )}
+                          <Row label="Pricing basis" value={courierEstimate.reference} />
+                          <Row label="Payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Paid (Demo)" : "Awaiting Payment"} />
+                          <Row label="Outbound postage (pickup → you)" value={money(courierEstimate.fee)} />
+                          <Row label="Return postage (you → pickup)" value={money(returnCourierEstimate.fee)} />
+                          <Row label="Total two-way postage" value={money(twoWayDeliveryFee!)} strong />
                         </View>
                       )}
                     </>
@@ -1566,14 +1680,19 @@ export default function ListingDetailScreen() {
             {renterRisk?.level !== "very_high" && quote && (
               <View style={styles.checkoutPanel}>
                 <View style={styles.deliveryHeaderRow}>
-                  <Ionicons name="bicycle-outline" size={16} color={colors.navy} />
-                  <Text style={styles.checkoutTitle}>GrabExpress Delivery (Demo)</Text>
+                  <Ionicons name={isCourierDelivery ? "cube-outline" : "bicycle-outline"} size={16} color={colors.navy} />
+                  <Text style={styles.checkoutTitle}>{isCourierDelivery ? "Domestic Courier (Demo)" : "GrabExpress Delivery (Demo)"}</Text>
                 </View>
                 <Row label="Delivery payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Demo Payment Completed" : deliveryDetailsChanged ? "New calculation and payment required" : "Awaiting Payment"} />
                 {checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged
                   ? <Button secondary onPress={() => router.push(`/delivery-demo/${checkoutBooking.id}` as never)}>View Receipt</Button>
-                  : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() || !deliveryEstimate || !returnDeliveryEstimate || !effectiveReturnPickupTime || !!checkoutBooking} onPress={() => void handleDeliveryDemo()}>
-                      {twoWayDeliveryFee != null ? `Pay Delivery & Continue · ${money(twoWayDeliveryFee)}` : "Pay Delivery & Continue"}
+                  : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() ||
+                      !((deliveryEstimate && returnDeliveryEstimate && effectiveReturnPickupTime) ||
+                        (courierEstimate && returnCourierEstimate && dispatchDate && returnDispatchDate)) ||
+                      !!checkoutBooking} onPress={() => void handleDeliveryDemo()}>
+                      {twoWayDeliveryFee != null
+                        ? `Pay ${isCourierDelivery ? "Postage" : "Delivery"} & Continue · ${money(twoWayDeliveryFee)}`
+                        : `Pay ${isCourierDelivery ? "Postage" : "Delivery"} & Continue`}
                     </Button>}
                 {checkoutBooking && <Button secondary onPress={async () => {
                   try {

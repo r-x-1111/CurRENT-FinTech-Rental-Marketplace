@@ -89,14 +89,17 @@ export function selectDeliveryVehicle(weightKg: number | undefined, dimensions: 
   return eligible[0] || null;
 }
 
-/** Use saved parcel facts first; infer a conservative vehicle when they are absent. */
+/** Use saved parcel facts first; infer a conservative vehicle only when they are absent.
+ * Returns null when real weight/dimensions are known but no vehicle qualifies for them — the
+ * caller must treat that as "no local vehicle fits" (Special Delivery Quotation Required),
+ * never silently guess a vehicle that the parcel's own measurements rule out. */
 export function selectListingDeliveryVehicle(params: {
   weightKg?: number; dimensionsCm?: ParcelDimensions;
   requirement?: "standard" | "fragile" | "bulky";
   title?: string; category?: string; description?: string;
-}): DeliveryVehicle {
-  const measured = selectDeliveryVehicle(params.weightKg, params.dimensionsCm, params.requirement);
-  if (measured) return measured;
+}): DeliveryVehicle | null {
+  const hasMeasurements = params.weightKg != null && !!params.dimensionsCm;
+  if (hasMeasurements) return selectDeliveryVehicle(params.weightKg, params.dimensionsCm, params.requirement);
   const item = `${params.title || ""} ${params.category || ""} ${params.description || ""}`.toLowerCase();
   if (params.requirement === "bulky" || /chair|furniture|sofa|table|desk|monitor|appliance|refrigerator|washing machine|large speaker|projector|bulky/.test(item)) return "Car";
   if (params.requirement === "fragile") return "Car";
@@ -115,7 +118,7 @@ export function quoteAutomaticVehicleDelivery(params: {
 }): AutomaticVehicleDeliveryQuote | null {
   const route = estimatePostcodeDistance(params.pickupPostcode, params.deliveryPostcode);
   const vehicle = selectListingDeliveryVehicle(params);
-  if (!route) return null;
+  if (!route || !vehicle) return null; // No vehicle: the parcel exceeds every local vehicle's limits.
   const area = routeArea(route.pickup, route.delivery);
   if (!area) return null; // The historical table does not establish interstate delivery.
   const published = quoteDemoDelivery(area, vehicle, route.distanceKm);
@@ -159,6 +162,18 @@ export type StoredDeliveryDemo = {
   distanceCharge?: number;
   minimumFare?: number;
   pricingReference?: string;
+  // Domestic Courier (Demo) fields — set only when provider is the courier, not GrabExpress.
+  shippingZone?: CourierShippingZone;
+  chargeableWeightKg?: number;
+  volumetricWeightKg?: number;
+  dispatchDate?: string;
+  estimatedDeliveryRangeStart?: string;
+  estimatedDeliveryRangeEnd?: string;
+  returnDispatchDeadline?: string;
+  estimatedReturnRangeStart?: string;
+  estimatedReturnRangeEnd?: string;
+  outboundTrackingRef?: string;
+  returnTrackingRef?: string;
   status: "required" | "paid_demo" | "refunded_demo";
   receiptReference?: string;
   paidAt?: string;
@@ -166,7 +181,7 @@ export type StoredDeliveryDemo = {
 };
 
 export type DisplayDelivery = {
-  method: "GrabExpress (Demo)" | "Self-Pickup";
+  method: DeliveryMethod;
   origin: string;
   destination: string;
   area: DeliveryArea | null;
@@ -178,6 +193,19 @@ export type DisplayDelivery = {
   baseFare: number | null;
   distanceCharge: number | null;
   minimumFare: number | null;
+  // Domestic Courier (Demo) display fields — null unless method is "Domestic Courier (Demo)".
+  courierName: string | null;
+  shippingZone: CourierShippingZone | null;
+  chargeableWeightKg: number | null;
+  volumetricWeightKg: number | null;
+  dispatchDate?: string | null;
+  estimatedDeliveryRangeStart?: string | null;
+  estimatedDeliveryRangeEnd?: string | null;
+  returnDispatchDeadline?: string | null;
+  estimatedReturnRangeStart?: string | null;
+  estimatedReturnRangeEnd?: string | null;
+  outboundTrackingRef?: string | null;
+  returnTrackingRef?: string | null;
   status: "paid_demo" | "required" | "unavailable" | "self_pickup" | "refunded_demo";
   receiptReference?: string;
   paidAt?: string;
@@ -206,6 +234,11 @@ export function deriveDisplayDelivery(params: {
   deliveryPostcode?: string;
   parcelWeightKg?: number;
   parcelDimensionsCm?: ParcelDimensions;
+  /** Multi-package listings (e.g. Photo Booth Setup) — when set, the courier quote prices each
+   * package independently and combines the charges, per package, instead of using the single
+   * parcelWeightKg/parcelDimensionsCm pair above. Not used by the GrabExpress vehicle quote,
+   * which only ever covers single-package local deliveries. */
+  parcelPackages?: ParcelPackage[];
   deliveryRequirement?: "standard" | "fragile" | "bulky";
   title?: string;
   category?: string;
@@ -218,10 +251,11 @@ export function deriveDisplayDelivery(params: {
   const pickupLocation = params.pickupLocation || legacyPickup?.address || "";
   const pickupPostcode = params.pickupPostcode || legacyPickup?.postcode;
   const deliveryPostcode = params.deliveryPostcode || (demoBooking ? demoDestinationPostcode(deliveryAddress) : undefined);
+  const nullCourierFields = { courierName: null, shippingZone: null, chargeableWeightKg: null, volumetricWeightKg: null };
   if (collectionMethod === "Self-Pickup") {
     return { method: "Self-Pickup", origin: pickupLocation, destination: pickupLocation, area: null,
       distanceKm: null, vehicle: null, fee: null, outboundFee: null, returnFee: null, baseFare: null,
-      distanceCharge: null, minimumFare: null, status: "self_pickup" };
+      distanceCharge: null, minimumFare: null, status: "self_pickup", ...nullCourierFields };
   }
   const parcel = { weightKg: params.parcelWeightKg, dimensionsCm: params.parcelDimensionsCm,
     requirement: params.deliveryRequirement, title: params.title, category: params.category,
@@ -232,8 +266,44 @@ export function deriveDisplayDelivery(params: {
   const inboundDistance = estimatePostcodeDistance(deliveryPostcode, pickupPostcode);
   const estimatedTwoWayFee = outbound && inbound
     ? Math.round((outbound.fee + inbound.fee) * 100) / 100 : null;
+  // GrabExpress covers same-state routes. When it doesn't resolve, try the Domestic Courier
+  // (cross-state) quote instead, before falling back to "unavailable".
+  const courierParcel = { pickupPostcode, deliveryPostcode, weightKg: params.parcelWeightKg,
+    dimensionsCm: params.parcelDimensionsCm, packages: params.parcelPackages };
+  const courierOutbound = !outbound ? quoteAutomaticDomesticCourier(courierParcel) : null;
+  const courierInbound = !inbound ? quoteAutomaticDomesticCourier({ ...courierParcel,
+    pickupPostcode: deliveryPostcode, deliveryPostcode: pickupPostcode }) : null;
+  const estimatedCourierTwoWayFee = courierOutbound && courierInbound
+    ? Math.round((courierOutbound.fee + courierInbound.fee) * 100) / 100 : null;
   if (deliveryDemo) {
     const unpaid = deliveryDemo.status === "required";
+    const isCourier = deliveryDemo.provider === DOMESTIC_COURIER_NAME || (unpaid && !outbound && !!courierOutbound);
+    if (isCourier) {
+      return {
+        method: "Domestic Courier (Demo)",
+        origin: unpaid ? pickupLocation : deliveryDemo.origin,
+        destination: unpaid ? deliveryAddress || deliveryDemo.destination : deliveryDemo.destination,
+        area: null, distanceKm: null, vehicle: null, baseFare: null, distanceCharge: null, minimumFare: null,
+        courierName: DOMESTIC_COURIER_NAME,
+        shippingZone: unpaid ? courierOutbound?.zone ?? null : deliveryDemo.shippingZone ?? null,
+        chargeableWeightKg: unpaid ? courierOutbound?.chargeableWeightKg ?? null : deliveryDemo.chargeableWeightKg ?? null,
+        volumetricWeightKg: unpaid ? courierOutbound?.volumetricWeightKg ?? null : deliveryDemo.volumetricWeightKg ?? null,
+        fee: unpaid ? estimatedCourierTwoWayFee : deliveryDemo.fee,
+        outboundFee: unpaid ? courierOutbound?.fee ?? null : deliveryDemo.outboundFee ?? null,
+        returnFee: unpaid ? courierInbound?.fee ?? null : deliveryDemo.returnFee ?? null,
+        dispatchDate: deliveryDemo.dispatchDate ?? null,
+        estimatedDeliveryRangeStart: deliveryDemo.estimatedDeliveryRangeStart ?? null,
+        estimatedDeliveryRangeEnd: deliveryDemo.estimatedDeliveryRangeEnd ?? null,
+        returnDispatchDeadline: deliveryDemo.returnDispatchDeadline ?? null,
+        estimatedReturnRangeStart: deliveryDemo.estimatedReturnRangeStart ?? null,
+        estimatedReturnRangeEnd: deliveryDemo.estimatedReturnRangeEnd ?? null,
+        outboundTrackingRef: deliveryDemo.outboundTrackingRef ?? null,
+        returnTrackingRef: deliveryDemo.returnTrackingRef ?? null,
+        status: deliveryDemo.status, receiptReference: deliveryDemo.receiptReference, paidAt: deliveryDemo.paidAt,
+        estimatedTwoWayFee: estimatedCourierTwoWayFee, estimatedOutboundFee: courierOutbound?.fee ?? null,
+        estimatedReturnFee: courierInbound?.fee ?? null, returnDistanceKm: null,
+      };
+    }
     return {
       method: "GrabExpress (Demo)",
       origin: unpaid ? pickupLocation : deliveryDemo.origin,
@@ -247,28 +317,38 @@ export function deriveDisplayDelivery(params: {
       baseFare: unpaid ? outbound?.baseFare ?? null : deliveryDemo.baseFare ?? null,
       distanceCharge: unpaid ? outbound?.distanceCharge ?? null : deliveryDemo.distanceCharge ?? null,
       minimumFare: unpaid ? outbound?.minimumFare ?? null : deliveryDemo.minimumFare ?? null,
+      ...nullCourierFields,
       status: deliveryDemo.status, receiptReference: deliveryDemo.receiptReference, paidAt: deliveryDemo.paidAt,
       estimatedTwoWayFee, estimatedOutboundFee: outbound?.fee ?? null,
       estimatedReturnFee: inbound?.fee ?? null, returnDistanceKm: inboundDistance?.distanceKm ?? null,
     };
   }
   // No saved delivery record yet: derive a read-only estimate using the exact same automatic
-  // postcode-distance formula as the renter-side GrabExpress Delivery (Demo) checkout
-  // (services/geo.ts estimateAutomaticDelivery), applied separately to the outbound and return
-  // legs and summed — never assuming the return trip costs the same without calculating it.
-  // Never reports a payment as completed.
+  // quote functions used at renter-side checkout, applied separately to the outbound and
+  // return legs and summed — never assuming the return trip costs the same without
+  // calculating it. Never reports a payment as completed.
   if (outbound && inbound) {
     return { method: "GrabExpress (Demo)", origin: pickupLocation, destination: deliveryAddress || "",
       area: outbound.area, distanceKm: outbound.distanceKm, vehicle: outbound.vehicle,
       fee: Math.round((outbound.fee + inbound.fee) * 100) / 100,
       outboundFee: outbound.fee, returnFee: inbound.fee,
       baseFare: outbound.baseFare, distanceCharge: outbound.distanceCharge, minimumFare: outbound.minimumFare,
+      ...nullCourierFields,
       status: "required", estimatedTwoWayFee, estimatedOutboundFee: outbound.fee,
       estimatedReturnFee: inbound.fee, returnDistanceKm: inbound.distanceKm, estimateOnly: true };
   }
+  if (courierOutbound && courierInbound) {
+    return { method: "Domestic Courier (Demo)", origin: pickupLocation, destination: deliveryAddress || "",
+      area: null, distanceKm: null, vehicle: null, baseFare: null, distanceCharge: null, minimumFare: null,
+      courierName: DOMESTIC_COURIER_NAME, shippingZone: courierOutbound.zone,
+      chargeableWeightKg: courierOutbound.chargeableWeightKg, volumetricWeightKg: courierOutbound.volumetricWeightKg,
+      fee: estimatedCourierTwoWayFee, outboundFee: courierOutbound.fee, returnFee: courierInbound.fee,
+      status: "required", estimatedTwoWayFee: estimatedCourierTwoWayFee, estimatedOutboundFee: courierOutbound.fee,
+      estimatedReturnFee: courierInbound.fee, returnDistanceKm: null, estimateOnly: true };
+  }
   return { method: "GrabExpress (Demo)", origin: pickupLocation, destination: deliveryAddress || "Not provided",
     area: null, distanceKm: null, vehicle: null, fee: null, outboundFee: null, returnFee: null, baseFare: null,
-    distanceCharge: null, minimumFare: null, status: "unavailable" };
+    distanceCharge: null, minimumFare: null, ...nullCourierFields, status: "unavailable" };
 }
 
 export function quoteDemoDelivery(area: DeliveryArea, vehicle: DeliveryVehicle, distanceKm: number): DeliveryEstimate | null {
@@ -327,4 +407,118 @@ export function quoteDemoDelivery(area: DeliveryArea, vehicle: DeliveryVehicle, 
   return { area, vehicle, distanceKm, baseFare, distanceCharge, minimumFare,
     fee: Math.round(Math.max(minimumFare, baseFare + distanceCharge) * 100) / 100,
     reference: DELIVERY_PRICING_REFERENCE };
+}
+
+// ============================================================================
+// Domestic Courier (Demo) — covers routes the GrabExpress-style local quote above
+// doesn't (cross-state routes, since routeArea() requires same state). Modeled as
+// "J&T Express (Demo)"; pricing is an explicit CurRENT demo assumption, not a
+// published J&T rate, and is labeled as such everywhere it's shown.
+// ============================================================================
+
+export type CourierShippingZone = "West Malaysia" | "East Malaysia";
+export type DeliveryMethod = "GrabExpress (Demo)" | "Domestic Courier (Demo)" | "Self-Pickup";
+
+export const DOMESTIC_COURIER_NAME = "J&T Express (Demo)";
+export const DOMESTIC_COURIER_PRICING_REFERENCE =
+  "CurRENT demo courier rate, informed by typical J&T Malaysia zone structure — not an official J&T quotation.";
+
+/** Longest side a standard domestic courier parcel accepts in this demo. Beyond this, show
+ * Special Delivery Quotation Required rather than a fabricated postage fee. */
+const COURIER_MAX_DIMENSION_CM = 120;
+
+const eastMalaysiaState = (state: string) => /^(sabah|sarawak|labuan)$/i.test(state);
+
+function courierShippingZone(pickupState: string, deliveryState: string): CourierShippingZone {
+  return eastMalaysiaState(pickupState) || eastMalaysiaState(deliveryState) ? "East Malaysia" : "West Malaysia";
+}
+
+/** Volumetric Weight (kg) = Length x Width x Height / 6000. */
+export function calculateVolumetricWeightKg(dimensions: ParcelDimensions): number {
+  return (dimensions.length * dimensions.width * dimensions.height) / 6000;
+}
+
+/** Chargeable Weight = MAX(Actual Weight, Volumetric Weight), rounded up to the courier's usual 0.5kg step. */
+export function calculateChargeableWeightKg(actualKg: number, dimensions: ParcelDimensions): number {
+  const heavier = Math.max(actualKg, calculateVolumetricWeightKg(dimensions));
+  return Math.ceil(heavier * 2) / 2;
+}
+
+export type ParcelPackage = { weightKg: number; dimensionsCm: ParcelDimensions };
+
+export type DomesticCourierQuote = {
+  courierName: string;
+  zone: CourierShippingZone;
+  chargeableWeightKg: number;
+  volumetricWeightKg: number;
+  fee: number;
+  reference: string;
+};
+
+const courierZoneRate: Record<CourierShippingZone, { base: number; perKg: number }> = {
+  "West Malaysia": { base: 9, perKg: 3.5 },
+  "East Malaysia": { base: 18, perKg: 6.5 }, // Sabah/Sarawak zone: higher base + per-kg, sea-crossing demo assumption.
+};
+
+function quoteDomesticCourierPackage(zone: CourierShippingZone, weightKg: number, dimensions: ParcelDimensions): DomesticCourierQuote | null {
+  if (!Number.isFinite(weightKg) || weightKg <= 0) return null;
+  const sides = [dimensions.length, dimensions.width, dimensions.height];
+  if (sides.some((side) => !Number.isFinite(side) || side <= 0)) return null;
+  if (sides.some((side) => side > COURIER_MAX_DIMENSION_CM)) return null; // Oversized: Special Delivery Quotation Required.
+  const volumetricWeightKg = Math.round(calculateVolumetricWeightKg(dimensions) * 100) / 100;
+  const chargeableWeightKg = calculateChargeableWeightKg(weightKg, dimensions);
+  const rate = courierZoneRate[zone];
+  const fee = Math.round((rate.base + rate.perKg * chargeableWeightKg) * 100) / 100;
+  return { courierName: DOMESTIC_COURIER_NAME, zone, chargeableWeightKg, volumetricWeightKg, fee, reference: DOMESTIC_COURIER_PRICING_REFERENCE };
+}
+
+/**
+ * New unpaid courier quotes only; paid bookings always use their stored receipt amount.
+ * Triggers only for cross-state routes (routeArea() null) — same-state routes stay on the
+ * GrabExpress path above. When `packages` has more than one entry (e.g. a two-piece Photo
+ * Booth Setup shipment), each package is priced independently per the task's requirement and
+ * the charges combined; a single weightKg/dimensionsCm pair is treated as one package.
+ * Returns null (→ Courier Quotation Required) rather than ever fabricating a price — for an
+ * unresolved postcode, a same-state route (GrabExpress territory), or any oversized/invalid package.
+ */
+export function quoteAutomaticDomesticCourier(params: {
+  pickupPostcode?: string; deliveryPostcode?: string;
+  weightKg?: number; dimensionsCm?: ParcelDimensions;
+  packages?: ParcelPackage[];
+}): DomesticCourierQuote | null {
+  const route = estimatePostcodeDistance(params.pickupPostcode, params.deliveryPostcode);
+  if (!route) return null;
+  const area = routeArea(route.pickup, route.delivery);
+  if (area) return null; // Same-state: GrabExpress covers this, not the courier.
+  const packages: ParcelPackage[] = params.packages?.length
+    ? params.packages
+    : params.weightKg != null && params.dimensionsCm
+      ? [{ weightKg: params.weightKg, dimensionsCm: params.dimensionsCm }]
+      : [];
+  if (packages.length === 0) return null;
+  const zone = courierShippingZone(route.pickup.state, route.delivery.state);
+  const quotes = packages.map((pkg) => quoteDomesticCourierPackage(zone, pkg.weightKg, pkg.dimensionsCm));
+  if (quotes.some((quote) => !quote)) return null; // Any oversized/invalid package blocks the whole quote.
+  const resolved = quotes as DomesticCourierQuote[];
+  return {
+    courierName: DOMESTIC_COURIER_NAME,
+    zone,
+    chargeableWeightKg: Math.round(resolved.reduce((sum, q) => sum + q.chargeableWeightKg, 0) * 100) / 100,
+    volumetricWeightKg: Math.round(resolved.reduce((sum, q) => sum + q.volumetricWeightKg, 0) * 100) / 100,
+    fee: Math.round(resolved.reduce((sum, q) => sum + q.fee, 0) * 100) / 100,
+    reference: DOMESTIC_COURIER_PRICING_REFERENCE,
+  };
+}
+
+/** Simple demo transit-time assumption per zone, used only to show an estimated date range —
+ * never promises an exact arrival hour. */
+export function estimatedCourierTransitDays(zone: CourierShippingZone): { min: number; max: number } {
+  return zone === "East Malaysia" ? { min: 4, max: 7 } : { min: 2, max: 4 };
+}
+
+/** YYYY-MM-DD + N days, as a YYYY-MM-DD string (UTC-safe, no timezone drift). */
+export function addDaysToDateString(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }

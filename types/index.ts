@@ -54,6 +54,10 @@ export interface Listing {
   /** Lender-provided packaged parcel details, required for a new delivery quote. */
   parcelWeightKg?: number;
   parcelDimensionsCm?: { length: number; width: number; height: number };
+  /** Set only for listings that ship as more than one physical package (e.g. multi-piece event
+   * equipment). When present, delivery/postage quoting prices each package independently and
+   * combines the charges, instead of using the single parcelWeightKg/parcelDimensionsCm above. */
+  parcelPackages?: { weightKg: number; dimensionsCm: { length: number; width: number; height: number } }[];
   deliveryRequirement?: "standard" | "fragile" | "bulky";
   rating: number;
   completedRentalsCount?: number;
