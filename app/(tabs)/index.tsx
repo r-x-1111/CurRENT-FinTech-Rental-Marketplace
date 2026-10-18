@@ -182,7 +182,7 @@ export default function HomeScreen() {
                   <TextInput
                     accessibilityLabel="Search items"
                     placeholder="Search cameras, tools, speakers..."
-                    placeholderTextColor="#8FA3BF"
+                    placeholderTextColor="#64748B"
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                     returnKeyType="search"
@@ -420,13 +420,13 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   eyebrowText: {
-    color: "#99C0FF",
+    color: "#2563EB",
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.5,
   },
   heroHeadline: {
-    color: "white",
+    color: "#102B50",
     fontSize: 38,
     fontWeight: "900",
     letterSpacing: -1.2,
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
   },
   mobileHeroHeadline: { fontSize: 30, lineHeight: 34, letterSpacing: -0.8 },
   heroSubhead: {
-    color: "#C5D2E2",
+    color: "#405A78",
     fontSize: 15,
     lineHeight: 24,
     maxWidth: 520,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     color: colors.navy,
     fontWeight: "500",
   },
-  categoryLabel: { color: colors.white, fontSize: 12, fontWeight: "700" },
+  categoryLabel: { color: "#102B50", fontSize: 12, fontWeight: "700" },
   mobileCategoryScroll: { marginTop: 4, flexGrow: 0 },
   categoryChips: { alignItems: "center", gap: 8, paddingVertical: 3, paddingRight: 18 },
   categoryChip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", cursor: "pointer" },
