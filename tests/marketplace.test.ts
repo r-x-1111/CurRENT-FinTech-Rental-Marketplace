@@ -2560,7 +2560,7 @@ test("Very High Risk renters (0-29) submit Request to Rent applications to CurRE
   assert.equal(booked.payment, "paid");
 });
 
-test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 84 (+2,+2,0,0)", () => {
+test("V3.36 Demo Account has 2 completed rentals and a history-derived score of 84 (+2,+2)", () => {
   const seed = createSeed("admin_demo");
   const demoUserId = "demo-renter";
   const userBookings = seed.bookings.filter((b) => b.renterId === demoUserId);
@@ -2619,32 +2619,33 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
     `Expected >= 3 disputed rentals, got ${disputed.length}`,
   );
 
-  // 7. At least 4 Completed rentals, exactly 4 of which carry the linked risk adjustments (+2, +2, 0, 0)
+  // 7. Exactly 2 Completed rentals (Camping Tent, Sony A7 III), both linked to the risk history (+2, +2)
   const completed = userBookings.filter((b) => b.status === "completed");
-  assert.ok(
-    completed.length >= 4,
-    `Expected >= 4 completed rentals, got ${completed.length}`,
+  assert.equal(
+    completed.length,
+    2,
+    `Expected exactly 2 completed rentals, got ${completed.length}`,
   );
   const riskLinkedBookingIds = new Set((demoProfile.riskHistory || []).map((h) => h.bookingId));
   const riskLinkedCompleted = completed.filter((b) => riskLinkedBookingIds.has(b.id));
   assert.equal(
     riskLinkedCompleted.length,
-    4,
-    `Expected exactly 4 completed rentals linked to the fixed risk history, got ${riskLinkedCompleted.length}`,
+    2,
+    `Expected exactly 2 completed rentals linked to the fixed risk history, got ${riskLinkedCompleted.length}`,
   );
   assert.equal(demoProfile.riskScore, 84, "Expected risk score 84");
   assert.equal(demoProfile.riskLevel, "low", "Expected low risk tier");
   assert.ok(demoProfile.riskHistory, "Risk history must be present");
   assert.equal(
     demoProfile.riskHistory.length,
-    4,
-    "Expected 4 risk incident records",
+    2,
+    "Expected 2 risk incident records",
   );
   const adjustments = demoProfile.riskHistory.map((h) => h.effectiveAdjustment);
   assert.deepEqual(
     adjustments.slice().sort(),
-    [0, 0, 2, 2],
-    "Expected adjustments to be +2, +2, 0, 0",
+    [2, 2],
+    "Expected adjustments to be +2, +2",
   );
   const sumAdj = adjustments.reduce((a, b) => a + b, 0);
   assert.equal(
@@ -2717,7 +2718,7 @@ test("V3.36 Demo Account has 4 completed rentals and a history-derived score of 
   );
 });
 
-test("Demo renter account carries 7 Rental Protection demo scenarios, one per status tab", () => {
+test("Demo renter account carries 5 Rental Protection demo scenarios, one per status tab except Completed", () => {
   const seed = createSeed("admin_demo");
   const byId = (id: string) => seed.bookings.find((b) => b.id === id)!;
 
@@ -2744,35 +2745,11 @@ test("Demo renter account carries 7 Rental Protection demo scenarios, one per st
   assert.equal(returnDue.deposit, "held", "Deposit must stay held until both sides confirm a clean return");
   assert.equal(returnDue.insurance?.selected, true);
 
-  // 4. Completed, insured — Sony A7 III Mirrorless Camera, exact figures from the spec
-  const completedInsured = byId("demo-booking-protection-completed-insured");
-  assert.equal(completedInsured.title, "Sony A7 III Mirrorless Camera");
-  assert.equal(completedInsured.status, "completed");
-  assert.deepEqual(completedInsured.quote, {
-    days: 3, rentalFee: 200, serviceFee: 10, deposit: 125, protection: 7.5, total: 342.5,
-  });
-  assert.equal(completedInsured.insurance?.selected, true);
-  assert.equal(completedInsured.insurance?.premium, 7.5);
-  assert.equal(completedInsured.insurance?.referralIncome, 2);
-  assert.equal(completedInsured.deposit, "released");
-  // Historical paid booking: its protection fee was charged under the old formula and must
-  // not be retroactively recalculated under the new 5%-of-rental-fee model.
+  // 4. (Completed scenarios removed) — the renter's Completed tab is kept to exactly the 2
+  // risk-linked demo bookings (Camping Tent, Sony A7 III Mirrorless Camera); no separate
+  // Rental Protection "completed" demo bookings exist any more.
 
-  // 5. Completed, uninsured — Portable Projector, exact figures from the spec
-  const completedUninsured = byId("demo-booking-protection-completed-uninsured");
-  assert.equal(completedUninsured.title, "Portable Projector");
-  assert.equal(completedUninsured.status, "completed");
-  assert.deepEqual(completedUninsured.quote, {
-    days: 2, rentalFee: 90, serviceFee: 5, deposit: 40, protection: 0, total: 135,
-  });
-  assert.equal(completedUninsured.insurance, null);
-  assert.equal(completedUninsured.deposit, "released");
-
-  // Completed tab must contain exactly one insured and one (at least) uninsured Rental Protection scenario
-  assert.equal(completedInsured.status, "completed");
-  assert.equal(completedUninsured.status, "completed");
-
-  // 6. Cancelled — GoPro HERO12 Black, full refund, matching deposit release
+  // 5. Cancelled — GoPro HERO12 Black, full refund, matching deposit release
   const cancelled = byId("demo-booking-protection-cancelled");
   assert.equal(cancelled.title, "GoPro HERO12 Black");
   assert.equal(cancelled.status, "cancelled");
@@ -2786,7 +2763,7 @@ test("Demo renter account carries 7 Rental Protection demo scenarios, one per st
     "Cancellation reason must be recorded as a message on the booking thread",
   );
 
-  // 7. Disputed — Canon RF Camera Lens, insured, unresolved, no automatic refund
+  // 6. Disputed — Canon RF Camera Lens, insured, unresolved, no automatic refund
   const disputed = byId("demo-booking-protection-disputed");
   assert.equal(disputed.title, "Canon RF Camera Lens");
   assert.equal(disputed.status, "disputed");
@@ -2801,11 +2778,10 @@ test("Demo renter account carries 7 Rental Protection demo scenarios, one per st
     "Renter's dispute response must be recorded",
   );
 
-  // Running the seed twice must not duplicate any of the 7 scenario bookings or the linked dispute
+  // Running the seed twice must not duplicate any of the 5 scenario bookings or the linked dispute
   const seedAgain = createSeed("admin_demo");
   const ids = [
     "demo-booking-protection-upcoming", "demo-booking-protection-active", "demo-booking-protection-return-due",
-    "demo-booking-protection-completed-insured", "demo-booking-protection-completed-uninsured",
     "demo-booking-protection-cancelled", "demo-booking-protection-disputed",
   ];
   for (const bid of ids) {
