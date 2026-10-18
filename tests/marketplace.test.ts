@@ -24,7 +24,9 @@ import {
   demoSlotAvailable,
   formatMalaysiaDateTime,
   formatScheduledReturnPickup,
-  calculateInsurancePremium,
+  calculateProtectionFee,
+  calculateProtectionLimit,
+  requiresProtectionEligibilityReview,
   getBookingTotals,
   getEffectiveBookingStatus,
   isCancellationEligible,
@@ -1044,8 +1046,8 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
     rentalFee: 90,
     serviceFee: 5,
     deposit: 200,
-    protection: 12,
-    total: 307,
+    protection: 4.5,
+    total: 299.5,
   });
   assert.deepEqual(calculateOwnerPayout(90), {
     commission: 11.7,
@@ -1077,17 +1079,23 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(1)), /1 to 90/);
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(92)), /1 to 90/);
 });
-test("optional Rental Protection premium follows the Shopee-inspired demo formula and stays out of the security deposit", () => {
-  assert.equal(calculateInsurancePremium(500, 2), 5);
-  assert.equal(calculateInsurancePremium(2500, 3), 7.5);
-  assert.equal(calculateInsurancePremium(2500, 8), 15);
+test("optional Rental Protection fee is 5% of the total rental fee, with no minimum or 7-day periods, and stays out of the security deposit", () => {
+  assert.equal(calculateProtectionFee(200), 10);
+  assert.equal(calculateProtectionFee(150), 7.5);
+  assert.equal(calculateProtectionFee(0), 0);
+  assert.equal(calculateProtectionLimit(500), 500);
+  assert.equal(calculateProtectionLimit(2500), 2500);
+  assert.equal(calculateProtectionLimit(90000), 60000);
+  assert.equal(requiresProtectionEligibilityReview(90000), true);
+  assert.equal(requiresProtectionEligibilityReview(60000), false);
   const state = createSeed();
   const unselected = quoteFor(state, state.profiles[0], state.listings[0], dateAfter(1), dateAfter(3), false);
   assert.equal(unselected.protection, 0);
   assert.equal(unselected.total, unselected.rentalFee + unselected.serviceFee + unselected.deposit);
   const selected = quoteFor(state, state.profiles[0], state.listings[0], dateAfter(1), dateAfter(3), true);
+  assert.equal(selected.protection, calculateProtectionFee(selected.rentalFee));
   assert.ok(selected.protection > 0);
-  assert.equal(selected.deposit, unselected.deposit, "Insurance must never change the risk-based security deposit.");
+  assert.equal(selected.deposit, unselected.deposit, "Protection must never change the risk-based security deposit.");
   assert.equal(selected.total, unselected.total + selected.protection);
 });
 test("the final available date can be rented with an exclusive next-day return", () => {
@@ -2747,7 +2755,8 @@ test("Demo renter account carries 7 Rental Protection demo scenarios, one per st
   assert.equal(completedInsured.insurance?.premium, 7.5);
   assert.equal(completedInsured.insurance?.referralIncome, 2);
   assert.equal(completedInsured.deposit, "released");
-  assert.equal(calculateInsurancePremium(2500, 3), completedInsured.insurance!.premium);
+  // Historical paid booking: its protection fee was charged under the old formula and must
+  // not be retroactively recalculated under the new 5%-of-rental-fee model.
 
   // 5. Completed, uninsured — Portable Projector, exact figures from the spec
   const completedUninsured = byId("demo-booking-protection-completed-uninsured");

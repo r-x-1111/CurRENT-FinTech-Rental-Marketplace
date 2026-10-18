@@ -114,10 +114,12 @@ export function Screen({
       </>;
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={s.screen}>
-      {(mobile || headerGradient) && <>
-        <LinearGradient pointerEvents="none" colors={["#EAF3FF", colors.paleBlue, colors.offWhite]} locations={[0, 0.38, 1]} style={mobile ? StyleSheet.absoluteFill : s.desktopHeaderGradient} />
+      {/* Shared page background: #EAF3FF fading to the flat #F7F8FA page colour over the top
+          ~400px, used on every screen so the wash is consistent app-wide. */}
+      <LinearGradient pointerEvents="none" colors={["#EAF3FF", colors.offWhite]} style={s.pageBgGradient} />
+      {(mobile || headerGradient) && (
         <View pointerEvents="none" style={mobile ? s.mobileBackgroundCurve : s.desktopBackgroundCurve} />
-      </>}
+      )}
       {bounded ? (
         <View style={[s.content, s.boundedContent, contentStyle]}>{content}</View>
       ) : (
@@ -507,7 +509,7 @@ export function PhotoPicker({
 export const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.offWhite },
   mobileBackgroundCurve: { position: "absolute", top: 0, right: -80, width: 270, height: 220, borderBottomLeftRadius: 180, backgroundColor: colors.softBlue, opacity: 0.3 },
-  desktopHeaderGradient: { position: "absolute", top: 0, left: 0, right: 0, height: 320 },
+  pageBgGradient: { position: "absolute", top: 0, left: 0, right: 0, height: 400 },
   desktopBackgroundCurve: { position: "absolute", top: -60, right: -120, width: 420, height: 320, borderBottomLeftRadius: 320, backgroundColor: colors.softBlue, opacity: 0.25 },
   content: {
     width: "100%",

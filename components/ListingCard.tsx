@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 18,
     fontWeight: "800",
-    color: colors.navy,
+    color: colors.blue,
   },
   compactPrice: { fontSize: 15 },
   perDayText: {

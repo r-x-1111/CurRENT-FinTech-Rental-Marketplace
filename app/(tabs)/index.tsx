@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +12,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ListingGrid } from "../../components/ListingGrid";
@@ -21,7 +23,25 @@ import { useMarketplace } from "../../context/Marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
 import { MagneticGlow } from "../../components/MagneticGlow";
 
+// Cools the hero photo's beige tones towards the page's blue palette. `filter` is a web-only
+// CSS property (this app ships as a web build via react-native-web) so it's injected only on
+// web and is a no-op on native platforms.
+const webHeroImageCoolStyle = Platform.OS === "web" ? ({ filter: "saturate(0.85) hue-rotate(6deg)" } as any) : undefined;
+
+// Hides the category-chip scrollbar while keeping it scrollable. `scrollbarWidth` covers
+// Firefox; the injected `.hide-scrollbar::-webkit-scrollbar` rule below covers Chrome/Safari.
+const webHideScrollbarStyle = Platform.OS === "web" ? ({ scrollbarWidth: "none", className: "hide-scrollbar" } as any) : undefined;
+let scrollbarStyleInjected = false;
+function injectHideScrollbarStyleOnce() {
+  if (Platform.OS !== "web" || scrollbarStyleInjected || typeof document === "undefined") return;
+  scrollbarStyleInjected = true;
+  const style = document.createElement("style");
+  style.textContent = ".hide-scrollbar::-webkit-scrollbar { display: none; }";
+  document.head.appendChild(style);
+}
+
 export default function HomeScreen() {
+  useEffect(() => { injectHideScrollbarStyleOnce(); }, []);
   const { state, user } = useMarketplace();
   const { width } = useWindowDimensions();
   const isDesktop = width >= 800;
@@ -123,9 +143,45 @@ export default function HomeScreen() {
               no separate panel, letterboxing or visible seam needed. */}
           <Image
             source={{ uri: "/hero/hero-products.png" }}
-            style={StyleSheet.absoluteFill}
+            style={[StyleSheet.absoluteFill, webHeroImageCoolStyle]}
             resizeMode="cover"
           />
+          {/* Blend the photo's left edge into the blue backdrop instead of a visible rectangle. */}
+          <LinearGradient
+            pointerEvents="none"
+            colors={[colors.paleBlue, "rgba(238,244,255,0)"]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.heroImageLeftFade}
+          />
+          {/* 120px fade from transparent into the flat #F7F8FA that every other page uses as its
+              background, so the hero ends with no hard line against the listings below. */}
+          <LinearGradient
+            pointerEvents="none"
+            colors={["rgba(238,244,255,0)", colors.offWhite]}
+            style={styles.heroBottomFade}
+          />
+          {/* Notification bell anchored to the hero's own top-right corner, flush with the page
+              edge, independent of the headline column. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              unreadNotifications > 0
+                ? `Notifications, ${unreadNotifications} unread`
+                : "Notifications"
+            }
+            onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
+            style={styles.heroNotificationButton}
+          >
+            <Ionicons name="notifications-outline" size={21} color={colors.navy} />
+            {unreadNotifications > 0 && (
+              <View style={styles.notificationCount}>
+                <Text style={styles.notificationCountText}>
+                  {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                </Text>
+              </View>
+            )}
+          </Pressable>
           <View style={[styles.heroContainer, isDesktop && styles.desktopHeroContainer]}>
             <View
               style={[
@@ -139,29 +195,6 @@ export default function HomeScreen() {
                 <View style={styles.eyebrowBadge}>
                   <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    unreadNotifications > 0
-                      ? `Notifications, ${unreadNotifications} unread`
-                      : "Notifications"
-                  }
-                  onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
-                  style={[styles.notificationButton, isDesktop && styles.desktopNotificationButton, isDesktop && { left: width * (width >= 1600 ? 0.2625 : 0.31) - 20 }]}
-                >
-                  <Ionicons
-                    name="notifications-outline"
-                    size={21}
-                    color={colors.navy}
-                  />
-                  {unreadNotifications > 0 && (
-                    <View style={styles.notificationCount}>
-                      <Text style={styles.notificationCountText}>
-                        {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
               </View>
 
               {/* Main Headline */}
@@ -274,16 +307,32 @@ export default function HomeScreen() {
               )}
 
                 <Text style={styles.categoryLabel}>Explore by category</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator keyboardShouldPersistTaps="handled" style={styles.mobileCategoryScroll} contentContainerStyle={styles.categoryChips}>
-                  {visibleCategories.map((category) => {
-                    const selected = mobileCategory === category;
-                    return (
-                      <Pressable key={category} accessibilityRole="button" accessibilityLabel={`Filter by ${category}`} accessibilityState={{ selected }} onPress={() => setMobileCategory(category)} style={[styles.categoryChip, selected && styles.categoryChipSelected]}>
-                        <Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]}>{category}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
+                <View style={styles.categoryScrollWrap}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    style={[styles.mobileCategoryScroll, webHideScrollbarStyle]}
+                    contentContainerStyle={styles.categoryChips}
+                  >
+                    {visibleCategories.map((category) => {
+                      const selected = mobileCategory === category;
+                      return (
+                        <Pressable key={category} accessibilityRole="button" accessibilityLabel={`Filter by ${category}`} accessibilityState={{ selected }} onPress={() => setMobileCategory(category)} style={[styles.categoryChip, selected && styles.categoryChipSelected]}>
+                          <Text style={[styles.categoryChipText, selected && styles.categoryChipTextSelected]}>{category}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                  {/* Right-edge fade hints that more chips are scrollable past the visible edge. */}
+                  <LinearGradient
+                    pointerEvents="none"
+                    colors={["rgba(238,244,255,0)", colors.paleBlue]}
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 1, y: 0.5 }}
+                    style={styles.categoryScrollFade}
+                  />
+                </View>
             </View>
 
           </View>
@@ -291,7 +340,10 @@ export default function HomeScreen() {
 
         {/* =========================================================================
             2. DISCOVERY CATALOGUE SECTION (Merged Explore Functionality)
+            Full-bleed light-blue band so the colour runs edge-to-edge with no seam against
+            the hero above it, regardless of viewport width; inner content stays centred.
            ========================================================================= */}
+        <View style={styles.catalogueBand}>
         <View style={[styles.catalogueSection, isMobile && styles.mobileCatalogueSection]}>
           <View style={[styles.catalogueControlsRow, isMobile && styles.mobileCatalogueControlsRow]}>
             {/* Left: Results count & active category indicator */}
@@ -344,6 +396,7 @@ export default function HomeScreen() {
             />
           )}
         </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -359,7 +412,7 @@ const styles = StyleSheet.create({
   },
   // Hero Styles
   heroWrapper: {
-    backgroundColor: colors.navy,
+    backgroundColor: colors.paleBlue,
     paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 36,
@@ -388,16 +441,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  notificationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.white,
-    position: "relative",
-  },
-  desktopNotificationButton: { position: "absolute", top: 0, zIndex: 2 },
   notificationCount: {
     minWidth: 17,
     height: 17,
@@ -531,23 +574,60 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   categoryLabel: { color: "#102B50", fontSize: 12, fontWeight: "700" },
+  categoryScrollWrap: { position: "relative" },
   mobileCategoryScroll: { marginTop: 4, flexGrow: 0 },
   categoryChips: { alignItems: "center", gap: 8, paddingVertical: 3, paddingRight: 18 },
+  categoryScrollFade: { position: "absolute", right: 0, top: 4, bottom: 0, width: 32 },
   categoryChip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", cursor: "pointer" },
   categoryChipSelected: { backgroundColor: colors.blue, borderColor: colors.blue },
   categoryChipText: { color: colors.navy, fontSize: 12, fontWeight: "700" },
   categoryChipTextSelected: { color: colors.white },
   // Floating Hero Showcase
   // Catalogue section
+  // Blends the photo's left edge into the surrounding blue backdrop.
+  heroImageLeftFade: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: "18%",
+  },
+  // 120px transparent-to-#EEF4FF fade so the hero ends flush into the catalogue band's colour.
+  heroBottomFade: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 120,
+  },
+  heroNotificationButton: {
+    position: "absolute",
+    top: 16,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.white,
+    zIndex: 3,
+  },
+  catalogueBand: {
+    // Flat #F7F8FA — same shared page background used by every other screen; the hero above
+    // already provides the blue wash, so no gradient is repeated here.
+    backgroundColor: colors.offWhite,
+    marginTop: -32,
+  },
   catalogueSection: {
     maxWidth: 1180,
     width: "100%",
     alignSelf: "center",
     paddingHorizontal: 20,
     paddingTop: 24,
+    paddingBottom: 32,
     gap: 16,
   },
-  mobileCatalogueSection: { paddingHorizontal: 16, paddingTop: 10, gap: 12 },
+  mobileCatalogueSection: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20, gap: 12 },
   catalogueControlsRow: {
     flexDirection: "row",
     alignItems: "center",

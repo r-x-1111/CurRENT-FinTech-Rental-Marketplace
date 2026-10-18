@@ -219,14 +219,38 @@ export function riskFor(state: Marketplace, profile: Profile) {
   };
 }
 
+/** Rental-fee-based pricing assumption for the optional Rental Protection demo (informed by
+ * Leechy's published 5% protection service fee), not an insurer quotation. */
+export const RENTAL_PROTECTION_RATE = 0.05;
+
+/** Proposed maximum protection exposure (informed by Antbuildz Malaysia's published equipment
+ * rental protection model) — a demo cap, not a guaranteed insurer payout. */
+export const RENTAL_PROTECTION_LIMIT_CAP = 60000;
+
 /**
- * Shopee-inspired optional Rental Protection premium (demo pricing assumption, not an insurer quotation).
- * Insurance Premium = MAX(RM5, Item Replacement Value x 0.003 x CEILING(Rental Days / 7)).
+ * Optional Rental Protection fee (demo pricing assumption, not an insurer quotation).
+ * Protection Fee = Total Rental Fee x 5%. No minimum, no seven-day billing periods — rental
+ * duration is already reflected in the rental fee.
  */
-export function calculateInsurancePremium(replacementValue: number, days: number): number {
-  if (!Number.isFinite(replacementValue) || replacementValue <= 0 || !Number.isFinite(days) || days <= 0) return 0;
-  const periods = Math.ceil(days / 7);
-  return Math.round(Math.max(5, replacementValue * 0.003 * periods) * 100) / 100;
+export function calculateProtectionFee(rentalFee: number): number {
+  if (!Number.isFinite(rentalFee) || rentalFee <= 0) return 0;
+  return Math.round(rentalFee * RENTAL_PROTECTION_RATE * 100) / 100;
+}
+
+/**
+ * Proposed Protection Limit = MIN(Item Replacement Value, RM60,000). A proposed maximum
+ * exposure, not an automatically guaranteed payout. Items whose replacement value exceeds the
+ * cap should be flagged for manual protection eligibility review by the caller.
+ */
+export function calculateProtectionLimit(replacementValue: number): number {
+  if (!Number.isFinite(replacementValue) || replacementValue <= 0) return 0;
+  return Math.min(replacementValue, RENTAL_PROTECTION_LIMIT_CAP);
+}
+
+/** Whether an item's replacement value exceeds the proposed protection cap and should be
+ * flagged for manual protection eligibility review rather than auto-covered. */
+export function requiresProtectionEligibilityReview(replacementValue: number): boolean {
+  return Number.isFinite(replacementValue) && replacementValue > RENTAL_PROTECTION_LIMIT_CAP;
 }
 
 export function quoteFor(
@@ -255,8 +279,8 @@ export function quoteFor(
     estimatedValue,
     risk.level,
   );
-  // Optional Rental Protection (Shopee-inspired, demo only). Never factored into the security deposit.
-  const protection = protectedItem ? calculateInsurancePremium(estimatedValue, days) : 0;
+  // Optional Rental Protection (demo only, 5% of the rental fee). Never factored into the security deposit.
+  const protection = protectedItem ? calculateProtectionFee(rentalFee) : 0;
   return {
     days,
     rentalFee,
