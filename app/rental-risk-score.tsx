@@ -75,7 +75,7 @@ export default function RentalRiskScoreScreen() {
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.softBlue, borderRadius: 12, overflow: "hidden", marginBottom: 12 },
+  card: { backgroundColor: colors.white, borderWidth: 1, borderColor: colors.navy, borderRadius: 12, overflow: "hidden", marginBottom: 12 },
   header: { minHeight: 54, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.paleBlue, cursor: "pointer" },
   hovered: { backgroundColor: colors.softBlue },
   pressed: { opacity: 0.82 },
