@@ -161,8 +161,9 @@ export default function HomeScreen() {
             colors={["rgba(238,244,255,0)", colors.offWhite]}
             style={styles.heroBottomFade}
           />
-          {/* Notification bell anchored to the hero's own top-right corner, flush with the page
-              edge, independent of the headline column. */}
+          {/* Notification bell: on desktop, anchored near the upper centre-right of the hero
+              (ahead of the product photography, not the far page edge); on mobile it stays at
+              the hero's top-right corner. */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
@@ -171,7 +172,11 @@ export default function HomeScreen() {
                 : "Notifications"
             }
             onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
-            style={styles.heroNotificationButton}
+            style={[
+              styles.heroNotificationButton,
+              isDesktop && styles.desktopHeroNotificationButton,
+              isDesktop && { left: width >= 1600 ? "52%" : "50%" },
+            ]}
           >
             <Ionicons name="notifications-outline" size={21} color={colors.navy} />
             {unreadNotifications > 0 && (
@@ -188,7 +193,7 @@ export default function HomeScreen() {
                 styles.heroContent,
                 isMobile && styles.mobileHeroContent,
                 isDesktop && styles.desktopHeroContent,
-                { width: isDesktop ? (width >= 1600 ? "43%" : "52%") : "100%" },
+                { width: isDesktop ? (width >= 1600 ? "50%" : "58%") : "100%" },
               ]}
             >
               <View style={styles.heroTopRow}>
@@ -324,14 +329,6 @@ export default function HomeScreen() {
                       );
                     })}
                   </ScrollView>
-                  {/* Right-edge fade hints that more chips are scrollable past the visible edge. */}
-                  <LinearGradient
-                    pointerEvents="none"
-                    colors={["rgba(238,244,255,0)", colors.paleBlue]}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 1, y: 0.5 }}
-                    style={styles.categoryScrollFade}
-                  />
                 </View>
             </View>
 
@@ -417,10 +414,14 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 36,
     overflow: "hidden",
+    position: "relative",
   },
   // A sensible minimum height keeps the hero from becoming extremely short-and-wide on large
   // monitors, which would force resizeMode="cover" to crop the product photo too aggressively.
-  desktopHeroWrapper: { paddingLeft: "20%", paddingRight: "7.5%", paddingTop: 26, paddingBottom: 26, minHeight: 460 },
+  // justifyContent "center" drops the content column down from the hero's top edge to sit
+  // lower within the hero, matching the repositioned target area instead of the original
+  // top-pinned spot.
+  desktopHeroWrapper: { paddingLeft: "20%", paddingRight: "7.5%", paddingTop: 26, paddingBottom: 26, minHeight: 460, justifyContent: "center" },
   mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 10, overflow: "hidden" },
   heroContainer: {
     maxWidth: 1180,
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
   heroContent: {
     gap: 16,
   },
-  desktopHeroContent: { gap: 10, maxWidth: 620 },
+  desktopHeroContent: { gap: 10, maxWidth: 700 },
   mobileHeroContent: { gap: 10 },
   heroTopRow: {
     flexDirection: "row",
@@ -574,10 +575,12 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   categoryLabel: { color: "#102B50", fontSize: 12, fontWeight: "700" },
-  categoryScrollWrap: { position: "relative" },
-  mobileCategoryScroll: { marginTop: 4, flexGrow: 0 },
+  // Clipped to the same width as the search bar/headline column (desktopSearchContainer's
+  // maxWidth: 620) so the scrollable chip row never extends past that edge towards the
+  // product photography; chips beyond it are reached by scrolling within this container only.
+  categoryScrollWrap: { position: "relative", width: "100%", maxWidth: 620, overflow: "hidden" },
+  mobileCategoryScroll: { marginTop: 4, flexGrow: 0, minWidth: 0 },
   categoryChips: { alignItems: "center", gap: 8, paddingVertical: 3, paddingRight: 18 },
-  categoryScrollFade: { position: "absolute", right: 0, top: 4, bottom: 0, width: 32 },
   categoryChip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", cursor: "pointer" },
   categoryChipSelected: { backgroundColor: colors.blue, borderColor: colors.blue },
   categoryChipText: { color: colors.navy, fontSize: 12, fontWeight: "700" },
@@ -611,6 +614,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.white,
     zIndex: 3,
+  },
+  // Desktop: drop the right-edge anchor in favour of a `left` percentage (set inline) so the
+  // bell sits ahead of the product photography instead of the far page edge.
+  desktopHeroNotificationButton: {
+    right: undefined,
+    top: 90,
   },
   catalogueBand: {
     // Flat #F7F8FA — same shared page background used by every other screen; the hero above
