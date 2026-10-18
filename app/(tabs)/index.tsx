@@ -134,7 +134,7 @@ export default function HomeScreen() {
             1. HERO SECTION (Canva Page 2 Dark Navy Anchor)
            ========================================================================= */}
         <View
-          style={[styles.heroWrapper, isDesktop && styles.desktopHeroWrapper, isDesktop && { paddingLeft: width >= 1600 ? "22%" : "20%" }, isMobile && styles.mobileHeroWrapper]}
+          style={[styles.heroWrapper, isDesktop && styles.desktopHeroWrapper, isMobile && styles.mobileHeroWrapper]}
         >
           {/* Full-bleed hero background photo. Its own composition already keeps ~55% of its
               left side as clean navy studio background and groups the camera/MacBook/DualSense/
@@ -172,11 +172,7 @@ export default function HomeScreen() {
                 : "Notifications"
             }
             onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
-            style={[
-              styles.heroNotificationButton,
-              isDesktop && styles.desktopHeroNotificationButton,
-              isDesktop && { left: width >= 1600 ? "52%" : "50%" },
-            ]}
+            style={styles.heroNotificationButton}
           >
             <Ionicons name="notifications-outline" size={21} color={colors.navy} />
             {unreadNotifications > 0 && (
@@ -187,7 +183,7 @@ export default function HomeScreen() {
               </View>
             )}
           </Pressable>
-          <View style={[styles.heroContainer, isDesktop && styles.desktopHeroContainer]}>
+          <View style={[styles.heroContainer, isDesktop && styles.desktopHeroContainer, isMobile && styles.mobileHeroContainer]}>
             <View
               style={[
                 styles.heroContent,
@@ -410,7 +406,6 @@ const styles = StyleSheet.create({
   // Hero Styles
   heroWrapper: {
     backgroundColor: colors.paleBlue,
-    paddingHorizontal: 20,
     paddingTop: 50,
     paddingBottom: 36,
     overflow: "hidden",
@@ -421,17 +416,26 @@ const styles = StyleSheet.create({
   // justifyContent "center" drops the content column down from the hero's top edge to sit
   // lower within the hero, matching the repositioned target area instead of the original
   // top-pinned spot.
-  desktopHeroWrapper: { paddingLeft: "20%", paddingRight: "7.5%", paddingTop: 26, paddingBottom: 26, minHeight: 460, justifyContent: "center" },
-  mobileHeroWrapper: { paddingHorizontal: 22, paddingTop: 28, paddingBottom: 10, overflow: "hidden" },
+  desktopHeroWrapper: { paddingTop: 26, paddingBottom: 26, minHeight: 460, justifyContent: "center" },
+  mobileHeroWrapper: { paddingTop: 28, paddingBottom: 10, overflow: "hidden" },
+  // No horizontal padding lives on heroWrapper any more — it's applied here instead, on the
+  // same maxWidth:1180/alignSelf:"center" element, exactly mirroring catalogueSection's own
+  // structure (full-width band with no padding > centered maxWidth element with its own
+  // paddingHorizontal). Two different centering strategies (padding on the outer wrapper vs.
+  // padding on the inner capped element) round differently once the content box exceeds 1180,
+  // which is what caused the headline and "All Items" to drift apart at some widths/zoom
+  // levels — this keeps the math identical between the two sections at every width.
   heroContainer: {
     maxWidth: 1180,
     width: "100%",
     alignSelf: "center",
+    paddingHorizontal: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  desktopHeroContainer: { maxWidth: 1600, alignItems: "flex-start" },
+  desktopHeroContainer: { alignItems: "flex-start" },
+  mobileHeroContainer: { paddingHorizontal: 22 },
   heroContent: {
     gap: 16,
   },
@@ -587,13 +591,16 @@ const styles = StyleSheet.create({
   categoryChipTextSelected: { color: colors.white },
   // Floating Hero Showcase
   // Catalogue section
-  // Blends the photo's left edge into the surrounding blue backdrop.
+  // Blends the photo's left edge into the surrounding blue backdrop. Fixed pixel width (not a
+  // percentage) so it covers the same amount of the photo at every screen size — a percentage
+  // width would grow with the viewport and visually "push" the photo further right as the
+  // window widens.
   heroImageLeftFade: {
     position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
-    width: "18%",
+    width: 220,
   },
   // 120px transparent-to-#EEF4FF fade so the hero ends flush into the catalogue band's colour.
   heroBottomFade: {
@@ -603,6 +610,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 120,
   },
+  // Pinned to the hero's own top-right corner (right: 20 matches heroContainer/catalogueSection's
+  // own side inset) at every screen size — a content-relative position was tried but overlapped
+  // the headline at narrower desktop widths, so a fixed corner anchor is the robust choice.
   heroNotificationButton: {
     position: "absolute",
     top: 16,
@@ -614,12 +624,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.white,
     zIndex: 3,
-  },
-  // Desktop: drop the right-edge anchor in favour of a `left` percentage (set inline) so the
-  // bell sits ahead of the product photography instead of the far page edge.
-  desktopHeroNotificationButton: {
-    right: undefined,
-    top: 90,
   },
   catalogueBand: {
     // Flat #F7F8FA — same shared page background used by every other screen; the hero above
