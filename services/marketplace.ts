@@ -24,7 +24,7 @@ import {
 } from "./deposit";
 import { evaluateRentalOutcome, tierForScore } from "./riskScore";
 import { createSeed } from "../data/seed";
-import { addDaysToDateString, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery } from "./delivery";
+import { addDaysToDateString, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "./delivery";
 
 export type Action =
   | { type: "login"; userId: string | null }
@@ -38,9 +38,12 @@ export type Action =
   | { type: "readChat"; conversationId: string }
   | { type: "saveListing"; listing: Listing }
   | { type: "startDeliveryCheckout"; id: string; listingId: string; start: string; end: string; deliveryAddress: string;
-      deliveryPostcode: string; returnPickupTime?: string; dispatchDate?: string; returnDispatchDate?: string }
+      deliveryPostcode: string; returnPickupTime?: string }
   | { type: "correctBookingDeliveryAddress"; bookingId: string; deliveryAddress: string; deliveryPostcode: string }
   | { type: "payDeliveryDemo"; bookingId: string; receiptReference: string }
+  | { type: "confirmOutboundDispatch"; bookingId: string; decision: "accept" | "propose" | "dropoff";
+      proposedDate?: string }
+  | { type: "respondToDispatchProposal"; bookingId: string; approve: boolean }
   | { type: "completeRentalCheckout"; bookingId: string; paymentMethod: string; insuranceSelected?: boolean }
   | { type: "cancelDeliveryCheckout"; bookingId: string }
   | { type: "deleteListing"; id: string }
@@ -718,27 +721,40 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         booking.status === "payment_required"), "Resume your existing checkout for these dates.");
       availability(state, listing, action.start, action.end);
       const quote = quoteFor(state, user, listing, action.start, action.end);
+      const courierReturnDispatchDate = action.end.slice(0, 10);
       const deliveryDemo = isCourier
         ? (() => {
             const twoWayFee = Math.round((courierOutbound!.fee + courierReturn!.fee) * 100) / 100;
-            requireThat(action.dispatchDate && action.dispatchDate.trim().length > 0,
-              "Select a planned dispatch date.");
-            requireThat(action.returnDispatchDate && action.returnDispatchDate.trim().length > 0,
-              "Select a scheduled return dispatch date.");
-            const transit = estimatedCourierTransitDays(courierOutbound!.zone);
+            // CurRENT recommends both dates automatically — the renter never schedules the
+            // lender's courier pickup directly. Outbound dispatch is computed early enough that
+            // the slowest-case transit estimate still arrives on/before the rental start date;
+            // return is a courier branch drop-off, defaulting to the rental's own end date. The
+            // lender confirms the outbound arrangement via the separate confirmOutboundDispatch
+            // action. When the zone has no reliable published transit reference (East Malaysia),
+            // dispatchDate/estimated ranges stay unset rather than inventing a figure — the UI
+            // shows "Delivery Timing Confirmation Required" and the lender proposes a date instead.
+            const dispatchDate = recommendDispatchDate(action.start, courierOutbound!.zone);
+            if (dispatchDate) {
+              requireThat(isDispatchDateFeasible(dispatchDate, now.slice(0, 10)),
+                "Selected Rental Dates Unavailable for Courier Delivery — your selected rental start date does not allow sufficient estimated shipping time. Please choose a later rental date.");
+            }
+            const returnDispatchDate = courierReturnDispatchDate;
+            const hasEstimate = hasReliableCourierTransitEstimate(courierOutbound!.zone);
+            const transit = hasEstimate ? estimatedCourierTransitDays(courierOutbound!.zone) : null;
             return {
               provider: DOMESTIC_COURIER_NAME as "J&T Express (Demo)", origin: listing.location,
               destination: action.deliveryAddress, fee: twoWayFee, status: "required" as const,
               outboundFee: courierOutbound!.fee, returnFee: courierReturn!.fee,
               shippingZone: courierOutbound!.zone, chargeableWeightKg: courierOutbound!.chargeableWeightKg,
               volumetricWeightKg: courierOutbound!.volumetricWeightKg,
-              dispatchDate: action.dispatchDate,
-              estimatedDeliveryRangeStart: addDaysToDateString(action.dispatchDate!, transit.min),
-              estimatedDeliveryRangeEnd: addDaysToDateString(action.dispatchDate!, transit.max),
-              returnDispatchDeadline: action.returnDispatchDate,
-              estimatedReturnRangeStart: addDaysToDateString(action.returnDispatchDate!, transit.min),
-              estimatedReturnRangeEnd: addDaysToDateString(action.returnDispatchDate!, transit.max),
+              dispatchDate: dispatchDate ?? undefined,
+              estimatedDeliveryRangeStart: dispatchDate && transit ? addDaysToDateString(dispatchDate, transit.min) : undefined,
+              estimatedDeliveryRangeEnd: dispatchDate && transit ? addDaysToDateString(dispatchDate, transit.max) : undefined,
+              returnDispatchDeadline: returnDispatchDate,
+              estimatedReturnRangeStart: transit ? addDaysToDateString(returnDispatchDate, transit.min) : undefined,
+              estimatedReturnRangeEnd: transit ? addDaysToDateString(returnDispatchDate, transit.max) : undefined,
               pricingReference: courierOutbound!.reference,
+              outboundDispatchStatus: "awaiting_lender_confirmation" as const,
             };
           })()
         : (() => {
@@ -763,7 +779,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         ownerId: listing.ownerId, renterId: user.id, start: action.start, end: action.end,
         scheduledPickup: action.start, scheduledReturn: action.end,
         returnPickupTime: isCourier ? undefined : action.returnPickupTime,
-        returnDispatchDate: isCourier ? action.returnDispatchDate : undefined,
+        returnDispatchDate: isCourier ? courierReturnDispatchDate : undefined,
         durationMinutes: calculateDurationMinutes(action.start, action.end),
         cancellationCutoff: calculateCancellationCutoff(action.start),
         collectionMethod: "Delivery Only", deliveryAddress: action.deliveryAddress,
@@ -908,6 +924,81 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           pricingReference: delivery.pricingReference || "Earlier CurRENT demo quote",
           paidAt: now, sample: false, status: "paid_demo",
         }, ...(state.deliveryHistory || [])];
+      }
+      break;
+    }
+
+    case "confirmOutboundDispatch": {
+      const booking = bookingFor(action.bookingId);
+      requireThat(booking.ownerId === user.id, "Only the lender can confirm the outbound dispatch arrangement.");
+      requireThat(getEffectiveBookingStatus(booking) === "upcoming",
+        "The outbound dispatch arrangement can only be confirmed before the rental starts.");
+      requireThat(booking.deliveryDemo?.provider === DOMESTIC_COURIER_NAME && booking.deliveryDemo.status === "paid_demo",
+        "This booking has no paid Domestic Courier delivery to confirm.");
+      const delivery = booking.deliveryDemo;
+      const hasEstimate = hasReliableCourierTransitEstimate(delivery.shippingZone!);
+      if (action.decision === "accept") {
+        delivery.outboundDispatchStatus = "confirmed";
+        delivery.outboundTrackingRef = delivery.outboundTrackingRef || `DEMO-JT-OUT-${booking.id.toUpperCase()}`;
+        booking.lenderOutboundDispatchConfirmedAt = now;
+        notify(booking.renterId, `Lender confirmed the outbound dispatch arrangement for ${booking.title}.`, booking.id);
+      } else if (action.decision === "dropoff") {
+        delivery.outboundDispatchStatus = "drop_off";
+        delivery.outboundTrackingRef = delivery.outboundTrackingRef || `DEMO-JT-OUT-${booking.id.toUpperCase()}`;
+        booking.lenderOutboundDispatchConfirmedAt = now;
+        notify(booking.renterId, `Lender will prepare the item for courier branch drop-off for ${booking.title}.`, booking.id);
+      } else {
+        requireThat(action.proposedDate && action.proposedDate.trim().length > 0, "Enter a proposed dispatch date.");
+        const proposedDate = action.proposedDate!;
+        delivery.lenderProposedDispatchDate = proposedDate;
+        // Without a reliable published transit reference for this zone (East Malaysia), CurRENT
+        // can't check compatibility against the rental start — the lender's proposal always
+        // requires renter approval rather than silently guessing it's fine.
+        const stillCompatible = hasEstimate &&
+          addDaysToDateString(proposedDate, estimatedCourierTransitDays(delivery.shippingZone!).max) <= booking.start.slice(0, 10);
+        if (stillCompatible) {
+          // The proposed date still lands on/before the rental's own start date — auto-confirm,
+          // no renter approval needed, since nothing about the agreed rental is affected.
+          const transit = estimatedCourierTransitDays(delivery.shippingZone!);
+          delivery.outboundDispatchStatus = "confirmed";
+          delivery.dispatchDate = proposedDate;
+          delivery.estimatedDeliveryRangeStart = addDaysToDateString(proposedDate, transit.min);
+          delivery.estimatedDeliveryRangeEnd = addDaysToDateString(proposedDate, transit.max);
+          delivery.requiresRenterDispatchApproval = false;
+          delivery.outboundTrackingRef = delivery.outboundTrackingRef || `DEMO-JT-OUT-${booking.id.toUpperCase()}`;
+          booking.lenderOutboundDispatchConfirmedAt = now;
+          notify(booking.renterId, `Lender rescheduled the outbound dispatch for ${booking.title}; still arrives before your rental starts.`, booking.id);
+        } else {
+          delivery.outboundDispatchStatus = "proposed_alternate";
+          delivery.requiresRenterDispatchApproval = true;
+          notify(booking.renterId, `Lender proposed a dispatch date for ${booking.title} that needs your approval — please review.`, booking.id);
+        }
+      }
+      break;
+    }
+
+    case "respondToDispatchProposal": {
+      const booking = bookingFor(action.bookingId);
+      requireThat(booking.renterId === user.id, "Only the renter can respond to a proposed dispatch date.");
+      requireThat(booking.deliveryDemo?.requiresRenterDispatchApproval,
+        "There is no proposed dispatch date awaiting your approval.");
+      const delivery = booking.deliveryDemo;
+      if (action.approve) {
+        const proposedDate = delivery.lenderProposedDispatchDate!;
+        delivery.outboundDispatchStatus = "confirmed";
+        delivery.dispatchDate = proposedDate;
+        if (hasReliableCourierTransitEstimate(delivery.shippingZone!)) {
+          const transit = estimatedCourierTransitDays(delivery.shippingZone!);
+          delivery.estimatedDeliveryRangeStart = addDaysToDateString(proposedDate, transit.min);
+          delivery.estimatedDeliveryRangeEnd = addDaysToDateString(proposedDate, transit.max);
+        }
+        delivery.requiresRenterDispatchApproval = false;
+        delivery.outboundTrackingRef = delivery.outboundTrackingRef || `DEMO-JT-OUT-${booking.id.toUpperCase()}`;
+        booking.lenderOutboundDispatchConfirmedAt = booking.lenderOutboundDispatchConfirmedAt || now;
+        notify(booking.ownerId, `Renter approved the proposed dispatch date for ${booking.title}.`, booking.id);
+      } else {
+        delivery.requiresRenterDispatchApproval = false;
+        notify(booking.ownerId, `Renter declined the proposed dispatch date for ${booking.title}. Message them to agree a new arrangement, or they may cancel the booking.`, booking.id);
       }
       break;
     }
@@ -1214,6 +1305,14 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         b.renterReturnConfirmedAt = now;
         b.status = "return_pending";
         b.deposit = "release_pending";
+        // Courier Branch Drop-off: this is the moment the renter confirms they've dropped the
+        // returned parcel off, so stamp the demo drop-off confirmation + tracking reference
+        // here rather than a separate action. The deposit stays held until the lender also
+        // confirms (owner branch below) — unaffected by return transit time.
+        if (b.deliveryDemo?.provider === DOMESTIC_COURIER_NAME) {
+          b.deliveryDemo.returnDropoffConfirmedAt = now;
+          b.deliveryDemo.returnTrackingRef = b.deliveryDemo.returnTrackingRef || `DEMO-JT-RET-${b.id.toUpperCase()}`;
+        }
         notify(
           b.ownerId,
           `Renter confirmed return and uploaded condition evidence for ${b.title}. Please inspect the item and confirm return.`,

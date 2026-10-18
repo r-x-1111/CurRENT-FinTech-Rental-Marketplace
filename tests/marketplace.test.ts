@@ -38,7 +38,7 @@ import {
   toMalaysiaUtcTimestamp,
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
-import { calculateChargeableWeightKg, calculateVolumetricWeightKg, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, eligibleDeliveryVehicles, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, quoteDemoDelivery, selectListingDeliveryVehicle } from "../services/delivery";
+import { calculateChargeableWeightKg, calculateVolumetricWeightKg, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, eligibleDeliveryVehicles, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, quoteDemoDelivery, recommendDispatchDate, selectListingDeliveryVehicle } from "../services/delivery";
 import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../services/geo";
 import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
 import { evaluateRentalOutcome } from "../services/riskScore";
@@ -762,6 +762,144 @@ test("Domestic Courier (Demo): volumetric weight, chargeable weight, and cross-s
     weightKg: 4, dimensionsCm: { length: 130, width: 20, height: 18 } }), null);
   assert.equal(quoteAutomaticDomesticCourier({ pickupPostcode: "80000", deliveryPostcode: "46200",
     weightKg: 4, dimensionsCm: { length: 130, width: 20, height: 18 } }), null);
+});
+
+test("recommendDispatchDate uses J&T's published 2-3 day Peninsular estimate; East Malaysia has no reliable reference", () => {
+  // Latest Planned Dispatch Date = Rental Start - (3-day transit + 1-day CurRENT buffer) = -4 days,
+  // matching the task's own example (19 Oct start -> 15 Oct dispatch).
+  assert.equal(recommendDispatchDate("2026-10-19", "West Malaysia"), "2026-10-15");
+  assert.equal(recommendDispatchDate("2026-06-15", "West Malaysia", 0), "2026-06-12");
+  // East Malaysia has no published transit reference this demo can cite — never fabricate one.
+  assert.equal(recommendDispatchDate("2026-06-15", "East Malaysia"), null);
+  assert.equal(hasReliableCourierTransitEstimate("West Malaysia"), true);
+  assert.equal(hasReliableCourierTransitEstimate("East Malaysia"), false);
+  assert.deepEqual(estimatedCourierTransitDays("West Malaysia"), { min: 2, max: 3 });
+});
+
+test("isDispatchDateFeasible rejects a dispatch date already in the past relative to today", () => {
+  assert.equal(isDispatchDateFeasible("2026-06-10", "2026-06-10"), true);
+  assert.equal(isDispatchDateFeasible("2026-06-10", "2026-06-09"), true);
+  assert.equal(isDispatchDateFeasible("2026-06-10", "2026-06-11"), false);
+});
+
+test("Domestic Courier (Demo) scheduling: CurRENT recommends dates, the lender confirms outbound dispatch, and a paid fee is never recalculated", () => {
+  const j = journey(); // logged in as demo-renter by default
+  const start = `${dateAfter(10)}T11:00:00+08:00`;
+  const end = `${dateAfter(12)}T11:00:00+08:00`;
+
+  // The renter is never asked to type a dispatch date — no scheduling field is required to
+  // start a courier checkout at all; CurRENT computes everything automatically.
+  j.act({ type: "startDeliveryCheckout", id: "courier-schedule", listingId: "sony-a7iii",
+    start, end, deliveryAddress: "George Town, Pulau Pinang", deliveryPostcode: "10000" });
+  let booking = j.state.bookings.find((b) => b.id === "courier-schedule")!;
+  assert.equal(booking.deliveryDemo?.provider, DOMESTIC_COURIER_NAME);
+  assert.ok(booking.deliveryDemo?.dispatchDate, "CurRENT must auto-compute a dispatch date for West Malaysia");
+  assert.equal(booking.deliveryDemo?.outboundDispatchStatus, "awaiting_lender_confirmation");
+  assert.equal(booking.returnDispatchDate, end.slice(0, 10));
+  const paidFee = booking.deliveryDemo!.fee;
+
+  // A rental start too close to today doesn't leave enough transit time — never show a past
+  // dispatch date as available.
+  assert.throws(
+    () => j.act({ type: "startDeliveryCheckout", id: "too-soon", listingId: "sony-a7iii",
+      start: `${dateAfter(0)}T11:00:00+08:00`, end: `${dateAfter(2)}T11:00:00+08:00`,
+      deliveryAddress: "George Town, Pulau Pinang", deliveryPostcode: "10000" }),
+    /Selected Rental Dates Unavailable for Courier Delivery/,
+  );
+
+  j.act({ type: "payDeliveryDemo", bookingId: "courier-schedule", receiptReference: "DEMO-GE-COURIER-SCHEDULE" });
+  j.act({ type: "completeRentalCheckout", bookingId: "courier-schedule", paymentMethod: "Demo FPX" });
+  booking = j.state.bookings.find((b) => b.id === "courier-schedule")!;
+  assert.equal(booking.deliveryDemo?.status, "paid_demo");
+
+  // Only the lender (sony-a7iii's owner) can confirm the outbound dispatch arrangement.
+  assert.throws(
+    () => j.act({ type: "confirmOutboundDispatch", bookingId: "courier-schedule", decision: "accept" }),
+    /only the lender/i,
+  );
+
+  j.login("owner-aiman");
+  j.act({ type: "confirmOutboundDispatch", bookingId: "courier-schedule", decision: "accept" });
+  booking = j.state.bookings.find((b) => b.id === "courier-schedule")!;
+  assert.equal(booking.deliveryDemo?.outboundDispatchStatus, "confirmed");
+  assert.ok(booking.deliveryDemo?.outboundTrackingRef);
+  assert.ok(booking.lenderOutboundDispatchConfirmedAt);
+  assert.equal(booking.deliveryDemo?.fee, paidFee, "Confirming dispatch must never recalculate the paid fee");
+
+  // A lender-proposed date far enough out to miss the rental start requires renter approval,
+  // and still never touches the paid fee.
+  j.act({ type: "confirmOutboundDispatch", bookingId: "courier-schedule", decision: "propose", proposedDate: dateAfter(30) });
+  booking = j.state.bookings.find((b) => b.id === "courier-schedule")!;
+  assert.equal(booking.deliveryDemo?.outboundDispatchStatus, "proposed_alternate");
+  assert.equal(booking.deliveryDemo?.requiresRenterDispatchApproval, true);
+  assert.equal(booking.deliveryDemo?.fee, paidFee);
+
+  j.login("demo-renter");
+  assert.throws(
+    () => j.act({ type: "confirmOutboundDispatch", bookingId: "courier-schedule", decision: "accept" }),
+    /only the lender/i,
+  );
+  j.act({ type: "respondToDispatchProposal", bookingId: "courier-schedule", approve: true });
+  booking = j.state.bookings.find((b) => b.id === "courier-schedule")!;
+  assert.equal(booking.deliveryDemo?.outboundDispatchStatus, "confirmed");
+  assert.equal(booking.deliveryDemo?.requiresRenterDispatchApproval, false);
+  assert.equal(booking.deliveryDemo?.dispatchDate, dateAfter(30));
+  assert.equal(booking.deliveryDemo?.fee, paidFee);
+
+  // Return: a courier branch drop-off, not a scheduled pickup. The renter confirms the drop-off
+  // through the existing returnConfirm flow (reused, not a new action), which stamps the demo
+  // drop-off confirmation + tracking reference — deposit stays held until the lender also confirms.
+  booking.end = new Date(Date.now() - 1).toISOString();
+  booking.status = "active";
+  j.act({ type: "returnConfirm", bookingId: "courier-schedule", role: "renter",
+    photos: ["/p1.jpg", "/p2.jpg", "/p3.jpg", "/p4.jpg", "/p5.jpg", "/p6.jpg"], videos: ["/v1.mp4"] });
+  booking = j.state.bookings.find((b) => b.id === "courier-schedule")!;
+  assert.ok(booking.deliveryDemo?.returnDropoffConfirmedAt, "Expected the courier drop-off to be stamped");
+  assert.ok(booking.deliveryDemo?.returnTrackingRef);
+  assert.equal(booking.deposit, "release_pending", "Deposit stays held, not released, until the lender also confirms");
+
+  // Drop-off arrangement (outbound leg) on a second booking.
+  j.login("demo-renter");
+  j.act({ type: "startDeliveryCheckout", id: "courier-dropoff", listingId: "sony-a7iii",
+    start: `${dateAfter(14)}T11:00:00+08:00`, end: `${dateAfter(16)}T11:00:00+08:00`,
+    deliveryAddress: "George Town, Pulau Pinang", deliveryPostcode: "10000" });
+  j.act({ type: "payDeliveryDemo", bookingId: "courier-dropoff", receiptReference: "DEMO-GE-COURIER-DROPOFF" });
+  j.act({ type: "completeRentalCheckout", bookingId: "courier-dropoff", paymentMethod: "Demo FPX" });
+  j.login("owner-aiman");
+  j.act({ type: "confirmOutboundDispatch", bookingId: "courier-dropoff", decision: "dropoff" });
+  const dropoffBooking = j.state.bookings.find((b) => b.id === "courier-dropoff")!;
+  assert.equal(dropoffBooking.deliveryDemo?.outboundDispatchStatus, "drop_off");
+  assert.ok(dropoffBooking.deliveryDemo?.outboundTrackingRef);
+
+  // East Malaysia (Sabah pickup): no published transit reference this demo can cite — CurRENT
+  // must not fabricate a dispatch date or an estimated range, but the lender can still propose
+  // one, which then always requires renter approval (CurRENT can't check compatibility itself).
+  j.login("demo-renter");
+  j.act({ type: "startDeliveryCheckout", id: "courier-east", listingId: "power-station",
+    start: `${dateAfter(20)}T11:00:00+08:00`, end: `${dateAfter(22)}T11:00:00+08:00`,
+    deliveryAddress: "Petaling Jaya, Selangor", deliveryPostcode: "46100" });
+  let eastBooking = j.state.bookings.find((b) => b.id === "courier-east")!;
+  assert.equal(eastBooking.deliveryDemo?.shippingZone, "East Malaysia");
+  assert.equal(eastBooking.deliveryDemo?.dispatchDate, undefined);
+  assert.equal(eastBooking.deliveryDemo?.estimatedDeliveryRangeStart, undefined);
+  assert.equal(eastBooking.deliveryDemo?.outboundDispatchStatus, "awaiting_lender_confirmation");
+  j.act({ type: "payDeliveryDemo", bookingId: "courier-east", receiptReference: "DEMO-GE-COURIER-EAST" });
+  j.act({ type: "completeRentalCheckout", bookingId: "courier-east", paymentMethod: "Demo FPX" });
+  j.login("owner-daniel");
+  j.act({ type: "confirmOutboundDispatch", bookingId: "courier-east", decision: "propose", proposedDate: dateAfter(16) });
+  eastBooking = j.state.bookings.find((b) => b.id === "courier-east")!;
+  assert.equal(eastBooking.deliveryDemo?.outboundDispatchStatus, "proposed_alternate");
+  assert.equal(eastBooking.deliveryDemo?.requiresRenterDispatchApproval, true);
+
+  // GrabExpress (local, same-state) bookings never gain any of these courier-only fields.
+  j.login("demo-renter");
+  j.act({ type: "startDeliveryCheckout", id: "grab-schedule", listingId: "sony-a7iii",
+    start: `${dateAfter(2)}T11:00:00+08:00`, end: `${dateAfter(4)}T11:00:00+08:00`,
+    deliveryAddress: "Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480", returnPickupTime: "15:00" });
+  const grabBooking = j.state.bookings.find((b) => b.id === "grab-schedule")!;
+  assert.equal(grabBooking.deliveryDemo?.provider, "GrabExpress (Simulation)");
+  assert.equal(grabBooking.deliveryDemo?.outboundDispatchStatus, undefined);
+  assert.equal(grabBooking.deliveryDemo?.dispatchDate, undefined);
 });
 
 test("automatic postcode-based delivery estimate: Haversine x road factor, MAX(RM5, RM4 + distance) fee, no API and no manual distance", () => {

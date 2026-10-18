@@ -174,6 +174,12 @@ export type StoredDeliveryDemo = {
   estimatedReturnRangeEnd?: string;
   outboundTrackingRef?: string;
   returnTrackingRef?: string;
+  outboundDispatchStatus?: "awaiting_lender_confirmation" | "confirmed" | "proposed_alternate" | "drop_off";
+  lenderProposedDispatchDate?: string;
+  requiresRenterDispatchApproval?: boolean;
+  /** Set once the renter confirms they've dropped the returned parcel at a courier branch
+   * (stamped by the existing returnConfirm action for courier bookings). */
+  returnDropoffConfirmedAt?: string;
   status: "required" | "paid_demo" | "refunded_demo";
   receiptReference?: string;
   paidAt?: string;
@@ -206,6 +212,10 @@ export type DisplayDelivery = {
   estimatedReturnRangeEnd?: string | null;
   outboundTrackingRef?: string | null;
   returnTrackingRef?: string | null;
+  outboundDispatchStatus?: "awaiting_lender_confirmation" | "confirmed" | "proposed_alternate" | "drop_off" | null;
+  lenderProposedDispatchDate?: string | null;
+  requiresRenterDispatchApproval?: boolean;
+  returnDropoffConfirmedAt?: string | null;
   status: "paid_demo" | "required" | "unavailable" | "self_pickup" | "refunded_demo";
   receiptReference?: string;
   paidAt?: string;
@@ -299,6 +309,10 @@ export function deriveDisplayDelivery(params: {
         estimatedReturnRangeEnd: deliveryDemo.estimatedReturnRangeEnd ?? null,
         outboundTrackingRef: deliveryDemo.outboundTrackingRef ?? null,
         returnTrackingRef: deliveryDemo.returnTrackingRef ?? null,
+        outboundDispatchStatus: deliveryDemo.outboundDispatchStatus ?? null,
+        lenderProposedDispatchDate: deliveryDemo.lenderProposedDispatchDate ?? null,
+        requiresRenterDispatchApproval: deliveryDemo.requiresRenterDispatchApproval ?? false,
+        returnDropoffConfirmedAt: deliveryDemo.returnDropoffConfirmedAt ?? null,
         status: deliveryDemo.status, receiptReference: deliveryDemo.receiptReference, paidAt: deliveryDemo.paidAt,
         estimatedTwoWayFee: estimatedCourierTwoWayFee, estimatedOutboundFee: courierOutbound?.fee ?? null,
         estimatedReturnFee: courierInbound?.fee ?? null, returnDistanceKm: null,
@@ -510,15 +524,50 @@ export function quoteAutomaticDomesticCourier(params: {
   };
 }
 
-/** Simple demo transit-time assumption per zone, used only to show an estimated date range —
- * never promises an exact arrival hour. */
+/** J&T Express Malaysia's published estimated delivery time for applicable Peninsular Malaysia
+ * deliveries is 2-3 days (https://www.jtexpress.my/faq) — used here as a planning reference,
+ * not a guaranteed delivery period. East Malaysia (Sabah/Sarawak) has no equivalent published
+ * figure this demo can cite, so it's deliberately left out of this table — see
+ * hasReliableCourierTransitEstimate(). */
 export function estimatedCourierTransitDays(zone: CourierShippingZone): { min: number; max: number } {
-  return zone === "East Malaysia" ? { min: 4, max: 7 } : { min: 2, max: 4 };
+  return { min: 2, max: 3 };
+}
+
+/** True only for zones this demo has an actual published courier transit reference for
+ * (currently just J&T's Peninsular Malaysia figure). East Malaysia returns false — callers
+ * must show "Delivery Timing Confirmation Required" / "To Be Confirmed" rather than invent a
+ * transit estimate CurRENT has no source for. */
+export function hasReliableCourierTransitEstimate(zone: CourierShippingZone): boolean {
+  return zone === "West Malaysia";
 }
 
 /** YYYY-MM-DD + N days, as a YYYY-MM-DD string (UTC-safe, no timezone drift). */
 export function addDaysToDateString(date: string, days: number): string {
-  const d = new Date(`${date}T00:00:00Z`);
+  const d = new Date(`${date.slice(0, 10)}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * CurRENT's automatically recommended outbound dispatch date for a Domestic Courier (Demo)
+ * booking: Latest Planned Dispatch Date = Preferred Rental Start Date - (estimated transit
+ * allowance + CurRENT's own 1-day safety buffer). With J&T's published 2-3 day Peninsular
+ * estimate, that's rental start - 4 days. Pure calendar-day arithmetic — this demo has no
+ * Malaysian public-holiday or working-day table, so it never claims to skip weekends/holidays,
+ * only states the simplification via this doc comment. Returns null when the zone has no
+ * reliable transit reference (see hasReliableCourierTransitEstimate) — never a fabricated date.
+ * The renter never picks this date directly; the lender can accept it or propose an alternate
+ * via confirmOutboundDispatch.
+ */
+export function recommendDispatchDate(targetArrivalDate: string, zone: CourierShippingZone, bufferDays = 1): string | null {
+  if (!hasReliableCourierTransitEstimate(zone)) return null;
+  const transit = estimatedCourierTransitDays(zone);
+  return addDaysToDateString(targetArrivalDate, -(transit.max + bufferDays));
+}
+
+/** Whether a computed dispatch date still leaves time to dispatch — i.e. it isn't already in
+ * the past relative to referenceDate (both YYYY-MM-DD). A rental start chosen too soon for the
+ * estimated transit allowance must never silently show a past date as available. */
+export function isDispatchDateFeasible(dispatchDate: string, referenceDate: string): boolean {
+  return dispatchDate.slice(0, 10) >= referenceDate.slice(0, 10);
 }

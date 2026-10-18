@@ -19,7 +19,7 @@ import {
 import { useMarketplace } from "../../context/Marketplace";
 import { HoldToConfirmButton } from "../../components/HoldToConfirm";
 import { BookingSummary } from "../../components/BookingSummary";
-import { deriveDisplayDelivery } from "../../services/delivery";
+import { deriveDisplayDelivery, DOMESTIC_COURIER_NAME } from "../../services/delivery";
 import {
   formatMalaysiaDateTime,
   formatScheduledReturnPickup,
@@ -62,6 +62,8 @@ export default function RentalDetail() {
   const [now, setNow] = useState(() => Date.now());
   const [correctedDeliveryAddress, setCorrectedDeliveryAddress] = useState("");
   const [correctedDeliveryPostcode, setCorrectedDeliveryPostcode] = useState("");
+  const [showProposeDispatchDate, setShowProposeDispatchDate] = useState(false);
+  const [proposedDispatchDate, setProposedDispatchDate] = useState("");
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -468,6 +470,63 @@ export default function RentalDetail() {
                   : `Apply Dispute is available from ${formatMalaysiaDateTime(endMs)}.`}
               </Text>
             ) : null}
+          </View>
+        </Card>
+      )}
+
+      {owner && effectiveStatus === "upcoming" && b.deliveryDemo?.provider === DOMESTIC_COURIER_NAME &&
+        b.deliveryDemo.status === "paid_demo" &&
+        b.deliveryDemo.outboundDispatchStatus !== "confirmed" && b.deliveryDemo.outboundDispatchStatus !== "drop_off" && (
+        <Card>
+          <Text style={s.h2}>Confirm Outbound Dispatch Arrangement</Text>
+          <Text style={s.caption}>
+            CurRENT recommends a dispatch date so the item arrives before the rental starts.
+            Accept it, propose a different date, or use a simulated drop-off arrangement instead.
+          </Text>
+          <Row label="Recommended dispatch date" value={b.deliveryDemo.dispatchDate || "Delivery Timing Confirmation Required"} />
+          <Row label="Estimated delivery arrival" value={
+            b.deliveryDemo.estimatedDeliveryRangeStart && b.deliveryDemo.estimatedDeliveryRangeEnd
+              ? `${b.deliveryDemo.estimatedDeliveryRangeStart} – ${b.deliveryDemo.estimatedDeliveryRangeEnd}`
+              : "To Be Confirmed"} />
+          {b.deliveryDemo.outboundDispatchStatus === "proposed_alternate" && (
+            <Text style={[s.caption, { color: colors.danger }]}>
+              Proposed date {b.deliveryDemo.lenderProposedDispatchDate} is awaiting renter approval
+              (it may arrive after the rental start).
+            </Text>
+          )}
+          <View style={{ marginTop: 10, gap: 8 }}>
+            <Button onPress={() => run({ type: "confirmOutboundDispatch", bookingId: b.id, decision: "accept" })}>
+              Confirm Recommended Dispatch Date
+            </Button>
+            <Button secondary onPress={() => setShowProposeDispatchDate((open) => !open)}>
+              {showProposeDispatchDate ? "Cancel Proposing a Date" : "Propose Another Feasible Dispatch Date"}
+            </Button>
+            {showProposeDispatchDate && (
+              <>
+                <Field label="Proposed dispatch date" value={proposedDispatchDate} onChangeText={setProposedDispatchDate} placeholder="YYYY-MM-DD" />
+                <Button onPress={() => run({ type: "confirmOutboundDispatch", bookingId: b.id, decision: "propose", proposedDate: proposedDispatchDate.trim() })}>
+                  Submit Proposed Date
+                </Button>
+              </>
+            )}
+            <Button secondary onPress={() => run({ type: "confirmOutboundDispatch", bookingId: b.id, decision: "dropoff" })}>
+              Confirm Item Can Be Dropped Off at Courier Branch
+            </Button>
+          </View>
+        </Card>
+      )}
+
+      {!owner && b.deliveryDemo?.requiresRenterDispatchApproval && (
+        <Card>
+          <Text style={s.h2}>Review Proposed Dispatch Date</Text>
+          <Notice text={`Lender proposed dispatching on ${b.deliveryDemo.lenderProposedDispatchDate}, which may arrive after your rental start. Approve it, or decline so the lender can arrange something else.`} />
+          <View style={{ marginTop: 10, flexDirection: "row", gap: 8 }}>
+            <Button onPress={() => run({ type: "respondToDispatchProposal", bookingId: b.id, approve: true })}>
+              Approve
+            </Button>
+            <Button secondary onPress={() => run({ type: "respondToDispatchProposal", bookingId: b.id, approve: false })}>
+              Decline
+            </Button>
           </View>
         </Card>
       )}

@@ -54,7 +54,7 @@ import { GuestAuthPrompt } from "../../components/GuestAuth";
 import { SuccessBurst } from "../../components/SuccessBurst";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 import { resolvePostcodeCoordinate } from "../../services/geo";
-import { addDaysToDateString, deliveryRateDescription, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery } from "../../services/delivery";
+import { addDaysToDateString, deliveryRateDescription, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "../../services/delivery";
 
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
@@ -155,9 +155,18 @@ export default function ListingDetailScreen() {
       ? returnPickupTime
       : "";
   // Domestic Courier (Demo) scheduling — used instead of the hourly slots above when the
-  // resolved delivery method is the cross-state courier, not GrabExpress.
-  const [dispatchDate, setDispatchDate] = useState(checkoutBooking?.deliveryDemo?.dispatchDate || "");
-  const [returnDispatchDate, setReturnDispatchDate] = useState(checkoutBooking?.returnDispatchDate || "");
+  // resolved delivery method is the cross-state courier, not GrabExpress. The renter never
+  // types these dates: CurRENT recommends the outbound dispatch date and the return dispatch
+  // date defaults to the rental end date; the renter can only request a different return date.
+  // Return is a courier branch drop-off, not a scheduled pickup — the renter never arranges
+  // courier collection. The lender confirms the outbound arrangement separately via
+  // "Confirm Outbound Dispatch Arrangement" on their Rental Details screen.
+  const [returnDispatchDateOverride, setReturnDispatchDateOverride] = useState(
+    checkoutBooking?.returnDispatchDate && checkoutBooking.returnDispatchDate !== checkoutBooking.end.slice(0, 10)
+      ? checkoutBooking.returnDispatchDate
+      : "",
+  );
+  const [showReturnDateOverride, setShowReturnDateOverride] = useState(!!returnDispatchDateOverride);
   const [collectionMethod, setCollectionMethod] =
     useState<CollectionMethod>("Delivery");
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("Demo FPX");
@@ -289,7 +298,19 @@ export default function ListingDetailScreen() {
     : courierEstimate && returnCourierEstimate
     ? Math.round((courierEstimate.fee + returnCourierEstimate.fee) * 100) / 100
     : null;
-  const courierTransit = courierEstimate ? estimatedCourierTransitDays(courierEstimate.zone) : null;
+  // J&T Express's own published Peninsular Malaysia estimate; East Malaysia has no equivalent
+  // published reference this demo can cite, so hasEstimate is false there (see
+  // hasReliableCourierTransitEstimate) and the UI shows "To Be Confirmed" instead.
+  const hasCourierEstimate = courierEstimate ? hasReliableCourierTransitEstimate(courierEstimate.zone) : false;
+  const courierTransit = hasCourierEstimate ? estimatedCourierTransitDays(courierEstimate!.zone) : null;
+  // CurRENT recommends this automatically — the renter never schedules the lender's courier
+  // pickup directly. The lender can accept it or propose an alternate date (Confirm Outbound
+  // Dispatch Arrangement, on their Rental Details screen) after the booking is paid. null when
+  // the zone has no reliable transit reference.
+  const recommendedDispatchDate = courierEstimate && start ? recommendDispatchDate(start, courierEstimate.zone) : null;
+  const dispatchDate = checkoutBooking?.deliveryDemo?.dispatchDate || recommendedDispatchDate || "";
+  const dispatchDateFeasible = !dispatchDate || isDispatchDateFeasible(dispatchDate, new Date().toISOString().slice(0, 10));
+  const returnDispatchDate = returnDispatchDateOverride || end || "";
   const estimatedDeliveryRange = courierTransit && dispatchDate
     ? { start: addDaysToDateString(dispatchDate, courierTransit.min), end: addDaysToDateString(dispatchDate, courierTransit.max) }
     : null;
@@ -483,8 +504,8 @@ export default function ListingDetailScreen() {
       setError("Select a scheduled return pickup time before continuing.");
       return;
     }
-    if (!checkoutBooking && isCourierDelivery && (!dispatchDate || !returnDispatchDate)) {
-      setError("Select a planned dispatch date and a scheduled return dispatch date before continuing.");
+    if (!checkoutBooking && isCourierDelivery && dispatchDate && !dispatchDateFeasible) {
+      setError("Selected Rental Dates Unavailable for Courier Delivery — your selected rental start date does not allow sufficient estimated shipping time. Please choose a later rental date.");
       return;
     }
     if (checkoutBooking) {
@@ -514,9 +535,7 @@ export default function ListingDetailScreen() {
       await actAndPersist({ type: "startDeliveryCheckout", id: bookingId, listingId: id,
         start: startTimestamp, end: endTimestamp, deliveryAddress: formatDeliveryAddress(address),
         deliveryPostcode: postcode,
-        ...(isCourierDelivery
-          ? { dispatchDate, returnDispatchDate }
-          : { returnPickupTime: effectiveReturnPickupTime }) });
+        ...(isCourierDelivery ? {} : { returnPickupTime: effectiveReturnPickupTime }) });
       act({ type: "saveDeliveryAddress", address });
       router.push(`/delivery-demo/${bookingId}` as never);
     } catch (e) {
@@ -1080,53 +1099,83 @@ export default function ListingDetailScreen() {
               </View>
 
               {isCourierDelivery ? (
-                <>
-                  {/* Outbound Shipping — date-based scheduling replaces the hourly slots above,
-                      since a domestic courier only ever promises a dispatch date and an
-                      estimated delivery date range, never an exact arrival hour. */}
+                !dispatchDateFeasible ? (
                   <View style={{ marginTop: 8 }}>
-                    <Text style={styles.slotSectionTitle}>Planned Dispatch Date</Text>
+                    <Text style={styles.slotSectionTitle}>Selected Rental Dates Unavailable for Courier Delivery</Text>
                     <Text style={styles.slotSectionDescription}>
-                      Select the date the courier should collect the item from the lender.
+                      Your selected rental start date does not allow sufficient estimated shipping time. Please choose a later rental date.
                     </Text>
-                    <TextInput
-                      accessibilityLabel="Planned dispatch date"
-                      placeholder="YYYY-MM-DD"
-                      value={dispatchDate}
-                      onChangeText={setDispatchDate}
-                      editable={!deliveryTimeSlotsLocked}
-                      style={styles.addressInput}
-                    />
-                    {!!estimatedDeliveryRange && (
-                      <Text style={styles.fieldSubtext}>
-                        Estimated delivery: {estimatedDeliveryRange.start} – {estimatedDeliveryRange.end}
-                      </Text>
-                    )}
                   </View>
+                ) : (
+                  <>
+                    {/* Outbound Shipping — CurRENT recommends the dispatch date automatically; the
+                        renter never schedules the lender's courier pickup directly. The lender
+                        confirms (or proposes an alternate) via Confirm Outbound Dispatch
+                        Arrangement on their Rental Details screen once the booking is paid. */}
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={styles.slotSectionTitle}>Planned Dispatch Date</Text>
+                      <Text style={styles.slotSectionDescription}>
+                        Automatically recommended by CurRENT.
+                      </Text>
+                      {dispatchDate ? (
+                        <Text style={styles.returnTimeValue}>{dispatchDate}</Text>
+                      ) : (
+                        <Text style={styles.returnTimeValue}>Delivery Timing Confirmation Required</Text>
+                      )}
+                      <Text style={styles.fieldSubtext}>
+                        Dispatch Status: {checkoutBooking?.deliveryDemo?.outboundDispatchStatus === "confirmed"
+                          ? "Confirmed by Lender"
+                          : checkoutBooking?.deliveryDemo?.outboundDispatchStatus === "drop_off"
+                          ? "Drop-off Arrangement"
+                          : checkoutBooking?.deliveryDemo?.outboundDispatchStatus === "proposed_alternate"
+                          ? "Lender Proposed a New Date"
+                          : "Awaiting Lender Confirmation"}
+                      </Text>
+                      <Text style={styles.fieldSubtext}>
+                        Estimated Arrival: {estimatedDeliveryRange ? `${estimatedDeliveryRange.start} – ${estimatedDeliveryRange.end}` : "To Be Confirmed"}
+                      </Text>
+                    </View>
 
-                  {/* Return Shipping — selected independently of the dispatch date above; never
-                      changes the rental's billed duration or dates. */}
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={styles.slotSectionTitle}>Scheduled Return Dispatch Date</Text>
-                    <Text style={styles.slotSectionDescription}>
-                      Select the date you'll dispatch the item back to the courier for return.
-                    </Text>
-                    <TextInput
-                      accessibilityLabel="Scheduled return dispatch date"
-                      placeholder="YYYY-MM-DD"
-                      value={returnDispatchDate}
-                      onChangeText={setReturnDispatchDate}
-                      editable={!deliveryTimeSlotsLocked}
-                      style={styles.addressInput}
-                    />
-                    {!!estimatedReturnRange && (
-                      <Text style={styles.fieldSubtext}>
-                        Estimated return arrival: {estimatedReturnRange.start} – {estimatedReturnRange.end}
+                    {/* Return Shipping — CurRENT suggests the return drop-off date from the agreed
+                        rental end date; the renter can request a different date, but this is a
+                        courier branch drop-off, not a scheduled pickup — the renter never
+                        arranges courier collection. */}
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={styles.slotSectionTitle}>Return Drop-off Date</Text>
+                      <Text style={styles.slotSectionDescription}>
+                        Automatically suggested using your rental end date.
                       </Text>
-                    )}
-                    <Text style={styles.fieldSubtext}>Demo scheduling only — not a live J&T Express tracking status.</Text>
-                  </View>
-                </>
+                      <Text style={styles.returnTimeValue}>{returnDispatchDate}</Text>
+                      {!deliveryTimeSlotsLocked && (
+                        <Pressable accessibilityRole="button" onPress={() => setShowReturnDateOverride((open) => !open)}>
+                          <Text style={styles.summaryLinkText}>
+                            {showReturnDateOverride ? "Use the suggested date instead" : "Request a different return date"}
+                          </Text>
+                        </Pressable>
+                      )}
+                      {showReturnDateOverride && (
+                        <TextInput
+                          accessibilityLabel="Requested return drop-off date"
+                          placeholder="YYYY-MM-DD"
+                          value={returnDispatchDateOverride}
+                          onChangeText={setReturnDispatchDateOverride}
+                          editable={!deliveryTimeSlotsLocked}
+                          style={styles.addressInput}
+                        />
+                      )}
+                      <Text style={styles.fieldSubtext}>Return Method: Courier Branch Drop-off</Text>
+                      <Text style={styles.fieldSubtext}>
+                        Please securely package the item and drop it off at an eligible courier branch by the agreed return deadline.
+                      </Text>
+                      <Text style={styles.fieldSubtext}>
+                        Estimated Return Arrival: {estimatedReturnRange ? `${estimatedReturnRange.start} – ${estimatedReturnRange.end}` : "To Be Confirmed"}
+                      </Text>
+                      <Text style={styles.fieldSubtext}>
+                        Demo scheduling based on published courier transit estimates. Dates are provisional and are not confirmed J&T Express bookings or tracking information.
+                      </Text>
+                    </View>
+                  </>
+                )
               ) : (
                 <>
                   {/* Scheduled Delivery Time Slots */}
@@ -1688,7 +1737,7 @@ export default function ListingDetailScreen() {
                   ? <Button secondary onPress={() => router.push(`/delivery-demo/${checkoutBooking.id}` as never)}>View Receipt</Button>
                   : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() ||
                       !((deliveryEstimate && returnDeliveryEstimate && effectiveReturnPickupTime) ||
-                        (courierEstimate && returnCourierEstimate && dispatchDate && returnDispatchDate)) ||
+                        (courierEstimate && returnCourierEstimate && returnDispatchDate && dispatchDateFeasible)) ||
                       !!checkoutBooking} onPress={() => void handleDeliveryDemo()}>
                       {twoWayDeliveryFee != null
                         ? `Pay ${isCourierDelivery ? "Postage" : "Delivery"} & Continue · ${money(twoWayDeliveryFee)}`

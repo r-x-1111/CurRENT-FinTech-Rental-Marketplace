@@ -119,11 +119,23 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
           <Row label="Shipping Zone" value={delivery.shippingZone || "Unavailable"} />
           <Row label="Chargeable Weight" value={delivery.chargeableWeightKg != null ? `${delivery.chargeableWeightKg} kg` : "Unavailable"} />
           {!!delivery.dispatchDate && <Row label="Planned Dispatch Date" value={delivery.dispatchDate} />}
-          {!!(delivery.estimatedDeliveryRangeStart && delivery.estimatedDeliveryRangeEnd) &&
-            <Row label="Estimated Delivery" value={`${delivery.estimatedDeliveryRangeStart} – ${delivery.estimatedDeliveryRangeEnd}`} />}
-          {!!delivery.returnDispatchDeadline && <Row label="Return Dispatch Date" value={delivery.returnDispatchDeadline} />}
-          {!!(delivery.estimatedReturnRangeStart && delivery.estimatedReturnRangeEnd) &&
-            <Row label="Estimated Return Arrival" value={`${delivery.estimatedReturnRangeStart} – ${delivery.estimatedReturnRangeEnd}`} />}
+          <Row label="Lender confirmation" value={
+            delivery.outboundDispatchStatus === "confirmed" ? "Confirmed"
+              : delivery.outboundDispatchStatus === "drop_off" ? "Drop-off Arrangement"
+              : delivery.outboundDispatchStatus === "proposed_alternate" ? `Lender Proposed ${delivery.lenderProposedDispatchDate || "a New Date"}`
+              : delivery.outboundDispatchStatus === "awaiting_lender_confirmation" ? "Awaiting Lender Confirmation"
+              : "Not Recorded"} />
+          <Row label="Estimated Delivery" value={
+            delivery.estimatedDeliveryRangeStart && delivery.estimatedDeliveryRangeEnd
+              ? `${delivery.estimatedDeliveryRangeStart} – ${delivery.estimatedDeliveryRangeEnd}` : "To Be Confirmed"} />
+          {!!delivery.outboundTrackingRef && <Row label="Outbound tracking reference" value={delivery.outboundTrackingRef} />}
+          {!!delivery.returnDispatchDeadline && <Row label="Return Drop-off Date" value={delivery.returnDispatchDeadline} />}
+          <Row label="Return Method" value="Courier Branch Drop-off" />
+          <Row label="Return drop-off status" value={delivery.returnDropoffConfirmedAt ? `Confirmed ${delivery.returnDropoffConfirmedAt.slice(0, 10)}` : "Pending renter drop-off"} />
+          {!!delivery.returnTrackingRef && <Row label="Return tracking reference" value={delivery.returnTrackingRef} />}
+          <Row label="Estimated Return Arrival" value={
+            delivery.estimatedReturnRangeStart && delivery.estimatedReturnRangeEnd
+              ? `${delivery.estimatedReturnRangeStart} – ${delivery.estimatedReturnRangeEnd}` : "To Be Confirmed"} />
           <Row label="Outbound postage" value={money(deliveryOutboundFee ?? 0)} />
           <Row label="Return postage" value={money(deliveryReturnFee ?? 0)} />
           <Row label="Total two-way postage" value={totalDeliveryFee != null ? money(totalDeliveryFee) : "Unavailable"} strong />

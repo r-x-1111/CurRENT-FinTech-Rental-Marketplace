@@ -348,11 +348,23 @@ export default function RentalsScreen() {
                           <Row label="Shipping Zone" value={card.delivery.shippingZone || "Unavailable"} />
                           <Row label="Chargeable Weight" value={card.delivery.chargeableWeightKg != null ? `${card.delivery.chargeableWeightKg} kg` : "Unavailable"} />
                           {!!card.delivery.dispatchDate && <Row label="Planned Dispatch Date" value={card.delivery.dispatchDate} />}
-                          {!!(card.delivery.estimatedDeliveryRangeStart && card.delivery.estimatedDeliveryRangeEnd) &&
-                            <Row label="Estimated Delivery" value={`${card.delivery.estimatedDeliveryRangeStart} – ${card.delivery.estimatedDeliveryRangeEnd}`} />}
-                          {!!card.delivery.returnDispatchDeadline && <Row label="Return Dispatch Date" value={card.delivery.returnDispatchDeadline} />}
-                          {!!(card.delivery.estimatedReturnRangeStart && card.delivery.estimatedReturnRangeEnd) &&
-                            <Row label="Estimated Return Arrival" value={`${card.delivery.estimatedReturnRangeStart} – ${card.delivery.estimatedReturnRangeEnd}`} />}
+                          <Row label="Lender confirmation" value={
+                            card.delivery.outboundDispatchStatus === "confirmed" ? "Confirmed"
+                              : card.delivery.outboundDispatchStatus === "drop_off" ? "Drop-off Arrangement"
+                              : card.delivery.outboundDispatchStatus === "proposed_alternate" ? `Lender Proposed ${card.delivery.lenderProposedDispatchDate || "a New Date"}`
+                              : card.delivery.outboundDispatchStatus === "awaiting_lender_confirmation" ? "Awaiting Lender Confirmation"
+                              : "Not Recorded"} />
+                          <Row label="Estimated Delivery" value={
+                            card.delivery.estimatedDeliveryRangeStart && card.delivery.estimatedDeliveryRangeEnd
+                              ? `${card.delivery.estimatedDeliveryRangeStart} – ${card.delivery.estimatedDeliveryRangeEnd}` : "To Be Confirmed"} />
+                          {!!card.delivery.outboundTrackingRef && <Row label="Outbound tracking reference" value={card.delivery.outboundTrackingRef} />}
+                          {!!card.delivery.returnDispatchDeadline && <Row label="Return Drop-off Date" value={card.delivery.returnDispatchDeadline} />}
+                          <Row label="Return Method" value="Courier Branch Drop-off" />
+                          <Row label="Return drop-off status" value={card.delivery.returnDropoffConfirmedAt ? `Confirmed ${card.delivery.returnDropoffConfirmedAt.slice(0, 10)}` : "Pending renter drop-off"} />
+                          {!!card.delivery.returnTrackingRef && <Row label="Return tracking reference" value={card.delivery.returnTrackingRef} />}
+                          <Row label="Estimated Return Arrival" value={
+                            card.delivery.estimatedReturnRangeStart && card.delivery.estimatedReturnRangeEnd
+                              ? `${card.delivery.estimatedReturnRangeStart} – ${card.delivery.estimatedReturnRangeEnd}` : "To Be Confirmed"} />
                           {(card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee) != null && <View style={s.row}><Text style={s.caption}>Outbound postage{b.deliveryDemo?.status === "required" || card.delivery.outboundFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee)!)}</Text></View>}
                           {(card.delivery.returnFee ?? card.delivery.estimatedReturnFee) != null && <View style={s.row}><Text style={s.caption}>Return postage{b.deliveryDemo?.status === "required" || card.delivery.returnFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.returnFee ?? card.delivery.estimatedReturnFee)!)}</Text></View>}
                           {card.deliveryPaid && b.deliveryDemo

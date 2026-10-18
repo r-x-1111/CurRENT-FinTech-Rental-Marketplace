@@ -1,7 +1,7 @@
 import type { Booking, DeliveryTransaction, Marketplace } from "../types/marketplace";
 import { demoDestinationPostcode, demoPickupLocation } from "./demoDeliveryLocations";
 import { estimateAutomaticDelivery } from "./geo";
-import { addDaysToDateString, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery } from "./delivery";
+import { addDaysToDateString, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "./delivery";
 
 const roundMoney = (amount: number) => Math.round(amount * 100) / 100;
 const seededBooking = (booking: Booking) =>
@@ -68,23 +68,34 @@ export function repairDemoDeliveryPayments(source: Marketplace): Marketplace {
           weightKg: listing?.parcelWeightKg, dimensionsCm: listing?.parcelDimensionsCm,
         };
       } else if (courierOutbound && courierInbound) {
-        const transit = estimatedCourierTransitDays(courierOutbound.zone);
-        const dispatchDate = (previous?.dispatchDate) || booking.createdAt.slice(0, 10);
-        const returnDispatchDate = booking.returnDispatchDate || booking.scheduledReturn?.slice(0, 10) || dispatchDate;
+        const hasEstimate = hasReliableCourierTransitEstimate(courierOutbound.zone);
+        const transit = hasEstimate ? estimatedCourierTransitDays(courierOutbound.zone) : null;
+        // Mirrors the live checkout's recommendation; null for zones with no reliable published
+        // transit reference (East Malaysia) rather than a fabricated date.
+        const dispatchDate = previous?.dispatchDate || recommendDispatchDate(booking.start, courierOutbound.zone) || undefined;
+        const returnDispatchDate = booking.returnDispatchDate || booking.scheduledReturn?.slice(0, 10) || dispatchDate || booking.createdAt.slice(0, 10);
         booking.deliveryDemo = {
           provider: DOMESTIC_COURIER_NAME, origin, destination: booking.deliveryAddress,
           fee, outboundFee: courierOutbound.fee, returnFee: courierInbound.fee,
           shippingZone: courierOutbound.zone, chargeableWeightKg: courierOutbound.chargeableWeightKg,
           volumetricWeightKg: courierOutbound.volumetricWeightKg,
           dispatchDate,
-          estimatedDeliveryRangeStart: addDaysToDateString(dispatchDate, transit.min),
-          estimatedDeliveryRangeEnd: addDaysToDateString(dispatchDate, transit.max),
+          estimatedDeliveryRangeStart: dispatchDate && transit ? addDaysToDateString(dispatchDate, transit.min) : undefined,
+          estimatedDeliveryRangeEnd: dispatchDate && transit ? addDaysToDateString(dispatchDate, transit.max) : undefined,
           returnDispatchDeadline: returnDispatchDate,
-          estimatedReturnRangeStart: addDaysToDateString(returnDispatchDate, transit.min),
-          estimatedReturnRangeEnd: addDaysToDateString(returnDispatchDate, transit.max),
+          estimatedReturnRangeStart: transit ? addDaysToDateString(returnDispatchDate, transit.min) : undefined,
+          estimatedReturnRangeEnd: transit ? addDaysToDateString(returnDispatchDate, transit.max) : undefined,
           pricingReference: courierOutbound.reference,
           status, receiptReference, paidAt,
           refundedAt: status === "refunded_demo" ? previous?.refundedAt || booking.cancelledAt || booking.createdAt : undefined,
+          // Carry forward any lender-confirmation/drop-off state a seed fixture (or an earlier
+          // repair pass) already recorded, rather than resetting every courier booking back to pending.
+          outboundDispatchStatus: previous?.outboundDispatchStatus || "awaiting_lender_confirmation",
+          lenderProposedDispatchDate: previous?.lenderProposedDispatchDate,
+          requiresRenterDispatchApproval: previous?.requiresRenterDispatchApproval,
+          outboundTrackingRef: previous?.outboundTrackingRef,
+          returnTrackingRef: previous?.returnTrackingRef,
+          returnDropoffConfirmedAt: previous?.returnDropoffConfirmedAt,
         };
         booking.returnDispatchDate = returnDispatchDate;
       } else {

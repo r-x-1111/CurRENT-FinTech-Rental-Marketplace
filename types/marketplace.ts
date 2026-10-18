@@ -143,6 +143,19 @@ export interface Booking {
     estimatedReturnRangeEnd?: string;
     outboundTrackingRef?: string;
     returnTrackingRef?: string;
+    /** Lender's confirmation of the (CurRENT-recommended) outbound dispatch arrangement.
+     * "awaiting_lender_confirmation" is the default right after checkout; the lender resolves it
+     * via the confirmOutboundDispatch action. */
+    outboundDispatchStatus?: "awaiting_lender_confirmation" | "confirmed" | "proposed_alternate" | "drop_off";
+    /** Set only while outboundDispatchStatus is "proposed_alternate". */
+    lenderProposedDispatchDate?: string;
+    /** True only when a lender-proposed dispatch date would push estimated arrival past the
+     * rental's own start date — the renter must approve or the booking stays flagged. */
+    requiresRenterDispatchApproval?: boolean;
+    /** Set once the renter confirms they've dropped the returned parcel at a courier branch
+     * (stamped by the existing returnConfirm action for courier bookings — see "Return Method:
+     * Courier Branch Drop-off"). */
+    returnDropoffConfirmedAt?: string;
     status: "required" | "paid_demo" | "refunded_demo";
     receiptReference?: string;
     paidAt?: string;
@@ -172,13 +185,16 @@ export interface Booking {
    * independent of scheduledReturn's time-of-day, which stays anchored to the pickup time for
    * 24-hour rental billing. Purely a logistics/display field; never changes rental duration or fees. */
   returnPickupTime?: string;
-  /** Domestic Courier (Demo) equivalent of returnPickupTime — a renter-selected return dispatch
-   * date ("YYYY-MM-DD") instead of an hourly slot. Courier bookings use this field; GrabExpress
-   * bookings use returnPickupTime. Never both. */
+  /** Domestic Courier (Demo) equivalent of returnPickupTime — CurRENT's auto-suggested return
+   * dispatch date ("YYYY-MM-DD", defaults to the rental's end date) instead of an hourly slot.
+   * Courier bookings use this field; GrabExpress bookings use returnPickupTime. Never both. */
   returnDispatchDate?: string;
   durationMinutes?: number;
   cancellationCutoff?: string;
   lenderHandoverAt?: string | null;
+  /** Lender's confirmation timestamp for the courier outbound dispatch arrangement — mirrors
+   * lenderReturnConfirmedAt's role for the return leg, but for the outbound leg. */
+  lenderOutboundDispatchConfirmedAt?: string | null;
   renterReceivedAt?: string | null;
   activationTimestamp?: string | null;
   effectiveReturnDeadline?: string | null;
