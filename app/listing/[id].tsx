@@ -797,24 +797,9 @@ export default function ListingDetailScreen() {
           ]}
         >
           <Card>
-            {/* Header: Location, Rating, Price */}
+            {/* Header: Price */}
             <View style={styles.bookingCardHeader}>
               <View style={{ flex: 1 }}>
-                <View style={styles.bookingLocationRow}>
-                  <Ionicons
-                    name="location-outline"
-                    size={13}
-                    color={colors.muted}
-                  />
-                  <Text style={styles.bookingLocation}>
-                    {listing.location} · ★{" "}
-                    {listing.id === "sony-a7iii"
-                      ? "5.0 (1 completed rental)"
-                      : listing.rating
-                      ? `${listing.rating.toFixed(1)} rating`
-                      : "New"}
-                  </Text>
-                </View>
                 <Text style={s.title}>
                   {money(listing.dailyPrice)}
                   <Text style={s.caption}> / day</Text>
@@ -1951,17 +1936,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: 8,
-  },
-  bookingLocationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 4,
-  },
-  bookingLocation: {
-    fontSize: 12,
-    color: colors.muted,
-    fontWeight: "600",
   },
   dateBoxesRow: {
     flexDirection: "row",
