@@ -1320,8 +1320,8 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
     rentalFee: 90,
     serviceFee: 5,
     deposit: 200,
-    protection: 4.5,
-    total: 299.5,
+    protection: 3.43,
+    total: 298.43,
   });
   assert.deepEqual(calculateOwnerPayout(90), {
     commission: 11.7,
@@ -1353,10 +1353,13 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(1)), /1 to 90/);
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(92)), /1 to 90/);
 });
-test("optional Rental Protection fee is 5% of the total rental fee, with no minimum or 7-day periods, and stays out of the security deposit", () => {
-  assert.equal(calculateProtectionFee(200), 10);
-  assert.equal(calculateProtectionFee(150), 7.5);
-  assert.equal(calculateProtectionFee(0), 0);
+test("optional third-party insurance demo prorates 0.3% of fair value by rental days / 7 without week rounding", () => {
+  assert.equal(calculateProtectionFee(4000, 2), 3.43);
+  assert.equal(calculateProtectionFee(4000, 7), 12);
+  assert.equal(calculateProtectionFee(4000, 8), 13.71);
+  assert.equal(calculateProtectionFee(1200, 2), 1.03);
+  assert.equal(calculateProtectionFee(0, 2), 0);
+  assert.equal(calculateProtectionFee(4000, 0), 0);
   assert.equal(calculateProtectionLimit(500), 500);
   assert.equal(calculateProtectionLimit(2500), 2500);
   assert.equal(calculateProtectionLimit(90000), 60000);
@@ -1367,7 +1370,7 @@ test("optional Rental Protection fee is 5% of the total rental fee, with no mini
   assert.equal(unselected.protection, 0);
   assert.equal(unselected.total, unselected.rentalFee + unselected.serviceFee + unselected.deposit);
   const selected = quoteFor(state, state.profiles[0], state.listings[0], dateAfter(1), dateAfter(3), true);
-  assert.equal(selected.protection, calculateProtectionFee(selected.rentalFee));
+  assert.equal(selected.protection, calculateProtectionFee(state.listings[0].estimatedValue!, selected.days));
   assert.ok(selected.protection > 0);
   assert.equal(selected.deposit, unselected.deposit, "Protection must never change the risk-based security deposit.");
   assert.equal(selected.total, unselected.total + selected.protection);
@@ -3994,9 +3997,15 @@ test("Section 14.4: Unmatched questions and Talk to a Human use the approved rep
   );
 });
 
+<<<<<<< HEAD
 test("Section 14.3: Full 30-question FAQ covers all six categories with correct fee/deposit figures and the coverage comparison table", async () => {
   const { sampleFaqs, faqCategories } = await import("../data/mock");
   assert.ok(sampleFaqs.length >= 30);
+=======
+test("FAQ preserves core deposit guidance and explains third-party value-based insurance", async () => {
+  const { sampleFaqs } = await import("../data/mock");
+  assert.equal(sampleFaqs.length, 13);
+>>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
 
   // All six categories are represented, in order, and nothing outside the approved set.
   const seenCategories = [...new Set(sampleFaqs.map((f) => f.category))];
@@ -4032,6 +4041,7 @@ test("Section 14.3: Full 30-question FAQ covers all six categories with correct 
   assert.ok(maxFaq!.answer.includes("RM60,000"));
   assert.ok(maxFaq!.answer.includes("not guaranteed compensation"));
 
+<<<<<<< HEAD
   // The Q21 comparison table: 16 situations, five columns, "Without Rental Protection" present.
   const comparisonFaq = sampleFaqs.find((f) => !!f.coverageTable);
   assert.ok(comparisonFaq);
@@ -4054,6 +4064,31 @@ test("FAQ page and Help & Trust page render the same shared FAQ content", async 
   assert.ok(helpSource.includes("sampleFaqs"));
   assert.ok(faqSource.includes("FaqAccordion"));
   assert.ok(helpSource.includes("FaqAccordion"));
+=======
+  // Check Q5
+  assert.equal(
+    sampleFaqs[4].question,
+    "How much does CurRENT charge borrowers and lenders?",
+  );
+  assert.ok(sampleFaqs[4].answer.includes("13% lender commission"));
+  assert.ok(sampleFaqs[4].answer.includes("minimum RM5"));
+
+  // Check Q6
+  assert.equal(
+    sampleFaqs[5].question,
+    "Is Buy Now Pay Later (BNPL) available?",
+  );
+  assert.ok(sampleFaqs[5].answer.includes("simulated FPX and BNPL"));
+
+  const protection = sampleFaqs.find((item) => item.question === "How is the Rental Protection fee calculated?");
+  assert.ok(protection?.answer.includes("0.3% × (Rental Days ÷ 7)"));
+  assert.ok(protection?.answer.includes("RM3.43"));
+  assert.ok(protection?.answer.includes("no RM5 minimum"));
+  const provider = sampleFaqs.find((item) => item.question === "What is optional Rental Protection?");
+  assert.ok(provider?.answer.includes("third-party"));
+  const shipping = sampleFaqs.find((item) => item.question === "Can I report courier damage without purchasing Rental Protection?");
+  assert.ok(shipping?.answer.includes("Yes."));
+>>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
 });
 
 test("Confirm Received is gated by scheduled start and does not activate or reschedule a rental", () => {

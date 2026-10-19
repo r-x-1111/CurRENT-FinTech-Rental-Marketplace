@@ -100,7 +100,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
       )}
       <Row label="Rental fee" value={money(booking.quote.rentalFee)} />
       <Row label="CurRENT service fee (5%, min RM5)" value={money(booking.quote.serviceFee)} />
-      {booking.quote.protection > 0 && <Row label="Rental Protection (Demo)" value={money(booking.quote.protection)} />}
+      {booking.quote.protection > 0 && <Row label="Rental Protection — third-party insurance (Demo)" value={money(booking.quote.protection)} />}
       <Row label="Refundable security deposit" value={money(booking.quote.deposit)} />
       <Text style={styles.note}>Original risk: {tier.label} · Deposit rate: {DEPOSIT_TIERS[tier.level].label}</Text>
       <Row label="CurRENT subtotal" value={money(totals.subtotal)} strong />

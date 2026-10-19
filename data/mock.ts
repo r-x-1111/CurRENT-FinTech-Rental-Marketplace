@@ -48,10 +48,15 @@ export const sampleReviews: SampleReview[] = [
   },
 ];
 
+<<<<<<< HEAD
 
 // Section 14.3: Full customer-facing FAQ — 30 questions across six categories (replaces the old
 // six-question founder-screenshot set). Kept as a single shared source for the FAQ page and the
 // Help & Trust page. All insurance, delivery and payment flows referenced below are simulated.
+=======
+// FAQ shared by the profile FAQ screen and Help & Trust page. Keep pricing and insurer
+// responsibility consistent with checkout; all cover and premiums are classroom demos.
+>>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
 export const sampleFaqs: FaqItem[] = [
   // CATEGORY A. ABOUT CurRENT
   {
@@ -82,12 +87,17 @@ export const sampleFaqs: FaqItem[] = [
     category: "About CurRENT",
     question: "How does CurRENT verify users?",
     answer:
+<<<<<<< HEAD
       "CurRENT's proposed verification process involves authorised third-party electronic Know Your Customer (eKYC) providers.\n\nThe current application uses simulated identity verification for demonstration purposes. Newly verified renters begin with a Rental Risk Score of 80, classified as Low Risk.\n\nActual identity verification through a third-party provider would require a future provider integration.",
+=======
+      "Renters pay a CurRENT service fee of 5% of the rental fee (minimum RM5). New bookings have a 13% lender commission. Optional third-party Rental Protection, risk-based refundable deposits, and two-way delivery charges are separate from these platform fees.",
+>>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
   },
   {
     category: "About CurRENT",
     question: "What is the CurRENT Rental Risk Score?",
     answer:
+<<<<<<< HEAD
       "The CurRENT Rental Risk Score is an internal platform reliability measure ranging from 0 to 100. It is not a consumer credit score.\n\nThe score helps determine booking eligibility and the required refundable security deposit. The risk categories are:\n\n80–100 — Low Risk\n40–79 — Medium Risk\n30–39 — High Risk\n0–29 — Very High Risk\n\nNewly verified renters start with a score of 80. The score may change according to verified rental outcomes, including successful returns and confirmed rental incidents. Very High Risk renters require CurRENT Platform Review before proceeding with a rental.",
   },
 
@@ -279,6 +289,44 @@ export const sampleFaqs: FaqItem[] = [
     question: "Who is responsible for what — CurRENT, the insurer, the delivery company, renters and lenders?",
     answer:
       "CurRENT: marketplace administration, booking coordination, simulated escrow records, platform disputes and facilitating third-party claims.\n\nThird-Party Insurance Company: insurance coverage decisions, claim assessments and approved insurance compensation.\n\nDelivery Company: delivery operations and eligible compensation requests for shipping damage or loss under its terms.\n\nRenter: proper item use, safeguarding, timely returns and verified renter liability.\n\nLender: accurate listings, item condition evidence, delivery preparation and return inspection.\n\nAll external provider arrangements currently shown in the application are simulated.",
+=======
+      "CurRENT offers simulated FPX and BNPL checkout methods. BNPL in this classroom demo does not create a real financing agreement or live instalment plan.",
+  },
+  {
+    question: "What is optional Rental Protection?",
+    answer:
+      "Rental Protection (Third-Party Insurance — Demo) is an optional renter-purchased concept for eligible accidental physical damage during authorised rental use. A proposed independent insurer, not CurRENT, would provide coverage, decide claims and pay approved compensation. No policy has been issued and no insurer is connected in this prototype.",
+  },
+  {
+    question: "How is the Rental Protection fee calculated?",
+    answer:
+      "For the demo, Protection Fee = validated Item Fair / Replacement Value × 0.3% × (Rental Days ÷ 7), rounded to the nearest sen. For example, RM4,000 × 0.003 × (2 ÷ 7) = RM3.43. The duration is prorated: it is NOT rounded up to seven-day blocks and there is no RM5 minimum protection fee. The 0.3% rate is a CurRENT assumption, not an actual insurer-approved premium.",
+  },
+  {
+    question: "Does Rental Protection cover delivery damage?",
+    answer:
+      "The proposed standard Rental Protection focuses on accidental damage during authorised rental use. Courier damage is handled through the separate courier-damage reporting and claims process for all renters, whether or not they purchased protection. Transit cover would require an insurer's explicit policy terms; it is not automatically included.",
+  },
+  {
+    question: "Can I report courier damage without purchasing Rental Protection?",
+    answer:
+      "Yes. Anyone involved in the rental may report damage to CurRENT. CurRENT can help coordinate an applicable courier claim, but any compensation depends on courier terms, eligibility, evidence and claim approval. Demo delivery services do not provide actual courier compensation. A renter's deposit is not automatically deducted for damage caused by the courier.",
+  },
+  {
+    question: "Who processes an insurance claim and pays for approved damage?",
+    answer:
+      "The renter or lender may report damage to CurRENT. CurRENT would help collect evidence and facilitate submission, while the third-party insurer would decide who can formally submit the claim, evaluate eligibility and pay approved compensation under its policy. The insurer's decisions and payments are simulated in this prototype.",
+  },
+  {
+    question: "What happens to my deposit if an item is damaged?",
+    answer:
+      "The refundable security deposit can remain held during investigation. For eligible accidental damage during rental use, an approved third-party insurance claim would be considered before applying the deposit to any verified remaining renter liability. If the loss is fully covered and nothing else is owed, the deposit is refunded. Lenders cannot receive double compensation.",
+  },
+  {
+    question: "What is the proposed Rental Protection coverage limit?",
+    answer:
+      "The prototype illustrates a maximum of RM60,000 or the item's validated replacement value, whichever is lower, subject to item eligibility and review. This is a design benchmark, not an issued policy or a guaranteed payout. Final limits, exclusions, deductibles and premiums require an actual insurer's agreement.",
+>>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
   },
 ];
 

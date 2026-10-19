@@ -136,7 +136,7 @@ export function BookingCard({
             {booking.insurance?.selected && (
               <View style={styles.insuranceTag}>
                 <Ionicons name="shield-checkmark-outline" size={11} color={colors.blue} />
-                <Text style={styles.insuranceTagText}>Rental Protection (Demo) · {money(booking.insurance.premium)}</Text>
+                <Text style={styles.insuranceTagText}>Rental Protection · Third-party demo · {money(booking.insurance.premium)}</Text>
               </View>
             )}
             {mobile && statusBadge}

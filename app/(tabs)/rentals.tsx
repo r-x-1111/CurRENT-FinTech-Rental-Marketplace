@@ -321,7 +321,7 @@ export default function RentalsScreen() {
                   <Text style={styles.ledgerLineStatus}>{paymentStatusLabel}</Text>
                   {b.insurance?.selected && (
                     <>
-                      <Row label="Rental Protection (Optional, Demo)" value={money(b.insurance.premium)} />
+                      <Row label="Rental Protection — third-party insurance (Demo)" value={money(b.insurance.premium)} />
                       <Text style={styles.ledgerLineStatus}>{paymentStatusLabel}</Text>
                     </>
                   )}
