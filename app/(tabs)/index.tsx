@@ -208,7 +208,7 @@ export default function HomeScreen() {
                   // Mobile: a real flex row (align-items: center, justify-content: space-between)
                   // so the label and bell can never overlap at any width — flexbox naturally
                   // keeps a minimum gap instead of two independently absolute-positioned layers.
-                  <View style={styles.heroTopRow}>
+                  <View style={[styles.heroTopRow, styles.mobileHeroTopRow]}>
                     <View style={[styles.eyebrowBadge, styles.mobileEyebrowBadge]}>
                       <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
                     </View>
@@ -476,7 +476,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   desktopHeroContent: { gap: 10, maxWidth: 700 },
-  mobileHeroContent: { gap: 10 },
+  mobileHeroContent: { gap: 14 },
   heroTopRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -508,6 +508,10 @@ const styles = StyleSheet.create({
   // align-items: center) so their vertical centres line up automatically — the desktop-only
   // marginTop above would otherwise throw off that centring here, so it's cancelled.
   mobileEyebrowBadge: { marginTop: 0 },
+  // Moves the label+bell row down as one unit (both stay level with each other, per
+  // mobileEyebrowBadge cancelling the desktop-only marginTop above) instead of shifting the
+  // label alone, which previously pulled it out of line with the bell.
+  mobileHeroTopRow: { marginTop: 10, position: "relative" },
   eyebrowText: {
     color: "#2563EB",
     fontSize: 11,
@@ -678,10 +682,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.white,
   },
-  // Mobile sits in a real flex row (heroTopRow) instead of the desktop's fixed-width anchor, so
-  // it just needs a left-side gap from the label — flexbox's own space-between already keeps
-  // it off the right edge and off the label at any width.
-  mobileHeroNotificationButton: { marginRight: 0, marginLeft: 24, flexShrink: 0 },
+  // Mobile: taken out of flow (absolute, anchored to mobileHeroTopRow below) so the bell's own
+  // 40px height doesn't inflate the row's flow height — otherwise the gap from the label's text
+  // down to the headline is measured from the row's (taller, bell-driven) bottom edge instead
+  // of the label's actual visual bottom, overshooting the intended label-to-headline spacing.
+  mobileHeroNotificationButton: { position: "absolute", top: 0, right: 0, marginRight: 0 },
   catalogueBand: {
     // Flat #F7F8FA — same shared page background used by every other screen; the hero above
     // already provides the blue wash, so no gradient is repeated here.
@@ -691,7 +696,7 @@ const styles = StyleSheet.create({
   // On mobile the hero now ends with the in-flow product photo (not an absolute-fill bleed
   // photo), so the -32 pull-up isn't needed — instead add ~36px of normal document-flow space
   // so "All Items" isn't crowded against the category chips.
-  mobileCatalogueBand: { marginTop: 0 },
+  mobileCatalogueBand: { marginTop: 8 },
   catalogueSection: {
     maxWidth: 1180,
     width: "100%",
