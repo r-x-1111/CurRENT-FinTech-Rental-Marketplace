@@ -28,6 +28,12 @@ import { MagneticGlow } from "../../components/MagneticGlow";
 // web and is a no-op on native platforms.
 const webHeroImageCoolStyle = Platform.OS === "web" ? ({ filter: "saturate(0.85) hue-rotate(6deg)" } as any) : undefined;
 
+// On mobile the hero box is much taller/narrower than the photo's native aspect ratio, so a
+// centred "cover" crop pulls the product group up into the text column. Shifting the crop's
+// focal point toward the bottom-right keeps the same photo fully visible while moving the
+// products away from the headline/description. Web-only CSS property, no-op on native.
+const webHeroMobileImagePositionStyle = Platform.OS === "web" ? ({ objectPosition: "82% 92%" } as any) : undefined;
+
 // Hides the category-chip scrollbar while keeping it scrollable. `scrollbarWidth` covers
 // Firefox; the injected `.hide-scrollbar::-webkit-scrollbar` rule below covers Chrome/Safari.
 const webHideScrollbarStyle = Platform.OS === "web" ? ({ scrollbarWidth: "none", className: "hide-scrollbar" } as any) : undefined;
@@ -143,16 +149,19 @@ export default function HomeScreen() {
               no separate panel, letterboxing or visible seam needed. */}
           <Image
             source={{ uri: "/hero/hero-products.png" }}
-            style={[StyleSheet.absoluteFill, webHeroImageCoolStyle]}
+            style={[StyleSheet.absoluteFill, webHeroImageCoolStyle, isMobile && webHeroMobileImagePositionStyle]}
             resizeMode="cover"
           />
-          {/* Blend the photo's left edge into the blue backdrop instead of a visible rectangle. */}
+          {/* Blend the photo's left edge into the blue backdrop instead of a visible rectangle.
+              On mobile this doubles as a soft wash behind the text column (wider + more opaque)
+              since the photo's crop still reaches further up/left on narrow screens than on
+              desktop — a gradient, not a hard-edged box, so there's no visible text panel. */}
           <LinearGradient
             pointerEvents="none"
             colors={[colors.paleBlue, "rgba(238,244,255,0)"]}
             start={{ x: 0, y: 0.5 }}
             end={{ x: 1, y: 0.5 }}
-            style={styles.heroImageLeftFade}
+            style={[styles.heroImageLeftFade, isMobile && styles.mobileHeroImageLeftFade]}
           />
           {/* 120px fade from transparent into the flat #F7F8FA that every other page uses as its
               background, so the hero ends with no hard line against the listings below. */}
@@ -171,37 +180,57 @@ export default function HomeScreen() {
                 { position: "relative" },
               ]}
             >
-              {/* Notification bell: vertically level with the eyebrow row (top: 8 here lines up
-                  the bell's centre with the label's centre). Horizontally it's anchored to the
-                  same maxWidth:620 column the search bar uses (not the wider hero content box),
-                  so its right edge always sits a fixed 18px inside the Search button's own right
-                  edge — correct at every desktop width, not just the hero's maximum width. */}
-              <View style={styles.heroNotificationAnchor} pointerEvents="box-none">
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    unreadNotifications > 0
-                      ? `Notifications, ${unreadNotifications} unread`
-                      : "Notifications"
-                  }
-                  onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
-                  style={styles.heroNotificationButton}
-                >
-                  <Ionicons name="notifications-outline" size={21} color={colors.navy} />
-                  {unreadNotifications > 0 && (
-                    <View style={styles.notificationCount}>
-                      <Text style={styles.notificationCountText}>
-                        {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                      </Text>
+              {/* Notification bell content, shared between the mobile in-flow row and the
+                  desktop absolute anchor below. */}
+              {(() => {
+                const bell = (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      unreadNotifications > 0
+                        ? `Notifications, ${unreadNotifications} unread`
+                        : "Notifications"
+                    }
+                    onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
+                    style={[styles.heroNotificationButton, isMobile && styles.mobileHeroNotificationButton]}
+                  >
+                    <Ionicons name="notifications-outline" size={21} color={colors.navy} />
+                    {unreadNotifications > 0 && (
+                      <View style={styles.notificationCount}>
+                        <Text style={styles.notificationCountText}>
+                          {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+                return isMobile ? (
+                  // Mobile: a real flex row (align-items: center, justify-content: space-between)
+                  // so the label and bell can never overlap at any width — flexbox naturally
+                  // keeps a minimum gap instead of two independently absolute-positioned layers.
+                  <View style={styles.heroTopRow}>
+                    <View style={styles.eyebrowBadge}>
+                      <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
                     </View>
-                  )}
-                </Pressable>
-              </View>
-              <View style={styles.heroTopRow}>
-                <View style={styles.eyebrowBadge}>
-                  <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
-                </View>
-              </View>
+                    {bell}
+                  </View>
+                ) : (
+                  <>
+                    {/* Desktop: vertically level with the eyebrow row (top: 8 lines up the
+                        bell's centre with the label's centre); horizontally anchored to the
+                        same maxWidth:620 column the search bar uses, so its right edge always
+                        sits a fixed 18px inside the Search button's own right edge. */}
+                    <View style={styles.heroNotificationAnchor} pointerEvents="box-none">
+                      {bell}
+                    </View>
+                    <View style={styles.heroTopRow}>
+                      <View style={styles.eyebrowBadge}>
+                        <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
+                      </View>
+                    </View>
+                  </>
+                );
+              })()}
 
               {/* Main Headline */}
               <Text style={[styles.heroHeadline, isMobile && styles.mobileHeroHeadline]}>
@@ -424,7 +453,7 @@ const styles = StyleSheet.create({
   desktopHeroWrapper: { paddingTop: 26, paddingBottom: 26, minHeight: 460, justifyContent: "center" },
   // paddingBottom gives the scrollable category chips room to sit fully above the hero's
   // bottom fade/edge instead of being visually clipped by it on small screens.
-  mobileHeroWrapper: { paddingTop: 28, paddingBottom: 28, overflow: "hidden" },
+  mobileHeroWrapper: { paddingTop: 28, paddingBottom: 14, overflow: "hidden" },
   // No horizontal padding lives on heroWrapper any more — it's applied here instead, on the
   // same maxWidth:1180/alignSelf:"center" element, exactly mirroring catalogueSection's own
   // structure (full-width band with no padding > centered maxWidth element with its own
@@ -610,6 +639,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: 220,
   },
+  // Wider and covers the full hero height on mobile, since the text column there spans almost
+  // the full screen width (not just the left ~45%) and the photo's "cover" crop reaches higher
+  // behind it than on desktop.
+  mobileHeroImageLeftFade: { width: "78%" },
   // 120px transparent-to-#EEF4FF fade so the hero ends flush into the catalogue band's colour.
   heroBottomFade: {
     position: "absolute",
@@ -641,6 +674,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.white,
   },
+  // Mobile sits in a real flex row (heroTopRow) instead of the desktop's fixed-width anchor, so
+  // it just needs a left-side gap from the label — flexbox's own space-between already keeps
+  // it off the right edge and off the label at any width.
+  mobileHeroNotificationButton: { marginRight: 0, marginLeft: 24, flexShrink: 0 },
   catalogueBand: {
     // Flat #F7F8FA — same shared page background used by every other screen; the hero above
     // already provides the blue wash, so no gradient is repeated here.
@@ -650,7 +687,7 @@ const styles = StyleSheet.create({
   // On mobile the hero now ends with the in-flow product photo (not an absolute-fill bleed
   // photo), so the -32 pull-up isn't needed — instead add ~36px of normal document-flow space
   // so "All Items" isn't crowded against the category chips.
-  mobileCatalogueBand: { marginTop: 36 },
+  mobileCatalogueBand: { marginTop: 14 },
   catalogueSection: {
     maxWidth: 1180,
     width: "100%",
