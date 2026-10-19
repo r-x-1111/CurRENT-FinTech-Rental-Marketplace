@@ -150,6 +150,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
           <Row label="Pickup Location" value={delivery.origin || "Not recorded"} />
           <Row label="Delivery Address" value={delivery.destination || "Not recorded"} />
           <Row label="Courier" value={delivery.courierName || "Unavailable"} />
+          <Text style={styles.note}>Domestic courier postage is estimated using the pickup and destination postcodes to identify the shipping region, together with the parcel's weight and dimensions. Charges are based on CurRENT's configured demo rate table, not live J&T Express quotations.</Text>
           <Row label="Shipping Zone" value={delivery.shippingZone || "Unavailable"} />
           <Row label="Chargeable Weight" value={delivery.chargeableWeightKg != null ? `${delivery.chargeableWeightKg} kg` : "Unavailable"} />
           {!!delivery.dispatchDate && <Row label="Preferred Delivery Date" value={delivery.dispatchDate} />}
@@ -184,6 +185,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
           <Row label="Pickup Location" value={delivery.origin || "Not recorded"} />
           <Row label="Delivery Address" value={delivery.destination || "Not recorded"} />
           <Row label="Estimated Distance" value={sameRouteDistance ? `${delivery.distanceKm} km each way` : `${delivery.distanceKm ?? "—"} km out · ${delivery.returnDistanceKm ?? "—"} km back`} />
+          <Text style={styles.note}>Distance is estimated using the pickup and delivery postcodes. CurRENT calculates the approximate straight-line distance and applies a 1.3 road-distance adjustment factor. Actual driving distances and courier charges may differ.</Text>
           <Row label="Vehicle type" value={delivery.vehicle || "Unavailable"} />
           <Row label="Outbound delivery" value={`${delivery.distanceKm ?? "—"} km · ${money(deliveryOutboundFee ?? 0)}`} />
           <Row label="Return delivery" value={`${delivery.returnDistanceKm ?? "—"} km · ${money(deliveryReturnFee ?? 0)}`} />

@@ -362,6 +362,7 @@ export default function RentalsScreen() {
                           <Row label="Pickup Location" value={card.delivery.origin || "Not recorded"} />
                           <Row label="Delivery Address" value={card.delivery.destination || "Not recorded"} />
                           <Row label="Courier" value={card.delivery.courierName || "Unavailable"} />
+                          <Text style={s.caption}>Domestic courier postage is estimated using the pickup and destination postcodes to identify the shipping region, together with the parcel's weight and dimensions. Charges are based on CurRENT's configured demo rate table, not live J&T Express quotations.</Text>
                           <Row label="Shipping Zone" value={card.delivery.shippingZone || "Unavailable"} />
                           <Row label="Chargeable Weight" value={card.delivery.chargeableWeightKg != null ? `${card.delivery.chargeableWeightKg} kg` : "Unavailable"} />
                           {!!card.delivery.dispatchDate && <Row label="Preferred Delivery Date" value={card.delivery.dispatchDate} />}
@@ -406,6 +407,7 @@ export default function RentalsScreen() {
                           <Row label="Pickup Location" value={card.delivery.origin || "Not recorded"} />
                           <Row label="Delivery Address" value={card.delivery.destination || "Not recorded"} />
                           <Row label="Estimated Distance" value={card.delivery.distanceKm != null ? `${card.delivery.distanceKm} km each way` : "Unavailable"} />
+                          <Text style={s.caption}>Distance is estimated using the pickup and delivery postcodes. CurRENT calculates the approximate straight-line distance and applies a 1.3 road-distance adjustment factor. Actual driving distances and courier charges may differ.</Text>
                           <Row label="Vehicle type" value={card.delivery.vehicle || "Unavailable"} />
                           {(card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee) != null && <View style={s.row}><Text style={s.caption}>Outbound delivery fee{b.deliveryDemo?.status === "required" || card.delivery.outboundFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee)!)}</Text></View>}
                           {(card.delivery.returnFee ?? card.delivery.estimatedReturnFee) != null && <View style={s.row}><Text style={s.caption}>Return delivery fee{b.deliveryDemo?.status === "required" || card.delivery.returnFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.returnFee ?? card.delivery.estimatedReturnFee)!)}</Text></View>}

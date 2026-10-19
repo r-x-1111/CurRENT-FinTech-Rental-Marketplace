@@ -56,7 +56,7 @@ import { GuestAuthPrompt } from "../../components/GuestAuth";
 import { SuccessBurst } from "../../components/SuccessBurst";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 import { estimatePostcodeDistance, resolvePostcodeCoordinate } from "../../services/geo";
-import { addDaysToDateString, crossStateDeliveryEligibility, deliveryRateDescription, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "../../services/delivery";
+import { addDaysToDateString, CROSS_STATE_BOOKING_WARNING, CROSS_STATE_ELIGIBILITY_BADGE, CROSS_STATE_ELIGIBILITY_EXPLANATION, crossStateDeliveryEligibility, deliveryRateDescription, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "../../services/delivery";
 
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
@@ -328,7 +328,7 @@ export default function ListingDetailScreen() {
   // a renter entering an out-of-state address sees the right reason immediately, even before a
   // courier quote is attempted.
   const deliveryRoute = deliveryLocalityIsComplete() ? estimatePostcodeDistance(listing.pickupPostcode, postcode) : null;
-  const isActuallyCrossState = !!deliveryRoute && deliveryRoute.pickup.state.toLowerCase() !== deliveryRoute.delivery.state.toLowerCase();
+  const isActuallyCrossState = !!deliveryRoute && deliveryRoute.pickup.state.trim().toLowerCase() !== deliveryRoute.delivery.state.trim().toLowerCase();
   const listingCrossStateEligibility = crossStateDeliveryEligibility(listing);
   const crossStateBlocked = isActuallyCrossState && listingCrossStateEligibility !== "available";
   const twoWayDeliveryFee = deliveryEstimate && returnDeliveryEstimate
@@ -749,15 +749,9 @@ export default function ListingDetailScreen() {
           <Text style={[s.body, { marginTop: 20, marginBottom: 8 }]}>
             {listing.description}
           </Text>
-          <View style={{ marginBottom: 20 }}>
+          <View style={{ marginBottom: 20, gap: 4 }}>
             <Badge
-              text={
-                listingCrossStateEligibility === "available"
-                  ? "Cross-State Delivery Available"
-                  : listingCrossStateEligibility === "same_state_only"
-                    ? "Same-State Delivery Only"
-                    : "Cross-State Delivery Subject to Approval"
-              }
+              text={CROSS_STATE_ELIGIBILITY_BADGE[listingCrossStateEligibility]}
               tone={
                 listingCrossStateEligibility === "available"
                   ? "green"
@@ -766,6 +760,7 @@ export default function ListingDetailScreen() {
                     : "blue"
               }
             />
+            <Text style={s.caption}>Delivery eligibility is automatically determined using the item's packaged weight, dimensions and shipping requirements.</Text>
           </View>
 
           {/* Owner info card */}
@@ -856,18 +851,6 @@ export default function ListingDetailScreen() {
                   <Text style={bookingTypography.note}> / day</Text>
                 </Text>
               </View>
-              <Badge
-                text={
-                  typeof listing.estimatedValue !== "number" ||
-                  !Number.isFinite(listing.estimatedValue) ||
-                  listing.estimatedValue <= 0
-                    ? "Valuation pending"
-                    : owner?.verification === "verified"
-                      ? "Verified Owner"
-                      : "Not verified"
-                }
-                green={owner?.verification === "verified"}
-              />
             </View>
 
             {typeof listing.estimatedValue !== "number" ||
@@ -1147,12 +1130,10 @@ export default function ListingDetailScreen() {
                   <Ionicons name="information-circle-outline" size={16} color={colors.navy} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.crossStateWarningTitle}>
-                      {listingCrossStateEligibility === "same_state_only" ? "Cross-State Delivery Unavailable" : "Cross-State Delivery Requires Approval"}
+                      {CROSS_STATE_BOOKING_WARNING[listingCrossStateEligibility as "same_state_only" | "requires_review"].title}
                     </Text>
                     <Text style={styles.crossStateWarningText}>
-                      {listingCrossStateEligibility === "same_state_only"
-                        ? "This item cannot be delivered across states due to its size, weight or shipping requirements. Please select a delivery address within the same state to continue."
-                        : "This item is not currently available for cross-state delivery. Its shipping eligibility must be reviewed before a cross-state booking can proceed."}
+                      {CROSS_STATE_BOOKING_WARNING[listingCrossStateEligibility as "same_state_only" | "requires_review"].body}
                     </Text>
                   </View>
                 </View>
@@ -1537,11 +1518,7 @@ export default function ListingDetailScreen() {
                   <Ionicons name="shield-checkmark-outline" size={18} color={colors.blue} />
                   <Text style={sectionHeadingStyle}>Rental Protection (Optional · Demo)</Text>
                 </View>
-<<<<<<< HEAD
-                <Text style={styles.insuranceDescription}>Optional protection for eligible accidental damage. Demo only — no actual insurance policy is issued.</Text>
-=======
                 <Text style={styles.insuranceDescription}>Optional third-party insurance concept for eligible accidental damage during rental use (Demo).</Text>
->>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
                 <Pressable
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: insuranceSelected }}
@@ -1570,12 +1547,7 @@ export default function ListingDetailScreen() {
               <Pressable style={styles.calendarModalOverlay} onPress={() => setShowInsuranceDetails(false)}>
                 <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
                   <ScrollView contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
-<<<<<<< HEAD
-                  <Text style={s.h2}>Rental Protection (Demo)</Text>
-                  <Text style={styles.insuranceDescription}>Optional insurance is proposed for eligible accidental damage while the item is in your possession. A third-party insurer would provide the coverage, assess claims and pay approved compensation — CurRENT only facilitates the service.</Text>
-=======
                   <Text style={s.h2}>Rental Protection — Third-Party Insurance (Demo)</Text>
->>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
                   {!!quote && (() => {
                     const replacementValue = listing.estimatedValue || 0;
                     const protectionFee = calculateProtectionFee(replacementValue, quote.days);
@@ -1585,25 +1557,7 @@ export default function ListingDetailScreen() {
                       <>
                         <Text style={[s.body, { marginTop: 8, fontWeight: "700" }]}>Protection Fee</Text>
                         <View style={styles.summaryRow}>
-<<<<<<< HEAD
-                          <Text style={styles.summaryLabel}>Total Rental Fee</Text>
-                          <Text style={styles.summaryValue}>{money(quote.rentalFee)}</Text>
-                        </View>
-                        <View style={styles.summaryRow}>
-                          <Text style={styles.summaryLabel}>Protection Rate</Text>
-                          <Text style={styles.summaryValue}>5%</Text>
-                        </View>
-                        <View style={styles.summaryRow}>
-                          <Text style={styles.summaryLabel}>Premium</Text>
-                          <Text style={styles.summaryValue}>{money(protectionFee)}</Text>
-                        </View>
-
-                        <Text style={[s.body, { marginTop: 8, fontWeight: "700" }]}>Proposed Coverage Limit</Text>
-                        <View style={styles.summaryRow}>
-                          <Text style={styles.summaryLabel}>Item Replacement Value</Text>
-=======
                           <Text style={styles.summaryLabel}>Item Fair / Replacement Value</Text>
->>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
                           <Text style={styles.summaryValue}>{money(replacementValue)}</Text>
                         </View>
                         <View style={styles.summaryRow}>
@@ -1630,28 +1584,19 @@ export default function ListingDetailScreen() {
                             This item's replacement value exceeds the proposed maximum and is flagged for manual eligibility review.
                           </Text>
                         )}
-<<<<<<< HEAD
-                        <Text style={s.caption}>These are proposed maximum exposures, not guaranteed payouts.</Text>
-=======
                         <Text style={s.caption}>
                           The demo premium is based on the item's validated fair value and rental duration, prorated by days / 7. Days are not rounded up to full weeks, and no minimum fee applies. The 0.3% rate is an illustrative CurRENT assumption, not an insurer quotation.
                         </Text>
->>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
                       </>
                     );
                   })()}
 
                   <Text style={[s.body, { marginTop: 8, fontWeight: "700" }]}>Important Information</Text>
                   <Text style={s.caption}>
-<<<<<<< HEAD
-                    Your refundable security deposit is separate from this premium. Delivery damage is handled through the applicable delivery company's own compensation process. See the FAQ for full terms, exclusions and claim details.
-                  </Text>
-
-                  <Text style={[s.caption, { marginTop: 4 }]}>
-                    Demo only — no real insurance policy or insurer partnership exists. The premium and coverage limits shown are demonstration assumptions.
-=======
                     This is a proposed renter-purchased insurance product provided by a third-party insurer, not CurRENT. CurRENT would facilitate the selection and claim process; the insurer would set actual premiums and terms, assess claims and pay approved compensation. No insurer is connected and no policy has been issued in this demo. The 0.3% weekly reference rate and the RM{RENTAL_PROTECTION_LIMIT_CAP.toLocaleString()} cap are illustrative assumptions only. Courier damage reports remain available whether or not Rental Protection is purchased.
->>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
+                  </Text>
+                  <Text style={s.caption}>
+                    Your refundable security deposit is separate from this premium, and delivery damage is handled through the applicable delivery company's own compensation process. See the FAQ for full terms, exclusions and claim details.
                   </Text>
                   <Button secondary onPress={() => setShowInsuranceDetails(false)}>Close</Button>
                   </ScrollView>
@@ -1771,11 +1716,15 @@ export default function ListingDetailScreen() {
                           <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
                             <ScrollView contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
                             <Text style={s.h2}>{isCourierDelivery ? "Postage Details (Demo)" : "Delivery Details (Demo)"}</Text>
+                            <Text style={styles.fieldSubtext}>Cross-state delivery eligibility is automatically assessed from this item's packaged weight, dimensions and shipping characteristics. This is a simulated assessment, not a confirmed courier acceptance.</Text>
                       {showDeliveryDetails && deliveryEstimate && returnDeliveryEstimate && (
                         <View style={styles.deliveryDetails}>
                           <Row label="Pickup Location" value={listing.privateMeetingVenue || listing.location} />
                           <Row label="Delivery Address" value={currentDeliveryAddress} />
                           <Row label="Estimated Distance (Demo)" value={`${deliveryEstimate.distanceKm} km (estimated, not a measured route)`} />
+                          <Text style={styles.fieldSubtext}>
+                            Distance is estimated using the pickup and delivery postcodes. CurRENT calculates the approximate straight-line distance and applies a 1.3 road-distance adjustment factor. Actual driving distances and courier charges may differ.
+                          </Text>
                           <Row label="Vehicle" value={deliveryEstimate.vehicle} />
                           <Row label="Payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Paid (Demo)" : "Awaiting Payment"} />
                           <Row label="Rate" value={deliveryRateDescription(deliveryEstimate.area, deliveryEstimate.vehicle)} />
@@ -1791,6 +1740,9 @@ export default function ListingDetailScreen() {
                           <Row label="Pickup Location" value={listing.privateMeetingVenue || listing.location} />
                           <Row label="Delivery Address" value={currentDeliveryAddress} />
                           <Row label="Courier" value={DOMESTIC_COURIER_NAME} />
+                          <Text style={styles.fieldSubtext}>
+                            Domestic courier postage is estimated using the pickup and destination postcodes to identify the shipping region, together with the parcel's weight and dimensions. Charges are based on CurRENT's configured demo rate table, not live J&T Express quotations.
+                          </Text>
                           <Row label="Shipping Zone" value={courierEstimate.zone} />
                           <Row label="Chargeable Weight" value={`${courierEstimate.chargeableWeightKg} kg (volumetric: ${courierEstimate.volumetricWeightKg} kg)`} />
                           {!!listing.parcelPackages?.length && (

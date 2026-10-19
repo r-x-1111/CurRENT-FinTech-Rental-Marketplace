@@ -405,6 +405,183 @@ test("crossStateDeliveryEligibility classifies a listing from its own recorded p
     crossStateDeliveryEligibility({ parcelWeightKg: 0, parcelDimensionsCm: { length: 30, width: 20, height: 15 } }),
     "requires_review",
   );
+
+  // Step 1 — an explicit platform restriction always wins, even for a perfectly fine parcel.
+  assert.equal(
+    crossStateDeliveryEligibility({
+      parcelWeightKg: 2, parcelDimensionsCm: { length: 30, width: 20, height: 15 },
+      crossStateRestricted: true,
+    }),
+    "same_state_only",
+  );
+
+  // Step 4 — restricted contents (liquids) block cross-state delivery regardless of size.
+  assert.equal(
+    crossStateDeliveryEligibility({
+      parcelWeightKg: 2, parcelDimensionsCm: { length: 30, width: 20, height: 15 },
+      shippingCharacteristics: ["restricted_liquid"],
+    }),
+    "same_state_only",
+  );
+
+  // A lithium battery or fragile/bulky flag alone does not disqualify a normally-sized item —
+  // only an actual size/weight violation does. Electronics and fragile items are not
+  // automatically rejected just for being electronics or fragile.
+  assert.equal(
+    crossStateDeliveryEligibility({
+      parcelWeightKg: 2, parcelDimensionsCm: { length: 30, width: 20, height: 15 },
+      shippingCharacteristics: ["lithium_battery"],
+    }),
+    "available",
+  );
+  assert.equal(
+    crossStateDeliveryEligibility({
+      parcelWeightKg: 2, parcelDimensionsCm: { length: 30, width: 20, height: 15 },
+      shippingCharacteristics: ["fragile"],
+    }),
+    "available",
+  );
+});
+
+test("The five named demo listings stay restricted to same-state delivery regardless of their parcel size, and the remaining seeded listings are evaluated normally", async () => {
+  const { crossStateDeliveryEligibility } = await import("../services/delivery");
+  const { listings } = await import("../data/mock");
+  const restrictedTitles = [
+    "Ergonomic Office Chair",
+    "Pressure Washer",
+    "Standing Air Cooler",
+    "Portable Power Station",
+    "Photo Booth Setup",
+  ];
+  const restrictedListings = listings.filter((l) => restrictedTitles.includes(l.title));
+  assert.equal(restrictedListings.length, 5, "All five named demo listings must exist");
+  for (const listing of restrictedListings) {
+    assert.equal(listing.crossStateRestricted, true, `${listing.title} must carry the explicit platform restriction`);
+    assert.equal(crossStateDeliveryEligibility(listing), "same_state_only", `${listing.title} must stay same-state only`);
+  }
+
+  // The remaining seeded listings are not force-restricted — each is evaluated on its own
+  // recorded parcel data (this demo's fixtures all have usable data, so each resolves cleanly).
+  const otherListings = listings.filter((l) => !restrictedTitles.includes(l.title));
+  assert.ok(otherListings.length >= 15);
+  for (const listing of otherListings) {
+    assert.notEqual(listing.crossStateRestricted, true, `${listing.title} must not be force-restricted`);
+    assert.notEqual(crossStateDeliveryEligibility(listing), "requires_review", `${listing.title} should have usable parcel data`);
+  }
+});
+
+test("Cross-state restriction is enforced by actual booking validation (end-to-end), not just a frontend warning", () => {
+  // Root-cause regression test: the booking-validation gate previously only ran when NEITHER the
+  // GrabExpress nor the Domestic Courier quote resolved, so a restricted item with a normally
+  // sized parcel (like the Standing Air Cooler, which fits comfortably inside the courier's
+  // limits) sailed straight through on a real courier quote. The gate must fire purely from
+  // "is this route actually cross-state + is this listing eligible", independent of whether a
+  // quote happens to be available.
+  const restrictedListingIds = ["office-chair", "pressure-washer", "standing-air-cooler", "power-station", "photo-booth"];
+
+  for (const listingId of restrictedListingIds) {
+    let state = createSeed();
+    const listing = state.listings.find((l) => l.id === listingId)!;
+    assert.equal(listing.crossStateRestricted, true, `${listingId} must be restricted`);
+    // Office Chair happens to be demo-renter's own listing — book as a different verified renter
+    // for that one case so "You cannot rent your own item" doesn't mask the check being tested.
+    const renterId = listing.ownerId === "demo-renter" ? "owner-aiman" : "demo-renter";
+    state = transition(state, { type: "login", userId: renterId });
+
+    // -> Selangor (genuinely cross-state for any listing not itself pickup-located in Selangor):
+    // BLOCKED. (Office Chair's own pickup is in Selangor, so that case is skipped here — it's
+    // covered by the Kuala Lumpur case below instead, which no fixture is located in.)
+    if (!/selangor/i.test(listing.location || "")) {
+      assert.throws(
+        () => transition(state, {
+          type: "startDeliveryCheckout", id: `${listingId}-to-selangor`, listingId,
+          start: `${dateAfter(20)}T11:00:00+08:00`, end: `${dateAfter(22)}T11:00:00+08:00`,
+          deliveryAddress: "Subang Jaya, Selangor", deliveryPostcode: "47500",
+        }),
+        /cannot be delivered across states/,
+        `${listingId}: Selangor delivery must be blocked`,
+      );
+    }
+
+    // Also blocked to Kuala Lumpur.
+    assert.throws(
+      () => transition(state, {
+        type: "startDeliveryCheckout", id: `${listingId}-to-kl`, listingId,
+        start: `${dateAfter(20)}T11:00:00+08:00`, end: `${dateAfter(22)}T11:00:00+08:00`,
+        deliveryAddress: "Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480",
+      }),
+      /cannot be delivered across states/,
+      `${listingId}: Kuala Lumpur delivery must be blocked`,
+    );
+
+    // Editing an existing (unpaid) booking's delivery address to a cross-state one must be
+    // blocked the same way — the restriction can't be bypassed by "editing" around it.
+    state = transition(state, {
+      type: "startDeliveryCheckout", id: `${listingId}-edit-address`, listingId,
+      start: `${dateAfter(20)}T11:00:00+08:00`, end: `${dateAfter(22)}T11:00:00+08:00`,
+      deliveryAddress: listing.location!, deliveryPostcode: listing.pickupPostcode!, returnPickupTime: "15:00",
+    });
+    assert.throws(
+      () => transition(state, {
+        type: "correctBookingDeliveryAddress", bookingId: `${listingId}-edit-address`,
+        deliveryAddress: "Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480",
+      }),
+      /cannot be delivered across states/,
+      `${listingId}: correcting the address to a cross-state one must be blocked`,
+    );
+
+    // A listing with outdated/stale persisted data — e.g. loaded from an old record saved before
+    // `crossStateRestricted` existed, so the stored flag is missing — must still be blocked. This
+    // listing's own recorded parcel fits comfortably inside the courier's limits (that's exactly
+    // why the booking-validation bug went unnoticed), so without a backstop it would incorrectly
+    // read as "available". The id-based PLATFORM_RESTRICTED_LISTING_IDS check is that backstop.
+    const { crossStateDeliveryEligibility } = require("../services/delivery");
+    const staleRecord = { ...listing, crossStateRestricted: undefined };
+    assert.equal(
+      crossStateDeliveryEligibility(staleRecord),
+      "same_state_only",
+      `${listingId}: must stay restricted even with a stale record missing the crossStateRestricted field`,
+    );
+    assert.throws(
+      () => transition(
+        { ...state, listings: state.listings.map((l) => (l.id === listingId ? staleRecord : l)) },
+        {
+          type: "startDeliveryCheckout", id: `${listingId}-stale-record`, listingId,
+          start: `${dateAfter(25)}T11:00:00+08:00`, end: `${dateAfter(27)}T11:00:00+08:00`,
+          deliveryAddress: "Mont Kiara, Kuala Lumpur", deliveryPostcode: "50480",
+        },
+      ),
+      /cannot be delivered across states/,
+      `${listingId}: a stale persisted record must still be blocked end-to-end`,
+    );
+
+    // Johor -> another Johor address (genuinely same-state): ALLOWED, subject to other delivery
+    // requirements — the restriction only blocks actual cross-state routes.
+    if (listing.pickupPostcode) {
+      assert.doesNotThrow(
+        () => transition(state, {
+          type: "startDeliveryCheckout", id: `${listingId}-same-state`, listingId,
+          start: `${dateAfter(30)}T11:00:00+08:00`, end: `${dateAfter(32)}T11:00:00+08:00`,
+          deliveryAddress: listing.location!, deliveryPostcode: listing.pickupPostcode!, returnPickupTime: "15:00",
+        }),
+        `${listingId}: a same-state delivery address must remain allowed`,
+      );
+    }
+  }
+});
+
+test("An eligible listing with valid parcel details can be booked cross-state", () => {
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  // sony-a7iii is not platform-restricted and has a normal recorded parcel.
+  state = transition(state, {
+    type: "startDeliveryCheckout", id: "eligible-cross-state", listingId: "sony-a7iii",
+    start: `${dateAfter(20)}T11:00:00+08:00`, end: `${dateAfter(22)}T11:00:00+08:00`,
+    deliveryAddress: "George Town, Penang", deliveryPostcode: "10000",
+  });
+  const booking = state.bookings.find((b) => b.id === "eligible-cross-state")!;
+  assert.equal(booking.status, "payment_required");
+  assert.ok(booking.deliveryDemo);
 });
 
 test("A listing whose parcel is too large for the courier blocks a cross-state checkout with a clear reason", () => {
@@ -947,8 +1124,16 @@ test("Domestic Courier (Demo) scheduling: CurRENT recommends dates, the lender c
   // East Malaysia (Sabah pickup): no published transit reference this demo can cite — CurRENT
   // must not fabricate a dispatch date or an estimated range, but the lender can still propose
   // one, which then always requires renter approval (CurRENT can't check compatibility itself).
+  // "power-station" is the only seeded Sabah-pickup fixture, but it's also one of the five
+  // listings explicitly restricted to same-state delivery, and that restriction is now enforced
+  // even against a stale/overridden `crossStateRestricted` field (checked by listing id too — see
+  // PLATFORM_RESTRICTED_LISTING_IDS). So this test clones the fixture under a different id, kept
+  // out of that restricted-id set, purely to exercise the East Malaysia courier-estimate
+  // behaviour being tested here, not the cross-state restriction itself.
+  const sabahListing = { ...j.state.listings.find((l) => l.id === "power-station")!, id: "power-station-eastmy-test", crossStateRestricted: false };
+  j.state.listings.push(sabahListing);
   j.login("demo-renter");
-  j.act({ type: "startDeliveryCheckout", id: "courier-east", listingId: "power-station",
+  j.act({ type: "startDeliveryCheckout", id: "courier-east", listingId: "power-station-eastmy-test",
     start: `${dateAfter(20)}T11:00:00+08:00`, end: `${dateAfter(22)}T11:00:00+08:00`,
     deliveryAddress: "Petaling Jaya, Selangor", deliveryPostcode: "46100" });
   let eastBooking = j.state.bookings.find((b) => b.id === "courier-east")!;
@@ -2183,7 +2368,7 @@ test("RM10 lender boost features listing for 7 days", () => {
 
 test("Demo availability is stable, listing-specific, and limited to October–December 2026", () => {
   const state = createSeed("admin_demo");
-  assert.equal(state.listings.length, 20);
+  assert.equal(state.listings.length, 21);
   for (const listing of state.listings) {
     const result = availabilityCalendar(state, listing, 92, "2026-10-01");
     assert.equal(result.length, 92);
@@ -2199,6 +2384,28 @@ test("Demo availability is stable, listing-specific, and limited to October–De
     ["sony-a7iii", "party-speaker"].map((id) => Array.from({ length: 12 }, (_, n) => demoSlotAvailable(id, `2026-11-${String(n + 1).padStart(2, "0")}`, "10:00"))),
     ["party-speaker", "sony-a7iii"].map((id) => Array.from({ length: 12 }, (_, n) => demoSlotAvailable(id, `2026-11-${String(n + 1).padStart(2, "0")}`, "10:00"))),
   );
+});
+
+test("Demo projector retains prefilled parcel data and recalculates eligibility after saving", async () => {
+  const { crossStateDeliveryEligibility } = await import("../services/delivery");
+  let state = transition(createSeed("admin_demo"), { type: "login", userId: "demo-renter" });
+  const projector = state.listings.find((item) => item.id === "demo-portable-projector")!;
+  assert.equal(projector.ownerId, "demo-renter");
+  assert.equal(projector.privateMeetingVenue, "Lot 10 Concierge, Jalan Sultan Ismail, 50250 Kuala Lumpur, Wilayah Persekutuan Kuala Lumpur");
+  assert.equal(projector.pickupPostcode, "50250");
+  assert.equal(projector.parcelWeightKg, 2.5);
+  assert.deepEqual(projector.parcelDimensionsCm, { length: 35, width: 28, height: 18 });
+  assert.equal(projector.deliveryRequirement, "fragile");
+  assert.equal(crossStateDeliveryEligibility(projector), "available");
+  assert.deepEqual(projector.deliveryTimeSlots, ["10:00", "14:00"]);
+  assert.deepEqual(projector.availabilityPeriods, [{ start: "2026-10-19", end: "2026-12-31" }]);
+  assert.equal(calculateOwnerPayout(projector.dailyPrice).payout, 24.36);
+  const edited = { ...projector, parcelDimensionsCm: { length: 121, width: 28, height: 18 } };
+  state = transition(state, { type: "saveListing", listing: edited });
+  const saved = state.listings.find((item) => item.id === projector.id)!;
+  assert.equal(saved.parcelDimensionsCm?.length, 121);
+  assert.equal(crossStateDeliveryEligibility(saved), "same_state_only");
+  assert.deepEqual(saved.images, projector.images);
 });
 
 test("Demo lender upcoming delivery hours are valid Malaysia time", () => {
@@ -3266,6 +3473,7 @@ test("Demo lender listings use fixed view counts consistent with saves and compl
       "office-chair": 58,
       "party-speaker": 43,
       "camping-tent": 31,
+      "demo-portable-projector": 36,
     },
   );
 
@@ -3997,15 +4205,9 @@ test("Section 14.4: Unmatched questions and Talk to a Human use the approved rep
   );
 });
 
-<<<<<<< HEAD
 test("Section 14.3: Full 30-question FAQ covers all six categories with correct fee/deposit figures and the coverage comparison table", async () => {
   const { sampleFaqs, faqCategories } = await import("../data/mock");
   assert.ok(sampleFaqs.length >= 30);
-=======
-test("FAQ preserves core deposit guidance and explains third-party value-based insurance", async () => {
-  const { sampleFaqs } = await import("../data/mock");
-  assert.equal(sampleFaqs.length, 13);
->>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
 
   // All six categories are represented, in order, and nothing outside the approved set.
   const seenCategories = [...new Set(sampleFaqs.map((f) => f.category))];
@@ -4036,12 +4238,26 @@ test("FAQ preserves core deposit guidance and explains third-party value-based i
   const whatIsProtection = protectionFaqs.find((f) => f.question === "What is Rental Protection?");
   assert.ok(whatIsProtection!.answer.includes("not provided or underwritten by CurRENT"));
   const premiumFaq = protectionFaqs.find((f) => f.question === "How much does Rental Protection cost?");
-  assert.ok(premiumFaq!.answer.includes("5% of the total rental fee"));
+  assert.ok(premiumFaq!.answer.includes("0.3%"));
+  assert.ok(premiumFaq!.answer.includes("Rental Days"));
   const maxFaq = protectionFaqs.find((f) => f.question === "What is the maximum Rental Protection coverage?");
   assert.ok(maxFaq!.answer.includes("RM60,000"));
   assert.ok(maxFaq!.answer.includes("not guaranteed compensation"));
 
-<<<<<<< HEAD
+  // No FAQ answer may still describe the retired flat "5% of the rental fee" protection
+  // premium — every protection answer must track the current fair-value/0.3%-per-7-days formula.
+  assert.ok(!sampleFaqs.some((f) => /\b5%\b.*(?:rental fee|protection|insurance)/i.test(f.answer) || /(?:protection|insurance).*\b5%\b/i.test(f.answer)));
+  const sameAsDepositFaq = sampleFaqs.find((f) => f.question === "Is Rental Protection the same as a refundable security deposit?");
+  assert.ok(sameAsDepositFaq!.answer.includes("0.3%"));
+
+  // The delivery-fee FAQ explains the postcode → Haversine → ×1.3 estimation and that cross-state
+  // postage uses shipping regions/parcel weight instead of kilometres.
+  const deliveryFeeFaq = sampleFaqs.find((f) => f.question === "How are delivery fees calculated?");
+  assert.ok(deliveryFeeFaq);
+  assert.ok(deliveryFeeFaq!.answer.includes("1.3"));
+  assert.ok(deliveryFeeFaq!.answer.includes("straight-line distance"));
+  assert.ok(deliveryFeeFaq!.answer.includes("shipping regions"));
+
   // The Q21 comparison table: 16 situations, five columns, "Without Rental Protection" present.
   const comparisonFaq = sampleFaqs.find((f) => !!f.coverageTable);
   assert.ok(comparisonFaq);
@@ -4064,31 +4280,23 @@ test("FAQ page and Help & Trust page render the same shared FAQ content", async 
   assert.ok(helpSource.includes("sampleFaqs"));
   assert.ok(faqSource.includes("FaqAccordion"));
   assert.ok(helpSource.includes("FaqAccordion"));
-=======
-  // Check Q5
-  assert.equal(
-    sampleFaqs[4].question,
-    "How much does CurRENT charge borrowers and lenders?",
-  );
-  assert.ok(sampleFaqs[4].answer.includes("13% lender commission"));
-  assert.ok(sampleFaqs[4].answer.includes("minimum RM5"));
+});
 
-  // Check Q6
-  assert.equal(
-    sampleFaqs[5].question,
-    "Is Buy Now Pay Later (BNPL) available?",
-  );
-  assert.ok(sampleFaqs[5].answer.includes("simulated FPX and BNPL"));
+test("Lender Dashboard displays the eligibility badge from the shared classifier, never a separate rule, and package management uses Add/Remove instead of a manual count", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const dashboardSource = fs.readFileSync(path.join(__dirname, "../app/owner/index.tsx"), "utf8");
+  // Must import and call the same shared classifier/badge constants used everywhere else
+  // (product page, lender form, backend) — not a second, independently defined eligibility rule.
+  assert.ok(dashboardSource.includes('from "../../services/delivery"'));
+  assert.ok(dashboardSource.includes("crossStateDeliveryEligibility"));
+  assert.ok(dashboardSource.includes("CROSS_STATE_ELIGIBILITY_BADGE"));
 
-  const protection = sampleFaqs.find((item) => item.question === "How is the Rental Protection fee calculated?");
-  assert.ok(protection?.answer.includes("0.3% × (Rental Days ÷ 7)"));
-  assert.ok(protection?.answer.includes("RM3.43"));
-  assert.ok(protection?.answer.includes("no RM5 minimum"));
-  const provider = sampleFaqs.find((item) => item.question === "What is optional Rental Protection?");
-  assert.ok(provider?.answer.includes("third-party"));
-  const shipping = sampleFaqs.find((item) => item.question === "Can I report courier damage without purchasing Rental Protection?");
-  assert.ok(shipping?.answer.includes("Yes."));
->>>>>>> 53715447263a0628c559ebb315d915d1d8cdef76
+  const editSource = fs.readFileSync(path.join(__dirname, "../app/owner/edit.tsx"), "utf8");
+  assert.ok(editSource.includes("Add Package"));
+  assert.ok(editSource.includes("Remove Package"));
+  assert.ok(!editSource.includes("Number of packages"), "The manual package-count input must be gone");
+  assert.ok(!editSource.includes("packageCount"), "Package count must be driven by the Add/Remove list, not a typed number");
 });
 
 test("Confirm Received is gated by scheduled start and does not activate or reschedule a rental", () => {

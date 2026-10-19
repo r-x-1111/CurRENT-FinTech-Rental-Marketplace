@@ -48,16 +48,20 @@ export const DEMO_LISTING_TEMPLATE = {
   state: "Wilayah Persekutuan Kuala Lumpur",
   dailyPrice: "28",
   estimatedValue: 1200,
+  parcelWeightKg: 2.5,
+  parcelDimensionsCm: { length: 35, width: 28, height: 18 },
+  deliveryRequirement: "fragile" as const,
   deliveryTimeSlots: ["10:00", "14:00"],
 };
 
 export function getDemoListingAvailability(now = new Date()) {
   const myDate = new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+  if (myDate <= "2026-12-31") return { start: myDate < "2026-10-19" ? "2026-10-19" : myDate, end: "2026-12-31" };
   const start = new Date(`${myDate}T00:00:00Z`);
   const end = new Date(start);
   end.setUTCDate(end.getUTCDate() + 90);
   return {
     start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10) > "2026-12-31" ? "2026-12-31" : end.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10),
   };
 }

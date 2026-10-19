@@ -18,6 +18,7 @@ import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
 import { calculateOwnerPayout, CURRENT_LENDER_COMMISSION_RATE, LEGACY_LENDER_COMMISSION_RATE } from "../../services/deposit";
 import { formatMalaysiaDateTime, getEffectiveBookingStatus, money } from "../../services/booking";
+import { CROSS_STATE_ELIGIBILITY_BADGE, crossStateDeliveryEligibility } from "../../services/delivery";
 import { newId } from "../../services/marketplace";
 import { colors } from "../../constants/theme";
 import { supabase } from "../../lib/supabase";
@@ -179,6 +180,7 @@ export default function OwnerDashboard() {
             const isBoosted =
               l.featuredUntil &&
               new Date(l.featuredUntil).getTime() > Date.now();
+            const eligibility = crossStateDeliveryEligibility(l);
 
             return (
               <Card key={l.id}>
@@ -191,11 +193,18 @@ export default function OwnerDashboard() {
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={s.h2} numberOfLines={1}>{l.title}</Text>
                     <Text style={s.caption}>{money(l.dailyPrice)} / day</Text>
-                    <View style={{ flexDirection: "row", gap: 6, marginTop: 4 }}>
+                    <View style={{ flexDirection: "row", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                       <Badge text={l.status === "pending_review" ? "Pending Review" : l.status === "published" ? "Approved / Live" : l.status} />
                       {isBoosted && (
                         <Badge text="★ Featured" green />
                       )}
+                      {/* Same shared classifier/badge wording used on the product page, the
+                          lender's own listing form, and the renter's booking panel — never a
+                          separate rule, and never lender-overridable. */}
+                      <Badge
+                        text={CROSS_STATE_ELIGIBILITY_BADGE[eligibility]}
+                        tone={eligibility === "available" ? "green" : eligibility === "same_state_only" ? "amber" : "blue"}
+                      />
                     </View>
                   </View>
                 </View>

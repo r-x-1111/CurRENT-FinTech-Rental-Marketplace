@@ -521,11 +521,73 @@ export type ParcelPackage = { weightKg: number; dimensionsCm: ParcelDimensions }
  */
 export type CrossStateDeliveryEligibility = "available" | "same_state_only" | "requires_review";
 
+/** Shared product-page / lender-form badge wording — one source so every screen agrees. */
+export const CROSS_STATE_ELIGIBILITY_BADGE: Record<CrossStateDeliveryEligibility, string> = {
+  available: "Cross-State Delivery Available (Demo)",
+  same_state_only: "Same-State Delivery Only",
+  requires_review: "Delivery Details Required",
+};
+
+/** Shared explanation shown next to the badge, on the lender form and the product page. */
+export const CROSS_STATE_ELIGIBILITY_EXPLANATION: Record<CrossStateDeliveryEligibility, string> = {
+  available: "Your item meets CurRENT's simulated standard courier requirements based on its recorded parcel details.",
+  same_state_only: "This item does not meet CurRENT's cross-state shipping requirements. It can still be listed for eligible same-state delivery.",
+  requires_review: "Enter your item's packaged weight and dimensions to determine cross-state delivery availability.",
+};
+
+/** Shared renter-facing booking-panel warning (title + body) for a blocked cross-state attempt. */
+export const CROSS_STATE_BOOKING_WARNING: Record<"same_state_only" | "requires_review", { title: string; body: string }> = {
+  same_state_only: {
+    title: "Cross-State Delivery Unavailable",
+    body: "This item cannot be delivered across states due to its size, weight or shipping requirements. Please select a delivery address within the same state to continue.",
+  },
+  requires_review: {
+    title: "Delivery Details Required",
+    body: "This item's shipping details have not been fully provided yet, so cross-state delivery availability cannot be confirmed. Please select a delivery address within the same state, or check back once the lender completes this item's shipping information.",
+  },
+};
+
+/** Shipping characteristics the lender can flag — informs eligibility (Step 4) alongside size. */
+export type ShippingCharacteristic = "fragile" | "bulky" | "lithium_battery" | "restricted_liquid";
+
+/**
+ * The five demo listings CurRENT explicitly restricts to same-state delivery. Checked by listing
+ * id here as a backstop — independent of whatever a specific stored record's own
+ * `crossStateRestricted` field says — so a listing loaded from outdated persisted data (an older
+ * record saved before this field existed, a stale cache, etc.) is still correctly restricted
+ * rather than silently falling through to a parcel-size check it happens to pass.
+ */
+export const PLATFORM_RESTRICTED_LISTING_IDS = new Set([
+  "office-chair", // Ergonomic Office Chair
+  "pressure-washer", // Pressure Washer
+  "standing-air-cooler", // Standing Air Cooler
+  "power-station", // Portable Power Station
+  "photo-booth", // Photo Booth Setup
+]);
+
 export function crossStateDeliveryEligibility(listing: {
+  id?: string;
   parcelWeightKg?: number;
   parcelDimensionsCm?: ParcelDimensions;
   parcelPackages?: ParcelPackage[];
+  shippingCharacteristics?: ShippingCharacteristic[];
+  /** Explicit CurRENT/platform restriction (e.g. the five named demo listings), independent of
+   * the computed parcel size — never overridden by a lender toggle. Checked first (Step 1). */
+  crossStateRestricted?: boolean;
 }): CrossStateDeliveryEligibility {
+  // Step 1 — platform restriction always wins, regardless of recorded parcel size. Checked both
+  // from the stored flag and, as a backstop against stale/outdated persisted data, by listing id.
+  if (listing.crossStateRestricted || (listing.id && PLATFORM_RESTRICTED_LISTING_IDS.has(listing.id))) {
+    return "same_state_only";
+  }
+
+  // Step 4 — restricted contents (e.g. flammable liquids) are not accepted by the demo's
+  // standard courier regardless of size. A lithium battery or fragile/bulky flag alone does not
+  // disqualify an item — only an actual size/weight violation (Steps 2–3) does, so electronics
+  // and fragile items aren't automatically rejected just for being electronics or fragile.
+  if (listing.shippingCharacteristics?.includes("restricted_liquid")) return "same_state_only";
+
+  // Steps 2–3 — package dimensions and weight, every package evaluated independently.
   const packages: ParcelPackage[] = listing.parcelPackages?.length
     ? listing.parcelPackages
     : listing.parcelWeightKg != null && listing.parcelDimensionsCm

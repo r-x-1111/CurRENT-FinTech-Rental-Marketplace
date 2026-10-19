@@ -25,7 +25,7 @@ import {
 } from "./deposit";
 import { evaluateRentalOutcome, tierForScore } from "./riskScore";
 import { createSeed } from "../data/seed";
-import { addDaysToDateString, crossStateDeliveryEligibility, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "./delivery";
+import { addDaysToDateString, CROSS_STATE_BOOKING_WARNING, crossStateDeliveryEligibility, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "./delivery";
 import { estimatePostcodeDistance } from "./geo";
 
 export type Action =
@@ -596,7 +596,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       if (l.availableTo) parseDate(l.availableTo);
       requireThat(
         [l.availableFrom, l.availableTo, ...(l.availabilityPeriods || []).flatMap((p) => [p.start, p.end])]
-          .every((date) => !date || (parseDate(date), date <= "2026-12-31")),
+          .every((date) => !date || (parseDate(date), (state.mode === "admin_demo" && l.ownerId === "demo-renter") || date <= "2026-12-31")),
         "Availability must end by 31 December 2026.",
       );
       requireThat(
@@ -703,6 +703,23 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         "Complete identity verification and resolve account restrictions before booking.");
       requireThat((riskFor(state, user).score ?? 0) >= 30, "This rental requires CurRENT platform review.");
       requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery destination.");
+      // Explicit, user-facing cross-state eligibility check — the actual booking-validation gate,
+      // not just a frontend warning. Must run BEFORE any delivery quote is computed: a restricted
+      // or incompletely-described listing can still have a parcel small enough for the Domestic
+      // Courier to happily quote it (that was the bug — this check previously only ran when NO
+      // quote resolved at all, so a normally-sized restricted item like the Standing Air Cooler
+      // sailed straight through on the courier quote). Only applies once the postcodes actually
+      // resolve to two different Malaysian states — a same-state route that simply falls outside
+      // GrabExpress's pricing brackets still falls through to the normal courier quote below.
+      {
+        const route = estimatePostcodeDistance(listing.pickupPostcode, action.deliveryPostcode);
+        if (route && route.pickup.state.trim().toLowerCase() !== route.delivery.state.trim().toLowerCase()) {
+          const eligibility = crossStateDeliveryEligibility(listing);
+          if (eligibility === "same_state_only" || eligibility === "requires_review") {
+            requireThat(false, CROSS_STATE_BOOKING_WARNING[eligibility].body);
+          }
+        }
+      }
       const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
         title: listing.title, category: listing.category, description: listing.description };
       const outboundEstimate = quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: action.deliveryPostcode, ...parcel });
@@ -715,22 +732,6 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const courierReturn = !returnEstimate ? quoteAutomaticDomesticCourier({ ...courierParcel,
         pickupPostcode: action.deliveryPostcode, deliveryPostcode: listing.pickupPostcode }) : null;
       const isCourier = !outboundEstimate && !!courierOutbound;
-      // Explicit, user-facing cross-state eligibility check — backs up the listing-page warning
-      // so an unsupported cross-state booking can never be submitted directly, even bypassing the
-      // UI. Only applies when the postcodes actually resolve to different states; an in-state
-      // route that simply falls outside GrabExpress's pricing brackets still uses the generic
-      // "Delivery estimate unavailable" message below via the normal courier-quote fallback.
-      if (!outboundEstimate && !courierOutbound) {
-        const route = estimatePostcodeDistance(listing.pickupPostcode, action.deliveryPostcode);
-        if (route && route.pickup.state.toLowerCase() !== route.delivery.state.toLowerCase()) {
-          const eligibility = crossStateDeliveryEligibility(listing);
-          if (eligibility === "same_state_only") {
-            requireThat(false, "This item cannot be delivered across states due to its size, weight or shipping requirements. Please select a delivery address within the same state to continue.");
-          } else if (eligibility === "requires_review") {
-            requireThat(false, "This item is not currently available for cross-state delivery. Its shipping eligibility must be reviewed before a cross-state booking can proceed.");
-          }
-        }
-      }
       requireThat((outboundEstimate && returnEstimate) || (courierOutbound && courierReturn),
         "Delivery estimate unavailable. Check the pickup and delivery postcodes and route.");
       requireThat(!state.bookings.some((booking) => booking.id === action.id), "This checkout already exists.");
@@ -820,6 +821,17 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const listing = state.listings.find((item) => item.id === booking.listingId);
       requireThat(listing?.pickupPostcode, "The lender must add a valid pickup postcode first.");
       requireThat(action.deliveryAddress.trim().length > 0, "Enter a delivery address.");
+      // Same cross-state eligibility gate as startDeliveryCheckout — editing the delivery address
+      // on an existing (unpaid) booking must not be a way to bypass the restriction.
+      {
+        const route = estimatePostcodeDistance(listing.pickupPostcode, action.deliveryPostcode);
+        if (route && route.pickup.state.trim().toLowerCase() !== route.delivery.state.trim().toLowerCase()) {
+          const eligibility = crossStateDeliveryEligibility(listing);
+          if (eligibility === "same_state_only" || eligibility === "requires_review") {
+            requireThat(false, CROSS_STATE_BOOKING_WARNING[eligibility].body);
+          }
+        }
+      }
       const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
         title: listing.title, category: listing.category, description: listing.description };
       const outbound = quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: action.deliveryPostcode, ...parcel });

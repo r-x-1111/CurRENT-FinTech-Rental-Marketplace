@@ -5,14 +5,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
+  Badge,
   Button,
   Card,
-  Chips,
   Empty,
   Field,
   MediaPicker,
@@ -24,8 +25,8 @@ import { useMarketplace } from "../../context/Marketplace";
 import { categories } from "../../constants/categories";
 import { newId } from "../../services/marketplace";
 import { calculateOwnerPayout, CURRENT_LENDER_COMMISSION_RATE } from "../../services/deposit";
-import { colors } from "../../constants/theme";
-import { selectDeliveryVehicle } from "../../services/delivery";
+import { colors, fonts } from "../../constants/theme";
+import { CROSS_STATE_ELIGIBILITY_BADGE, CROSS_STATE_ELIGIBILITY_EXPLANATION, crossStateDeliveryEligibility, selectDeliveryVehicle } from "../../services/delivery";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 import type { AvailabilityPeriod, Listing } from "../../types";
 import {
@@ -53,6 +54,7 @@ function formatAvailabilityDate(date: string) {
 
 function parseDispatchAddress(address = "") {
   const parts = address.split(",").map((part) => part.trim()).filter(Boolean);
+  const state = parts.at(-1)?.startsWith("Wilayah Persekutuan") ? parts.pop()! : "";
   const locality = parts.at(-1)?.match(/^(\d{5})\s+(.+)$/);
   if (!locality) {
     return {
@@ -60,7 +62,7 @@ function parseDispatchAddress(address = "") {
       line2: parts.join(", "),
       postcode: "",
       city: "",
-      state: "",
+      state,
     };
   }
   parts.pop();
@@ -69,11 +71,12 @@ function parseDispatchAddress(address = "") {
     line2: parts.join(", "),
     postcode: locality[1],
     city: locality[2],
-    state: "",
+    state,
   };
 }
 
 export default function EditListing() {
+  const compact = useWindowDimensions().width < 640;
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { state, user, actAndPersist } = useMarketplace();
   const existing = state.listings.find(
@@ -81,54 +84,73 @@ export default function EditListing() {
   );
   const existingAddress = parseDispatchAddress(existing?.privateMeetingVenue);
   const demoAccount = state.mode === "admin_demo";
+  const demoProjector = demoAccount && (!existing || existing.id === "demo-portable-projector");
   const demoAvailability = getDemoListingAvailability();
 
   const [title, setTitle] = useState(
-    existing?.title || (demoAccount ? DEMO_LISTING_TEMPLATE.title : ""),
+    existing?.title || (demoProjector ? DEMO_LISTING_TEMPLATE.title : ""),
   );
   const [description, setDescription] = useState(
     existing?.description ||
-      (demoAccount ? DEMO_LISTING_TEMPLATE.description : ""),
+      (demoProjector ? DEMO_LISTING_TEMPLATE.description : ""),
   );
   const [category, setCategory] = useState(
     existing?.category ||
-      (demoAccount ? DEMO_LISTING_TEMPLATE.category : "Electronics"),
+      (demoProjector ? DEMO_LISTING_TEMPLATE.category : "Electronics"),
   );
   const [location, setLocation] = useState(
-    existing?.location || (demoAccount ? DEMO_LISTING_TEMPLATE.location : ""),
+    existing?.location || (demoProjector ? DEMO_LISTING_TEMPLATE.location : ""),
   );
   
   // Dispatch address fields
   const [addressLine1, setAddressLine1] = useState(
     existingAddress.line1 ||
-      (demoAccount ? DEMO_LISTING_TEMPLATE.addressLine1 : ""),
+      (demoProjector ? DEMO_LISTING_TEMPLATE.addressLine1 : ""),
   );
   const [addressLine2, setAddressLine2] = useState(
     existingAddress.line2 ||
-      (demoAccount ? DEMO_LISTING_TEMPLATE.addressLine2 : ""),
+      (demoProjector ? DEMO_LISTING_TEMPLATE.addressLine2 : ""),
   );
   const [postcode, setPostcode] = useState(
     existingAddress.postcode ||
-      (demoAccount ? DEMO_LISTING_TEMPLATE.postcode : ""),
+      (demoProjector ? DEMO_LISTING_TEMPLATE.postcode : ""),
   );
   const [city, setCity] = useState(
-    existingAddress.city || (demoAccount ? DEMO_LISTING_TEMPLATE.city : ""),
+    existingAddress.city || (demoProjector ? DEMO_LISTING_TEMPLATE.city : ""),
   );
   const [stateName, setStateName] = useState(
     existingAddress.state ||
-      (demoAccount ? DEMO_LISTING_TEMPLATE.state : ""),
+      (demoProjector ? DEMO_LISTING_TEMPLATE.state : ""),
   );
 
   const [price, setPrice] = useState(
     existing?.dailyPrice?.toString() ||
-      (demoAccount ? DEMO_LISTING_TEMPLATE.dailyPrice : ""),
+      (demoProjector ? DEMO_LISTING_TEMPLATE.dailyPrice : ""),
   );
-  const [parcelWeight, setParcelWeight] = useState(existing?.parcelWeightKg?.toString() || "");
-  const [parcelLength, setParcelLength] = useState(existing?.parcelDimensionsCm?.length?.toString() || "");
-  const [parcelWidth, setParcelWidth] = useState(existing?.parcelDimensionsCm?.width?.toString() || "");
-  const [parcelHeight, setParcelHeight] = useState(existing?.parcelDimensionsCm?.height?.toString() || "");
-  const [deliveryRequirement, setDeliveryRequirement] = useState<"standard" | "fragile" | "bulky">(existing?.deliveryRequirement || "standard");
-  
+  const [parcelWeight, setParcelWeight] = useState(existing?.parcelWeightKg?.toString() || (demoProjector ? String(DEMO_LISTING_TEMPLATE.parcelWeightKg) : ""));
+  const [parcelLength, setParcelLength] = useState(existing?.parcelDimensionsCm?.length?.toString() || (demoProjector ? String(DEMO_LISTING_TEMPLATE.parcelDimensionsCm.length) : ""));
+  const [parcelWidth, setParcelWidth] = useState(existing?.parcelDimensionsCm?.width?.toString() || (demoProjector ? String(DEMO_LISTING_TEMPLATE.parcelDimensionsCm.width) : ""));
+  const [parcelHeight, setParcelHeight] = useState(existing?.parcelDimensionsCm?.height?.toString() || (demoProjector ? String(DEMO_LISTING_TEMPLATE.parcelDimensionsCm.height) : ""));
+  const [deliveryRequirement, setDeliveryRequirement] = useState<"standard" | "fragile" | "bulky">(existing?.deliveryRequirement || (demoProjector ? DEMO_LISTING_TEMPLATE.deliveryRequirement : "standard"));
+  // Cross-state shipping eligibility: additional packages (package 1 is the fields above), each
+  // added/removed directly by the lender via Add Package / Remove Package — never a manually
+  // typed count — plus the two independent restricted-content flags. A listing may have at most
+  // 5 packages in total (package 1 + up to 4 here) and always has at least 1 (package 1, which
+  // can't be removed).
+  const [extraPackages, setExtraPackages] = useState<{ weight: string; length: string; width: string; height: string }[]>(
+    existing?.parcelPackages?.slice(1).map((pkg) => ({
+      weight: pkg.weightKg.toString(), length: pkg.dimensionsCm.length.toString(),
+      width: pkg.dimensionsCm.width.toString(), height: pkg.dimensionsCm.height.toString(),
+    })) || [],
+  );
+  const [lithiumBattery, setLithiumBattery] = useState(
+    existing?.shippingCharacteristics?.includes("lithium_battery") || false,
+  );
+  const [restrictedLiquid, setRestrictedLiquid] = useState(
+    existing?.shippingCharacteristics?.includes("restricted_liquid") || false,
+  );
+  const [showEligibilityInfo, setShowEligibilityInfo] = useState(false);
+
   const [photos, setPhotos] = useState<string[]>(
     existing?.images && existing.images.length >= 6
       ? existing.images
@@ -137,7 +159,7 @@ export default function EditListing() {
   const [videos, setVideos] = useState<string[]>(
     existing?.videos && existing.videos.length >= 1
       ? existing.videos
-      : existing ? ["/videos/listing-preview-sample.mp4"] : [],
+      : existing?.videos || [],
   );
 
   // Availability periods
@@ -146,7 +168,7 @@ export default function EditListing() {
       ? existing.availabilityPeriods
       : existing?.availableFrom && existing?.availableTo
       ? [{ start: existing.availableFrom, end: existing.availableTo }]
-      : demoAccount
+      : demoProjector
         ? [{ start: demoAvailability.start, end: demoAvailability.end }]
         : [],
   );
@@ -172,7 +194,7 @@ export default function EditListing() {
       ? existing.deliveryTimeSlots
       : existing?.pickupTimeWindows && existing.pickupTimeWindows.length > 0
       ? existing.pickupTimeWindows.map((w) => w.start)
-      : demoAccount
+      : demoProjector
         ? DEMO_LISTING_TEMPLATE.deliveryTimeSlots
         : [];
   const [selectedSlots, setSelectedSlots] = useState<string[]>(initialSlots);
@@ -219,6 +241,30 @@ export default function EditListing() {
   const dailyPriceNum = parseFloat(price);
   const parcelDimensions = { length: Number(parcelLength), width: Number(parcelWidth), height: Number(parcelHeight) };
   const selectedVehicle = selectDeliveryVehicle(Number(parcelWeight), parcelDimensions, deliveryRequirement);
+  // All recorded packages (package 1 from the fields above, plus any extra packages) — used only
+  // for the cross-state courier eligibility assessment below; same-state vehicle selection above
+  // is unchanged and still driven solely by parcelWeight/parcelDimensions/deliveryRequirement.
+  const allPackages = [
+    { weight: parcelWeight, length: parcelLength, width: parcelWidth, height: parcelHeight },
+    ...extraPackages,
+  ].filter((pkg) => pkg.weight.trim() || pkg.length.trim() || pkg.width.trim() || pkg.height.trim());
+  const parcelPackagesForEligibility = allPackages.length
+    ? allPackages.map((pkg) => ({
+        weightKg: Number(pkg.weight),
+        dimensionsCm: { length: Number(pkg.length), width: Number(pkg.width), height: Number(pkg.height) },
+      }))
+    : undefined;
+  const shippingCharacteristicsForEligibility: ("fragile" | "bulky" | "lithium_battery" | "restricted_liquid")[] = [
+    ...(deliveryRequirement === "fragile" ? ["fragile" as const] : []),
+    ...(deliveryRequirement === "bulky" ? ["bulky" as const] : []),
+    ...(lithiumBattery ? ["lithium_battery" as const] : []),
+    ...(restrictedLiquid ? ["restricted_liquid" as const] : []),
+  ];
+  const crossStateEligibility = crossStateDeliveryEligibility({
+    parcelPackages: parcelPackagesForEligibility,
+    shippingCharacteristics: shippingCharacteristicsForEligibility,
+    crossStateRestricted: existing?.crossStateRestricted,
+  });
   const estimatedPayout =
     !isNaN(dailyPriceNum) && dailyPriceNum > 0
       ? calculateOwnerPayout(dailyPriceNum).payout.toFixed(2)
@@ -229,8 +275,8 @@ export default function EditListing() {
       setError("Please specify both Start Date and End Date.");
       return;
     }
-    if (inputEnd < inputStart || inputEnd > "2026-12-31" || inputStart > "2026-12-31") {
-      setError("Availability must end by 31 December 2026 and follow its start date.");
+    if (inputEnd < inputStart || (!demoAccount && (inputEnd > "2026-12-31" || inputStart > "2026-12-31"))) {
+      setError(demoAccount ? "Availability must follow its start date." : "Availability must end by 31 December 2026 and follow its start date.");
       return;
     }
     setError("");
@@ -313,8 +359,8 @@ export default function EditListing() {
     if (isSaving) return;
     setIsSaving(true);
     try {
-      if (periods.some((period) => period.start > "2026-12-31" || period.end > "2026-12-31" || period.end < period.start)) {
-        setError("Availability must end by 31 December 2026.");
+      if (periods.some((period) => period.end < period.start || (!demoAccount && (period.start > "2026-12-31" || period.end > "2026-12-31")))) {
+        setError(demoAccount ? "Availability must follow its start date." : "Availability must end by 31 December 2026.");
         return;
       }
       if (selectedSlots.length < 2 && status === "pending_review") {
@@ -348,13 +394,18 @@ export default function EditListing() {
         publicArea: publicLocation,
         privateMeetingVenue: formattedDispatchAddress,
         pickupPostcode: postcode.trim(),
-        parcelWeightKg: selectedVehicle ? Number(parcelWeight) : undefined,
-        parcelDimensionsCm: selectedVehicle ? parcelDimensions : undefined,
+        parcelWeightKg: Number(parcelWeight) > 0 ? Number(parcelWeight) : undefined,
+        parcelDimensionsCm: Object.values(parcelDimensions).every((side) => Number.isFinite(side) && side > 0) ? parcelDimensions : undefined,
+        // Only stored once there's more than one package — a single-package listing keeps using
+        // parcelWeightKg/parcelDimensionsCm above, exactly as before.
+        parcelPackages: parcelPackagesForEligibility && parcelPackagesForEligibility.length > 1 ? parcelPackagesForEligibility : undefined,
+        shippingCharacteristics: shippingCharacteristicsForEligibility.length ? shippingCharacteristicsForEligibility : undefined,
+        crossStateRestricted: existing?.crossStateRestricted,
         deliveryRequirement,
         dailyPrice: Number(price),
         estimatedValue:
           existing?.estimatedValue ||
-          (demoAccount ? DEMO_LISTING_TEMPLATE.estimatedValue : undefined),
+          (demoProjector ? DEMO_LISTING_TEMPLATE.estimatedValue : undefined),
         images: photos,
         videos,
         imageUrl: photos[0] || "",
@@ -403,15 +454,17 @@ export default function EditListing() {
   return (
     <Screen
       back
-      title={
-        existing ? "Make your listing shine" : "Give your gear a second life"
-      }
-      subtitle="A few details today. A little extra income tomorrow."
+      contentStyle={styles.screenContent}
     >
-      <Card>
+      <View style={styles.pageHeading}>
+        <Text accessibilityRole="header" style={[styles.pageTitle, compact && styles.pageTitleCompact]}>Give your gear a second life</Text>
+        <Text style={styles.pageSubtitle}>A few details today. A little extra income tomorrow.</Text>
+      </View>
+      <Card style={[styles.formCard, compact && styles.formCardCompact]}>
         {/* Media Upload Section: Min 6 photos and 1 video required per V3.23 */}
+        <View style={styles.formSection}>
+        <Text style={styles.sectionHeading}>Listing Media (Photos & Video)</Text>
         <MediaPicker
-          title="Listing Media (Photos & Video)"
           subtitle={
             demoAccount
               ? "Media is optional for the Demo Account."
@@ -428,7 +481,10 @@ export default function EditListing() {
           allowMainSelect
           samplePrefix="listing"
         />
+        </View>
 
+        <View style={styles.formSection}>
+        <Text style={styles.sectionHeading}>Basic Listing Information</Text>
         <Field
           label="Listing title"
           value={title}
@@ -442,14 +498,23 @@ export default function EditListing() {
           multiline
           placeholder="What’s included, item condition and anything renters should know."
         />
-        <Text style={s.label}>Category</Text>
-        <Chips
-          options={categories.slice(1)}
-          selected={category}
-          onSelect={setCategory}
-        />
+        </View>
+
+        <View style={styles.formSection}>
+        <Text style={styles.sectionHeading}>Category</Text>
+        <View style={styles.optionGrid}>
+          {categories.slice(1).map((option) => (
+            <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected: category === option }}
+              onPress={() => setCategory(option)} style={[styles.optionButton, category === option && styles.optionButtonSelected]}>
+              <Text style={[styles.optionText, category === option && styles.optionTextSelected]}>{option}</Text>
+            </Pressable>
+          ))}
+        </View>
+        </View>
 
         {/* Public service area and dispatch address */}
+        <View style={styles.formSection}>
+        <Text style={styles.sectionHeading}>Service Area and Address</Text>
         <Field
           label="Service area / locality"
           value={location}
@@ -458,7 +523,7 @@ export default function EditListing() {
         />
 
         <View style={styles.addressBox}>
-          <Text style={[s.label, { marginBottom: 10 }]}>Address</Text>
+          <Text style={styles.subsectionHeading}>Pickup Address</Text>
 
           <Field
             label="Street / Address line 1"
@@ -472,7 +537,7 @@ export default function EditListing() {
             onChangeText={setAddressLine2}
             placeholder="e.g. Level 2, Unit B"
           />
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={[styles.inputRow, compact && styles.inputRowCompact]}>
             <View style={{ flex: 1 }}>
               <Field
                 label="Postcode"
@@ -493,21 +558,113 @@ export default function EditListing() {
           </View>
           <MalaysiaStateSelector value={stateName} onChange={setStateName} />
         </View>
+        </View>
 
-        <View style={{ marginTop: 14, gap: 8 }}>
-          <Text style={s.label}>Packaged item for delivery</Text>
-          <Text style={s.caption}>Optional: add packed weight and dimensions to improve the automatic vehicle estimate.</Text>
-          <Field label="Packaged weight (kg)" value={parcelWeight} onChangeText={setParcelWeight} keyboardType="decimal-pad" placeholder="e.g. 2.5" />
-          <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={styles.formSection}>
+          <Text style={styles.sectionHeading}>Delivery & Shipping Information</Text>
+          <Text style={s.caption}>Provide your item's packaged measurements so CurRENT can automatically determine available delivery options.</Text>
+
+          <Text style={styles.subsectionHeading}>Package Details</Text>
+          <Text style={styles.packageSummary}>{extraPackages.length + 1} {extraPackages.length === 0 ? "package" : "packages"} selected</Text>
+          <View style={styles.packageCard}>
+          <Text style={styles.packageTitle}>Package 1</Text>
+          <Field label="Package weight (kg)" value={parcelWeight} onChangeText={setParcelWeight} keyboardType="decimal-pad" placeholder="e.g. 2.5" />
+          <View style={[styles.inputRow, compact && styles.inputRowCompact]}>
             <View style={{ flex: 1 }}><Field label="Length (cm)" value={parcelLength} onChangeText={setParcelLength} keyboardType="decimal-pad" /></View>
             <View style={{ flex: 1 }}><Field label="Width (cm)" value={parcelWidth} onChangeText={setParcelWidth} keyboardType="decimal-pad" /></View>
             <View style={{ flex: 1 }}><Field label="Height (cm)" value={parcelHeight} onChangeText={setParcelHeight} keyboardType="decimal-pad" /></View>
           </View>
+          </View>
+          {extraPackages.map((pkg, index) => (
+            <View key={index} style={styles.packageCard}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={styles.packageTitle}>Package {index + 2}</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove package ${index + 2}`}
+                  onPress={() => setExtraPackages((prev) => prev.filter((_, i) => i !== index))}
+                >
+                  <Text style={{ color: colors.danger, fontWeight: "700", fontSize: 12 }}>Remove Package</Text>
+                </Pressable>
+              </View>
+              <Field label="Package weight (kg)" value={pkg.weight}
+                onChangeText={(value) => setExtraPackages((prev) => prev.map((p, i) => i === index ? { ...p, weight: value } : p))}
+                keyboardType="decimal-pad" placeholder="e.g. 2.5" />
+              <View style={[styles.inputRow, compact && styles.inputRowCompact]}>
+                <View style={{ flex: 1 }}><Field label="Length (cm)" value={pkg.length}
+                  onChangeText={(value) => setExtraPackages((prev) => prev.map((p, i) => i === index ? { ...p, length: value } : p))}
+                  keyboardType="decimal-pad" /></View>
+                <View style={{ flex: 1 }}><Field label="Width (cm)" value={pkg.width}
+                  onChangeText={(value) => setExtraPackages((prev) => prev.map((p, i) => i === index ? { ...p, width: value } : p))}
+                  keyboardType="decimal-pad" /></View>
+                <View style={{ flex: 1 }}><Field label="Height (cm)" value={pkg.height}
+                  onChangeText={(value) => setExtraPackages((prev) => prev.map((p, i) => i === index ? { ...p, height: value } : p))}
+                  keyboardType="decimal-pad" /></View>
+              </View>
+            </View>
+          ))}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: extraPackages.length >= 4 }}
+            disabled={extraPackages.length >= 4}
+            onPress={() => setExtraPackages((prev) => [...prev, { weight: "", length: "", width: "", height: "" }])}
+          >
+            <Text style={{ color: extraPackages.length >= 4 ? colors.muted : colors.blue, fontWeight: "700", fontSize: 12 }}>
+              {extraPackages.length >= 4 ? "Maximum 5 packages reached" : "+ Add Package"}
+            </Text>
+          </Pressable>
+
+          <Text style={styles.subsectionHeading}>Shipping Characteristics</Text>
           <Text style={s.label}>Delivery requirement</Text>
-          <Chips options={["standard", "fragile", "bulky"]} selected={deliveryRequirement} onSelect={(value) => setDeliveryRequirement(value as typeof deliveryRequirement)} />
+          <View style={styles.optionGrid}>
+            {(["standard", "fragile", "bulky"] as const).map((option) => (
+              <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected: deliveryRequirement === option }}
+                onPress={() => setDeliveryRequirement(option)} style={[styles.optionButton, deliveryRequirement === option && styles.optionButtonSelected]}>
+                <Text style={[styles.optionText, deliveryRequirement === option && styles.optionTextSelected]}>{option}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: lithiumBattery }}
+            onPress={() => setLithiumBattery((v) => !v)} style={styles.shippingCheckboxRow}>
+            <View style={[styles.shippingCheckbox, lithiumBattery && styles.shippingCheckboxChecked]}>
+              {lithiumBattery && <Ionicons name="checkmark" size={13} color={colors.white} />}
+            </View>
+            <Text style={s.caption}>Contains lithium batteries</Text>
+          </Pressable>
+          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: restrictedLiquid }}
+            onPress={() => setRestrictedLiquid((v) => !v)} style={styles.shippingCheckboxRow}>
+            <View style={[styles.shippingCheckbox, restrictedLiquid && styles.shippingCheckboxChecked]}>
+              {restrictedLiquid && <Ionicons name="checkmark" size={13} color={colors.white} />}
+            </View>
+            <Text style={s.caption}>Contains liquids or restricted materials</Text>
+          </Pressable>
           <Text style={s.caption}>{selectedVehicle ? `Automatically selected: ${selectedVehicle}` : "Vehicle will be inferred from the listing."}</Text>
+
+          {/* Automatic cross-state eligibility result — recalculated on every relevant change,
+              never a lender-editable toggle. */}
+          <View style={styles.eligibilityResultBox}>
+            <Badge
+              text={CROSS_STATE_ELIGIBILITY_BADGE[crossStateEligibility]}
+              tone={crossStateEligibility === "available" ? "green" : crossStateEligibility === "same_state_only" ? "amber" : "blue"}
+            />
+            <Text style={s.caption}>{CROSS_STATE_ELIGIBILITY_EXPLANATION[crossStateEligibility]}</Text>
+          </View>
+
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showEligibilityInfo }} onPress={() => setShowEligibilityInfo((v) => !v)} style={styles.accordionTrigger}>
+            <Text style={styles.accordionText}>
+              {showEligibilityInfo ? "Hide" : "How Is Delivery Eligibility Determined?"}
+            </Text>
+            <Ionicons name={showEligibilityInfo ? "chevron-up" : "chevron-down"} size={16} color={colors.blue} />
+          </Pressable>
+          {showEligibilityInfo && (
+            <Text style={s.caption}>
+              CurRENT automatically assesses cross-state delivery eligibility using the item's packaged weight, dimensions and shipping characteristics. Items that meet the supported courier requirements may be offered for cross-state delivery. All assessments are simulated and do not guarantee acceptance by an actual courier.
+            </Text>
+          )}
         </View>
 
+        <View style={styles.formSection}>
+        <Text style={styles.sectionHeading}>Rental Pricing</Text>
         <Field
           label="Daily rental price (RM)"
           value={price}
@@ -534,10 +691,11 @@ export default function EditListing() {
             CurRENT charges a {Math.round(CURRENT_LENDER_COMMISSION_RATE * 100)}% commission only when a rental is successfully completed. Your payout will be released once the deposit has been settled.
           </Text>
         </View>
+        </View>
 
         {/* Compact Availability Section (Section 4.3) */}
-        <View style={{ marginTop: 14, marginBottom: 14 }}>
-          <Text style={s.label}>Availability</Text>
+        <View style={styles.formSection}>
+          <Text style={styles.sectionHeading}>Availability</Text>
           <Text style={[s.caption, { marginBottom: 10 }]}>
             Set the date ranges when your item is available for rent.
           </Text>
@@ -546,14 +704,14 @@ export default function EditListing() {
           {periods.length > 0 && (
             <View style={{ gap: 8, marginBottom: 12 }}>
               {periods.map((p, idx) => (
-                <View key={`${p.start}-${p.end}-${idx}`} style={styles.periodRow}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
+                <View key={`${p.start}-${p.end}-${idx}`} style={[styles.periodRow, compact && styles.periodRowCompact]}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
                     <Ionicons name="calendar-outline" size={16} color={colors.blue} />
                     <Text style={styles.periodDateText}>
                       {formatAvailabilityDate(p.start)} – {formatAvailabilityDate(p.end)}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
+                  <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
                     <Pressable
                       accessibilityRole="button"
                       onPress={() => handleEditPeriod(idx)}
@@ -576,7 +734,7 @@ export default function EditListing() {
 
           {/* Add period inputs */}
           <View style={styles.addPeriodBox}>
-            <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={[styles.inputRow, compact && styles.inputRowCompact]}>
               <View style={{ flex: 1 }}>
                 <Text style={s.label}>Start Date</Text>
                 <Pressable
@@ -774,9 +932,9 @@ export default function EditListing() {
                         selected:
                           date ===
                           (calendarField === "start" ? inputStart : inputEnd),
-                        disabled: date < earliestCalendarDate || date > "2026-12-31",
+                        disabled: date < earliestCalendarDate || (!demoAccount && date > "2026-12-31"),
                       }}
-                      disabled={date < earliestCalendarDate || date > "2026-12-31"}
+                      disabled={date < earliestCalendarDate || (!demoAccount && date > "2026-12-31")}
                       onPress={() => {
                         if (calendarField === "start") setInputStart(date);
                         else setInputEnd(date);
@@ -795,7 +953,7 @@ export default function EditListing() {
                           date ===
                             (calendarField === "start" ? inputStart : inputEnd) &&
                             styles.calendarDayTextSelected,
-                          (date < earliestCalendarDate || date > "2026-12-31") && styles.calendarDayDisabled,
+                          (date < earliestCalendarDate || (!demoAccount && date > "2026-12-31")) && styles.calendarDayDisabled,
                         ]}
                       >
                         {Number(date.slice(-2))}
@@ -821,26 +979,22 @@ export default function EditListing() {
         </Modal>
 
         {/* Scheduled Delivery Time Slots (README V3.23 Section 4.3 & 17.8) */}
-        <View style={{ marginTop: 14, marginBottom: 14 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-            <Text style={s.label}>Available delivery time slots</Text>
-            <Text style={[s.caption, { marginTop: 0, fontWeight: "600", color: selectedSlots.length >= 2 ? colors.navy : colors.danger }]}>
+        <View style={styles.formSection}>
+          <View style={[styles.sectionHeaderRow, compact && styles.sectionHeaderRowCompact]}>
+            <Text style={styles.sectionHeading}>Available Delivery Time Slots</Text>
+            <Text style={[styles.countBadge, selectedSlots.length < 2 && styles.countBadgeWarning]}>
               {selectedSlots.length}/8 selected (min 2 required)
             </Text>
           </View>
-          <Text style={[s.label, { fontSize: 12, marginTop: -4, marginBottom: 2 }]}>Local Delivery – GrabExpress (Demo)</Text>
-          <Text style={[s.caption, { marginTop: 0, marginBottom: 8 }]}>
-            Select at least 2 of the 8 fixed delivery-start hours. Renters using eligible local delivery routes can only book during your selected time slots.{"\n\n"}
-            For each selected delivery time, the delivery driver is scheduled to collect the item from you approximately 40 minutes before the renter's selected delivery time. For example, if the renter selects 2:00 PM, the estimated driver collection time is 1:20 PM.{"\n\n"}
-            These are simulated schedules, not confirmed GrabExpress bookings.
-          </Text>
-          <Text style={[s.label, { fontSize: 12, marginBottom: 2 }]}>Cross-State Delivery – Domestic Courier (Demo)</Text>
-          <Text style={[s.caption, { marginTop: 0, marginBottom: 10 }]}>
-            Fixed hourly delivery slots do not apply to cross-state deliveries. Instead, CurRENT automatically recommends a dispatch date based on the renter's selected rental start date and the estimated courier transit time.{"\n\n"}
-            After receiving a cross-state booking, you will be asked to confirm the recommended dispatch date or propose an alternative arrangement.{"\n\n"}
-            For returns, the renter must drop off the securely packaged item at an eligible courier branch by the agreed return deadline. Courier arrival dates are estimates and are not guaranteed.
-          </Text>
-          <Text style={[s.caption, { marginTop: 0, marginBottom: 10, fontStyle: "italic" }]}>
+          <Text style={styles.subsectionHeading}>Local Delivery – GrabExpress (Demo)</Text>
+          <Text style={styles.supportingText}>Select at least 2 of the 8 fixed delivery-start hours. Renters using eligible local delivery routes can only book during your selected time slots.</Text>
+          <Text style={styles.supportingText}>For each selected delivery time, the delivery driver is scheduled to collect the item from you approximately 40 minutes before the renter's selected delivery time. For example, if the renter selects 2:00 PM, the estimated driver collection time is 1:20 PM.</Text>
+          <Text style={styles.disclaimerText}>These are simulated schedules, not confirmed GrabExpress bookings.</Text>
+          <Text style={styles.subsectionHeading}>Cross-State Delivery – Domestic Courier (Demo)</Text>
+          <Text style={styles.supportingText}>Fixed hourly delivery slots do not apply to cross-state deliveries. Instead, CurRENT automatically recommends a dispatch date based on the renter's selected rental start date and the estimated courier transit time.</Text>
+          <Text style={styles.supportingText}>After receiving a cross-state booking, you will be asked to confirm the recommended dispatch date or propose an alternative arrangement.</Text>
+          <Text style={styles.supportingText}>For returns, the renter must drop off the securely packaged item at an eligible courier branch by the agreed return deadline. Courier arrival dates are estimates and are not guaranteed.</Text>
+          <Text style={styles.disclaimerText}>
             The renter's delivery postcode is not known yet, so whether a booking uses local or cross-state delivery is determined later, at checkout.
           </Text>
           <View style={styles.fixedSlotsGrid}>
@@ -873,8 +1027,8 @@ export default function EditListing() {
         </View>
 
         {/* Fixed Fulfilment Label: Delivery Only per V3.23 */}
-        <View style={{ marginTop: 14, marginBottom: 14 }}>
-          <Text style={s.label}>Fulfilment method</Text>
+        <View style={styles.formSection}>
+          <Text style={styles.sectionHeading}>Fulfilment Method</Text>
           <View style={styles.deliveryOnlyBadge}>
             <Ionicons name="car-outline" size={16} color={colors.blue} />
             <Text style={styles.deliveryOnlyText}>Delivery Only</Text>
@@ -884,9 +1038,11 @@ export default function EditListing() {
           </Text>
         </View>
 
+        <View style={styles.formSection}>
+          <Text style={styles.sectionHeading}>Submit Listing for Review</Text>
         {!!error && <Notice text={error} error />}
 
-        <View style={{ gap: 10, marginTop: 8 }}>
+        <View style={{ gap: 10 }}>
           {existing && (
             <Button
               secondary
@@ -905,34 +1061,100 @@ export default function EditListing() {
             Save as draft
           </Button>
         </View>
+        </View>
       </Card>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  screenContent: { maxWidth: 920 },
+  pageHeading: { marginBottom: 22, gap: 6 },
+  pageTitle: { fontFamily: fonts.bold, fontSize: 32, lineHeight: 39, fontWeight: "700", letterSpacing: -0.5, color: "#102B50" },
+  pageTitleCompact: { fontSize: 27, lineHeight: 34 },
+  pageSubtitle: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 23, color: colors.muted },
+  formCard: { gap: 16, padding: 18 },
+  formCardCompact: { padding: 12, gap: 12 },
+  formSection: {
+    backgroundColor: colors.white, borderColor: colors.border, borderWidth: 1,
+    borderRadius: 14, padding: 16, gap: 8,
+  },
+  sectionHeading: {
+    fontFamily: fonts.bold, fontSize: 20, lineHeight: 27, fontWeight: "600",
+    color: "#102B50", marginBottom: 4,
+  },
+  subsectionHeading: {
+    fontFamily: fonts.medium, fontSize: 16, lineHeight: 23, fontWeight: "600",
+    color: "#102B50", marginTop: 10, marginBottom: 4,
+  },
+  inputRow: { flexDirection: "row", gap: 10 },
+  inputRowCompact: { flexDirection: "column" },
+  optionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  optionButton: {
+    minHeight: 44, minWidth: 108, alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
+    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white,
+  },
+  optionButtonSelected: { borderColor: "#2563EB", backgroundColor: "#2563EB" },
+  optionText: { fontFamily: fonts.medium, fontSize: 14, fontWeight: "600", color: "#102B50", textAlign: "center" },
+  optionTextSelected: { color: colors.white },
+  packageSummary: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 19, color: colors.muted },
+  packageCard: {
+    padding: 14, gap: 6, borderRadius: 12, borderWidth: 1,
+    borderColor: colors.border, backgroundColor: "#E4EEFA",
+  },
+  packageTitle: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 20, fontWeight: "600", color: "#102B50" },
+  accordionTrigger: {
+    minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: 12, borderRadius: 10, borderWidth: 1,
+    borderColor: colors.border, backgroundColor: colors.white,
+  },
+  accordionText: { fontFamily: fonts.medium, fontSize: 13, fontWeight: "600", color: "#2563EB" },
+  sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  sectionHeaderRowCompact: { flexDirection: "column", alignItems: "flex-start" },
+  countBadge: {
+    fontFamily: fonts.medium, fontSize: 12, lineHeight: 18, fontWeight: "600",
+    color: "#102B50", backgroundColor: "#E4EEFA", borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6, overflow: "hidden",
+  },
+  countBadgeWarning: { color: colors.danger },
+  supportingText: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 21, color: colors.muted },
+  disclaimerText: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 20, color: colors.muted, fontStyle: "italic" },
+  shippingCheckboxRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 },
+  shippingCheckbox: {
+    width: 18, height: 18, borderRadius: 4, borderWidth: 1.5,
+    borderColor: colors.border, backgroundColor: colors.white,
+    alignItems: "center", justifyContent: "center",
+  },
+  shippingCheckboxChecked: { backgroundColor: colors.blue, borderColor: colors.blue },
+  eligibilityResultBox: {
+    backgroundColor: "#E4EEFA", borderRadius: 10, borderWidth: 1,
+    borderColor: colors.border, padding: 12, gap: 6, marginTop: 8,
+  },
   payoutContainer: {
     gap: 7,
     marginBottom: 10,
   },
   payoutBox: {
-    backgroundColor: colors.paleBlue,
+    backgroundColor: "#E4EEFA",
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
     alignItems: "center",
     justifyContent: "space-between",
   },
   payoutValue: {
     fontSize: 16,
-    fontWeight: "800",
-    color: colors.navy,
+    fontWeight: "700",
+    color: "#102B50",
   },
   payoutSub: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.slate,
     fontWeight: "600",
   },
@@ -940,7 +1162,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: colors.paleBlue,
+    backgroundColor: "#E4EEFA",
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
@@ -949,38 +1171,41 @@ const styles = StyleSheet.create({
   },
   commissionNoticeText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13,
     color: colors.navy,
     lineHeight: 18,
   },
   addressBox: {
-    backgroundColor: colors.paleBlue,
+    backgroundColor: "#E4EEFA",
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.softBlue,
     padding: 14,
-    marginBottom: 14,
+    marginBottom: 0,
   },
   periodRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: colors.paleBlue,
+    backgroundColor: "#E4EEFA",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  periodRowCompact: { flexDirection: "column", alignItems: "stretch", gap: 10 },
   periodDateText: {
     fontSize: 13,
     fontWeight: "600",
     color: colors.navy,
   },
   periodActionBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+    minHeight: 40,
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: "white",
@@ -991,18 +1216,19 @@ const styles = StyleSheet.create({
     color: colors.navy,
   },
   addPeriodBox: {
-    backgroundColor: "#FAFAFA",
+    backgroundColor: "#E4EEFA",
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: colors.border,
   },
   addAvailabilityBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 8,
+    minHeight: 44,
+    paddingVertical: 10,
     backgroundColor: colors.paleBlue,
     borderRadius: 8,
     borderWidth: 1,
@@ -1010,7 +1236,7 @@ const styles = StyleSheet.create({
   },
   addAvailabilityText: {
     color: colors.blue,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
   },
   boostBox: {
@@ -1074,8 +1300,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   fixedSlotBtnSelected: {
-    backgroundColor: colors.blue,
-    borderColor: colors.blue,
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB",
   },
   fixedSlotText: {
     fontSize: 13,

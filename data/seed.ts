@@ -9,7 +9,7 @@ import type {
   Evidence,
   PlatformReviewRequest,
 } from "../types/marketplace";
-import { DEMO_SAVED_DELIVERY_ADDRESSES } from "../services/demoWorkspaceDefaults";
+import { DEMO_LISTING_TEMPLATE, DEMO_SAVED_DELIVERY_ADDRESSES, getDemoListingAvailability } from "../services/demoWorkspaceDefaults";
 import { cancelledDepositReleaseDeadline } from "../services/booking";
 import { demoDeliverySamples } from "./demoDeliveryHistory";
 import { demoDestinationPostcode } from "../services/demoDeliveryLocations";
@@ -1696,10 +1696,37 @@ export function createAdminDemoSeed(): Marketplace {
   return {
     ...normal,
     mode: "admin_demo",
-    listings: normal.listings.map((listing) => ({
-      ...listing,
-      demoViewCount: DEMO_LISTING_VIEW_COUNTS[listing.id],
-    })),
+    listings: [
+      ...normal.listings.map((listing) => ({
+        ...listing,
+        demoViewCount: DEMO_LISTING_VIEW_COUNTS[listing.id],
+      })),
+      {
+        ...normal.listings.find((listing) => listing.id === "portable-projector")!,
+        id: "demo-portable-projector",
+        ownerId: "demo-renter",
+        demoViewCount: 36,
+        title: DEMO_LISTING_TEMPLATE.title,
+        description: DEMO_LISTING_TEMPLATE.description,
+        category: DEMO_LISTING_TEMPLATE.category,
+        location: DEMO_LISTING_TEMPLATE.location,
+        publicArea: DEMO_LISTING_TEMPLATE.location,
+        privateMeetingVenue: `${DEMO_LISTING_TEMPLATE.addressLine1}, ${DEMO_LISTING_TEMPLATE.postcode} ${DEMO_LISTING_TEMPLATE.city}, ${DEMO_LISTING_TEMPLATE.state}`,
+        pickupPostcode: DEMO_LISTING_TEMPLATE.postcode,
+        dailyPrice: Number(DEMO_LISTING_TEMPLATE.dailyPrice),
+        estimatedValue: DEMO_LISTING_TEMPLATE.estimatedValue,
+        parcelWeightKg: DEMO_LISTING_TEMPLATE.parcelWeightKg,
+        parcelDimensionsCm: { ...DEMO_LISTING_TEMPLATE.parcelDimensionsCm },
+        deliveryRequirement: DEMO_LISTING_TEMPLATE.deliveryRequirement,
+        shippingCharacteristics: ["fragile"],
+        crossStateRestricted: false,
+        availabilityPeriods: [getDemoListingAvailability()],
+        availableFrom: getDemoListingAvailability().start,
+        availableTo: getDemoListingAvailability().end,
+        deliveryTimeSlots: [...DEMO_LISTING_TEMPLATE.deliveryTimeSlots],
+        pickupTimeWindows: DEMO_LISTING_TEMPLATE.deliveryTimeSlots.map((slot) => ({ start: slot, end: slot })),
+      },
+    ],
     profiles: normal.profiles.map((p) =>
       p.id === "demo-renter"
         ? {

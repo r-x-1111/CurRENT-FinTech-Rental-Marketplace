@@ -59,6 +59,13 @@ export interface Listing {
    * combines the charges, instead of using the single parcelWeightKg/parcelDimensionsCm above. */
   parcelPackages?: { weightKg: number; dimensionsCm: { length: number; width: number; height: number } }[];
   deliveryRequirement?: "standard" | "fragile" | "bulky";
+  /** Shipping characteristics the lender flags for cross-state courier eligibility — separate
+   * from deliveryRequirement, which only drives same-state automatic vehicle selection. */
+  shippingCharacteristics?: ("fragile" | "bulky" | "lithium_battery" | "restricted_liquid")[];
+  /** Explicit CurRENT/platform cross-state restriction, independent of computed parcel size —
+   * e.g. the five named demo listings restricted to same-state delivery regardless of their
+   * recorded dimensions. Not lender-overridable. */
+  crossStateRestricted?: boolean;
   rating: number;
   completedRentalsCount?: number;
   demoViewCount?: number;
