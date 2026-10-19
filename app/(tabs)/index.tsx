@@ -161,28 +161,6 @@ export default function HomeScreen() {
             colors={["rgba(238,244,255,0)", colors.offWhite]}
             style={styles.heroBottomFade}
           />
-          {/* Notification bell: on desktop, anchored near the upper centre-right of the hero
-              (ahead of the product photography, not the far page edge); on mobile it stays at
-              the hero's top-right corner. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              unreadNotifications > 0
-                ? `Notifications, ${unreadNotifications} unread`
-                : "Notifications"
-            }
-            onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
-            style={styles.heroNotificationButton}
-          >
-            <Ionicons name="notifications-outline" size={21} color={colors.navy} />
-            {unreadNotifications > 0 && (
-              <View style={styles.notificationCount}>
-                <Text style={styles.notificationCountText}>
-                  {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                </Text>
-              </View>
-            )}
-          </Pressable>
           <View style={[styles.heroContainer, isDesktop && styles.desktopHeroContainer, isMobile && styles.mobileHeroContainer]}>
             <View
               style={[
@@ -192,10 +170,32 @@ export default function HomeScreen() {
                 { width: isDesktop ? (width >= 1600 ? "50%" : "58%") : "100%" },
               ]}
             >
-              <View style={styles.heroTopRow}>
+              {/* Notification bell: laid out in-flow in the same row as the eyebrow badge (not
+                  absolutely positioned), so it's physically bounded by that row and can never
+                  float above the headline or below the search bar. */}
+              <View style={[styles.heroTopRow, isDesktop && styles.desktopHeroTopRow]}>
                 <View style={styles.eyebrowBadge}>
                   <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
                 </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    unreadNotifications > 0
+                      ? `Notifications, ${unreadNotifications} unread`
+                      : "Notifications"
+                  }
+                  onPress={() => user ? router.push("/notifications") : setAuthPrompt(true)}
+                  style={styles.heroNotificationButton}
+                >
+                  <Ionicons name="notifications-outline" size={21} color={colors.navy} />
+                  {unreadNotifications > 0 && (
+                    <View style={styles.notificationCount}>
+                      <Text style={styles.notificationCountText}>
+                        {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
               </View>
 
               {/* Main Headline */}
@@ -417,7 +417,9 @@ const styles = StyleSheet.create({
   // lower within the hero, matching the repositioned target area instead of the original
   // top-pinned spot.
   desktopHeroWrapper: { paddingTop: 26, paddingBottom: 26, minHeight: 460, justifyContent: "center" },
-  mobileHeroWrapper: { paddingTop: 28, paddingBottom: 10, overflow: "hidden" },
+  // paddingBottom gives the scrollable category chips room to sit fully above the hero's
+  // bottom fade/edge instead of being visually clipped by it on small screens.
+  mobileHeroWrapper: { paddingTop: 28, paddingBottom: 28, overflow: "hidden" },
   // No horizontal padding lives on heroWrapper any more — it's applied here instead, on the
   // same maxWidth:1180/alignSelf:"center" element, exactly mirroring catalogueSection's own
   // structure (full-width band with no padding > centered maxWidth element with its own
@@ -445,6 +447,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  // Caps the row at the same width as the search bar below it (desktopSearchContainer's
+  // maxWidth: 620), so the bell's right edge lines up with the Search button's right edge
+  // instead of stretching to the wider hero content column's own edge.
+  desktopHeroTopRow: {
+    maxWidth: 596,
   },
   notificationCount: {
     minWidth: 17,
@@ -476,7 +484,7 @@ const styles = StyleSheet.create({
   heroHeadline: {
     color: "#102B50",
     fontSize: 38,
-    fontWeight: "900",
+    fontWeight: "700",
     letterSpacing: -1.2,
     lineHeight: 46,
   },
@@ -578,12 +586,12 @@ const styles = StyleSheet.create({
     color: colors.navy,
     fontWeight: "500",
   },
-  categoryLabel: { color: "#102B50", fontSize: 12, fontWeight: "700" },
+  categoryLabel: { color: "#102B50", fontSize: 12, fontWeight: "700", marginTop: 14 },
   // Clipped to the same width as the search bar/headline column (desktopSearchContainer's
   // maxWidth: 620) so the scrollable chip row never extends past that edge towards the
   // product photography; chips beyond it are reached by scrolling within this container only.
-  categoryScrollWrap: { position: "relative", width: "100%", maxWidth: 620, overflow: "hidden" },
-  mobileCategoryScroll: { marginTop: 4, flexGrow: 0, minWidth: 0 },
+  categoryScrollWrap: { position: "relative", width: "100%", maxWidth: 620, overflow: "hidden", marginBottom: 4, zIndex: 2 },
+  mobileCategoryScroll: { marginTop: 0, flexGrow: 0, minWidth: 0 },
   categoryChips: { alignItems: "center", gap: 8, paddingVertical: 3, paddingRight: 18 },
   categoryChip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, alignItems: "center", justifyContent: "center", cursor: "pointer" },
   categoryChipSelected: { backgroundColor: colors.blue, borderColor: colors.blue },
@@ -610,20 +618,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 120,
   },
-  // Pinned to the hero's own top-right corner (right: 20 matches heroContainer/catalogueSection's
-  // own side inset) at every screen size — a content-relative position was tried but overlapped
-  // the headline at narrower desktop widths, so a fixed corner anchor is the robust choice.
+  // Laid out in-flow (not absolutely positioned against the page or hero), so it's bounded by
+  // heroTopRow and can never visually exceed the headline/search bar above or below it.
   heroNotificationButton: {
-    position: "absolute",
-    top: 16,
-    right: 20,
+    position: "relative",
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.white,
-    zIndex: 3,
   },
   catalogueBand: {
     // Flat #F7F8FA — same shared page background used by every other screen; the hero above
@@ -654,7 +658,7 @@ const styles = StyleSheet.create({
   mobileCatalogueControlsRow: { gap: 7, paddingBottom: 7 },
   resultsCount: {
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: "700",
     color: colors.navy,
   },
   resultsCountNum: {

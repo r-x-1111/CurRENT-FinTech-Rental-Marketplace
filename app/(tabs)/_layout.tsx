@@ -13,6 +13,7 @@ const icons = {
   messages: "chatbubble-ellipses-outline",
   profile: "person-circle-outline",
 } as const;
+
 export default function TabsLayout() {
   const mobile = useWindowDimensions().width < 768;
   const { user, state } = useMarketplace();
@@ -34,9 +35,9 @@ export default function TabsLayout() {
         tabBarActiveTintColor: mobile ? "#2463FF" : colors.blue,
         tabBarInactiveTintColor: mobile ? "#64789A" : colors.muted,
         tabBarStyle: {
-          minHeight: mobile ? 76 : 72,
+          minHeight: mobile ? 82 : 72,
           paddingTop: mobile ? 11 : 9,
-          paddingBottom: mobile ? 16 : 12,
+          paddingBottom: mobile ? 22 : 12,
           borderTopColor: colors.border,
           backgroundColor: "white",
         },

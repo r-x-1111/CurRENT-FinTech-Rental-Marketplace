@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -47,7 +48,7 @@ import {
   SINGLE_CHECKOUT,
   toMalaysiaUtcTimestamp,
 } from "../../services/booking";
-import { colors } from "../../constants/theme";
+import { colors, radius } from "../../constants/theme";
 import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
@@ -659,7 +660,7 @@ export default function ListingDetailScreen() {
   return (
     <Screen back scrollToY={addressSectionY} scrollRequestId={scrollToAddressRequestId}>
       <GuestAuthPrompt visible={authPrompt} onClose={() => setAuthPrompt(false)} returnTo={`/listing/${id}`} />
-      <View style={[s.split, width < 800 && { flexDirection: "column" }]}>
+      <View style={[s.split, width < 1024 && { flexDirection: "column" }]}>
         {/* Left Column: Image, Details, Reviews */}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Image
@@ -667,7 +668,7 @@ export default function ListingDetailScreen() {
             style={{
               width: "100%",
               height: width < 650 ? 270 : 380,
-              borderRadius: 20,
+              borderRadius: radius.lg,
               backgroundColor: colors.lightGrey,
             }}
           />
@@ -786,8 +787,15 @@ export default function ListingDetailScreen() {
           )}
         </View>
 
-        {/* Right Column: Clean Calendar, Locked Return Time, Booking Summary */}
-        <View style={{ width: width >= 800 ? 380 : "100%" }}>
+        {/* Right Column: Clean Calendar, Locked Return Time, Booking Summary. Sticky on web
+            desktop so the booking panel stays in view while the left column (photos/description)
+            scrolls underneath it. */}
+        <View
+          style={[
+            { width: width >= 1024 ? 380 : "100%" },
+            width >= 1024 && Platform.OS === "web" ? ({ position: "sticky", top: 20, alignSelf: "flex-start" } as any) : null,
+          ]}
+        >
           <Card>
             {/* Header: Location, Rating, Price */}
             <View style={styles.bookingCardHeader}>
@@ -2001,7 +2009,7 @@ const styles = StyleSheet.create({
     height: 34,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
+    borderRadius: radius.sm,
     backgroundColor: colors.paleBlue,
   },
   calendarSelectors: {
@@ -2017,7 +2025,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 5,
     paddingHorizontal: 8,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: "#BFDBFE",
     backgroundColor: "#FFFFFF",
@@ -2400,7 +2408,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderWidth: 1,
     borderColor: colors.softBlue,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     padding: 10,
     gap: 4,
   },
@@ -2419,9 +2427,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   deliveryInputs: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  deliveryInput: { minWidth: 65, flexGrow: 1, flexBasis: 70, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 8, color: colors.navy },
+  deliveryInput: { minWidth: 65, flexGrow: 1, flexBasis: 70, backgroundColor: colors.white, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: 9, paddingVertical: 8, color: colors.navy },
   deliveryVehicles: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  deliveryVehicle: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.white },
+  deliveryVehicle: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, backgroundColor: colors.white },
   deliveryVehicleSelected: { backgroundColor: colors.blue, borderColor: colors.blue },
   deliveryHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
   deliverySummaryRow: {
@@ -2463,7 +2471,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderWidth: 1,
     borderColor: colors.softBlue,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
@@ -2484,7 +2492,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paleBlue,
     borderWidth: 1,
     borderColor: colors.softBlue,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 6,
     alignSelf: "flex-start",
@@ -2546,7 +2554,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 7,
     fontSize: 12,

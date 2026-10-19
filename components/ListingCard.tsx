@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Listing } from "../types";
-import { colors } from "../constants/theme";
+import { colors, radius, shadow } from "../constants/theme";
 import { useMarketplace } from "../context/Marketplace";
 import { router } from "expo-router";
 
@@ -43,7 +43,12 @@ export function ListingCard({
         onPress={onPress}
       >
         <View style={styles.imageArea}>
-          <Image source={{ uri: listing.imageUrl }} style={[styles.image, compact && styles.compactImage]} resizeMode="cover" />
+          <Image
+            source={{ uri: listing.imageUrl }}
+            accessibilityLabel={listing.title}
+            style={[styles.image, compact && styles.compactImage]}
+            resizeMode="cover"
+          />
 
           {isFeatured && (
             <View style={styles.featuredBadge}>
@@ -89,6 +94,11 @@ export function ListingCard({
               RM{listing.dailyPrice}
               <Text style={styles.perDayText}>/day</Text>
             </Text>
+            {!compact && (
+              <View style={styles.detailsBtn}>
+                <Text style={styles.detailsBtnText}>View details</Text>
+              </View>
+            )}
           </View>
         </View>
       </Pressable>
@@ -120,16 +130,12 @@ const styles = StyleSheet.create({
   card: {
     position: "relative",
     backgroundColor: "white",
-    borderRadius: 16,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
     marginBottom: 4,
+    ...shadow.card,
   },
   imageArea: {
     position: "relative",
@@ -144,13 +150,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 12,
     top: 12,
+    width: 36,
+    height: 36,
     backgroundColor: "white",
-    borderRadius: 20,
-    padding: 7,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: radius.lg,
+    alignItems: "center",
+    justifyContent: "center",
+    ...shadow.card,
   },
   featuredBadge: {
     position: "absolute",
@@ -159,7 +165,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blue,
     paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: radius.sm,
   },
   featuredText: {
     color: "white",
@@ -174,7 +180,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFFEE",
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: radius.sm,
   },
   categoryText: {
     fontSize: 10,
@@ -255,8 +261,10 @@ const styles = StyleSheet.create({
   detailsBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.paleBlue,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.blue,
+    backgroundColor: "transparent",
   },
   detailsBtnText: {
     fontSize: 12,

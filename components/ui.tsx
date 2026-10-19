@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -48,9 +49,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { colors } from "../constants/theme";
+import { colors, fonts, radius, shadow, type } from "../constants/theme";
 import { useMarketplace } from "../context/Marketplace";
 export { colors } from "../constants/theme";
+// Web-only font family (DM Sans, loaded in app/_layout.tsx); native keeps the system sans-serif
+// since no local font binary is available within this restyle's file scope.
+const bodyFont = Platform.select({ web: fonts.regular, default: undefined });
+const boldFont = Platform.select({ web: fonts.bold, default: undefined });
 export { MediaPicker } from "./MediaPicker";
 
 export function Screen({
@@ -103,7 +108,7 @@ export function Screen({
         {title && (
           <View style={s.heading}>
             <View style={{ flex: 1 }}>
-              <Text style={s.title}>{title}</Text>
+              <Text accessibilityRole="header" style={s.title}>{title}</Text>
               {subtitle && <Text style={s.caption}>{subtitle}</Text>}
             </View>
             {action}
@@ -248,7 +253,7 @@ export function Section({
 }) {
   return (
     <View style={[s.section, compact && { marginTop: 17, marginBottom: 11 }]}>
-      <Text style={[s.h2, compact && { fontSize: 17 }]}>{title}</Text>
+      <Text accessibilityRole="header" style={[s.h2, compact && { fontSize: 17 }]}>{title}</Text>
       {action && (
         <Pressable accessibilityRole="button" onPress={onPress}>
           <Text style={s.link}>{action}</Text>
@@ -513,7 +518,7 @@ export const s = StyleSheet.create({
   desktopBackgroundCurve: { position: "absolute", top: -60, right: -120, width: 420, height: 320, borderBottomLeftRadius: 320, backgroundColor: colors.softBlue, opacity: 0.25 },
   content: {
     width: "100%",
-    maxWidth: 1180,
+    maxWidth: 1200,
     alignSelf: "center",
     padding: 22,
     paddingBottom: 44,
@@ -532,28 +537,30 @@ export const s = StyleSheet.create({
     marginBottom: 28,
   },
   title: {
-    fontSize: 31,
-    fontWeight: "800",
+    fontSize: type.xl28 + 3,
+    fontWeight: "700",
+    fontFamily: boldFont,
     color: colors.navy,
     letterSpacing: -1,
     lineHeight: 38,
   },
   h2: {
-    fontSize: 20,
-    fontWeight: "800",
+    fontSize: type.lg20,
+    fontWeight: "700",
+    fontFamily: boldFont,
     color: colors.navy,
     letterSpacing: -0.4,
   },
-  caption: { fontSize: 14, lineHeight: 22, color: colors.muted, marginTop: 4 },
-  body: { fontSize: 15, lineHeight: 22, color: colors.text },
-  bold: { fontWeight: "800", color: colors.navy },
-  link: { fontSize: 13, color: colors.linkBlue, fontWeight: "700" },
+  caption: { fontSize: type.sm14, lineHeight: 22, color: colors.muted, marginTop: 4, fontFamily: bodyFont },
+  body: { fontSize: type.md16 - 1, lineHeight: 22, color: colors.text, fontFamily: bodyFont },
+  bold: { fontWeight: "700", fontFamily: boldFont, color: colors.navy },
+  link: { fontSize: type.sm14 - 1, color: colors.linkBlue, fontWeight: "700", fontFamily: boldFont },
   button: {
     minHeight: 48,
     backgroundColor: colors.blue,
     borderColor: colors.blue,
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: radius.sm,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 20,
@@ -561,20 +568,16 @@ export const s = StyleSheet.create({
     cursor: "pointer",
   },
   secondary: { backgroundColor: colors.white, borderColor: colors.blue, borderWidth: 1 },
-  buttonText: { fontSize: 14, color: "white", fontWeight: "700", letterSpacing: 0.2 },
+  buttonText: { fontSize: type.sm14, color: "white", fontWeight: "700", fontFamily: boldFont, letterSpacing: 0.2 },
   card: {
     backgroundColor: colors.white,
     padding: 20,
-    borderRadius: 16,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     gap: 10,
     marginBottom: 16,
-    shadowColor: colors.navy,
-    shadowOpacity: 0.045,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 1,
+    ...shadow.card,
   },
   section: {
     flexDirection: "row",
@@ -584,38 +587,40 @@ export const s = StyleSheet.create({
     marginTop: 24,
     marginBottom: 14,
   },
-  label: { fontSize: 14, fontWeight: "600", color: colors.navy },
+  label: { fontSize: type.sm14, fontWeight: "600", fontFamily: bodyFont, color: colors.navy },
   input: {
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: radius.sm,
     minHeight: 48,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: type.md16 - 1,
+    fontFamily: bodyFont,
     color: colors.text,
   },
   badge: {
     backgroundColor: colors.paleBlue,
     borderWidth: 1,
     borderColor: colors.softBlue,
-    borderRadius: 8,
+    borderRadius: radius.sm,
     paddingHorizontal: 10,
     paddingVertical: 5,
     alignSelf: "flex-start",
   },
   badgeText: {
     color: colors.blue,
-    fontSize: 12,
+    fontSize: type.xs12,
     fontWeight: "700",
+    fontFamily: boldFont,
     textTransform: "capitalize",
   },
   notice: {
     backgroundColor: colors.paleBlue,
     borderWidth: 1,
     borderColor: colors.softBlue,
-    borderRadius: 12,
+    borderRadius: radius.sm,
     padding: 15,
     marginBottom: 16,
   },
@@ -631,7 +636,7 @@ export const s = StyleSheet.create({
     gap: 12,
     alignItems: "center",
     backgroundColor: "white",
-    borderRadius: 16,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     marginVertical: 16,
@@ -639,14 +644,14 @@ export const s = StyleSheet.create({
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 24,
+    borderRadius: radius.lg,
     borderColor: colors.border,
     borderWidth: 1,
     backgroundColor: "white",
   },
-  segmentedTrack: { flexGrow: 0, backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  segmentedTrack: { flexGrow: 0, backgroundColor: colors.white, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   segmentedContent: { gap: 5, padding: 5 },
-  segmentedChip: { backgroundColor: colors.paleBlue, borderColor: "transparent", borderRadius: 11, paddingHorizontal: 15, paddingVertical: 11 },
+  segmentedChip: { backgroundColor: colors.paleBlue, borderColor: "transparent", borderRadius: radius.sm, paddingHorizontal: 15, paddingVertical: 11 },
   segmentedChipSelected: { backgroundColor: "#2463FF", borderColor: "#2463FF" },
   segmentedLabel: { color: colors.slate, fontSize: 12 },
   split: { flexDirection: "row", flexWrap: "wrap", gap: 20 },

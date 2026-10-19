@@ -11,10 +11,10 @@ import { Badge, colors, s } from "./ui";
 
 type Props = { booking: Booking; listing?: Listing; lender?: boolean };
 
-function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+function Row({ label, value, strong = false, grand = false }: { label: string; value: string; strong?: boolean; grand?: boolean }) {
   return <View style={styles.row}>
-    <Text style={[styles.rowLabel, strong && styles.strong]}>{label}</Text>
-    <Text style={[styles.rowValue, strong && styles.strong]}>{value}</Text>
+    <Text style={[styles.rowLabel, strong && styles.strong, grand && styles.grand]}>{label}</Text>
+    <Text style={[styles.rowValue, strong && styles.strong, grand && styles.grand]}>{value}</Text>
   </View>;
 }
 
@@ -157,7 +157,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
 
       <View style={styles.divider} />
       <Text style={styles.section}>Total for this rental</Text>
-      <Row label={unpaidDeliveryQuote ? "Estimated total payable" : "Original total"} value={totals.grandTotal == null ? "Delivery not recorded" : money(totals.grandTotal)} strong />
+      <Row label={unpaidDeliveryQuote ? "Estimated total payable" : "Original total"} value={totals.grandTotal == null ? "Delivery not recorded" : money(totals.grandTotal)} strong grand />
       {totals.grandTotal == null && delivery.estimatedTwoWayFee != null && <Row label="Estimated total (not charged)" value={money(booking.quote.total + delivery.estimatedTwoWayFee)} />}
       <Text style={styles.note}>Includes {money(booking.quote.deposit)} refundable security deposit.</Text>
       <Row label="Amount paid (recorded)" value={money(amountPaid)} />
@@ -174,7 +174,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
           <Text style={styles.section}>Lender payout</Text>
           <Row label="Gross rental fee" value={money(booking.quote.rentalFee)} />
           <Row label={`Platform commission (${Math.round(rate * 100)}%)`} value={money(payout.commission)} />
-          <Row label="Net lender payout" value={money(payout.payout)} strong />
+          <Row label="Net lender payout" value={money(payout.payout)} strong grand />
           <Row label="Payout status" value="No payout transaction recorded" />
         </>
       )}
@@ -190,9 +190,10 @@ const styles = StyleSheet.create({
   note: { ...s.caption, color: colors.muted },
   divider: { borderTopWidth: 1, borderColor: colors.softBlue, marginVertical: 5 },
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
-  rowLabel: { ...s.body, flex: 1 },
-  rowValue: { ...s.body, flex: 1, textAlign: "right" },
+  rowLabel: { ...s.body, flex: 1, fontSize: 14 },
+  rowValue: { ...s.body, flex: 1, textAlign: "right", fontSize: 14 },
   strong: { fontWeight: "700" },
+  grand: { fontWeight: "700", color: colors.blue, fontSize: 16 },
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6, marginTop: 8 },
   link: { color: colors.blue, fontWeight: "700", fontSize: 12 },
   breakdownToggleRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },

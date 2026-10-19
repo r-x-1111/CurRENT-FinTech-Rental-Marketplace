@@ -31,3 +31,32 @@ export const radius = {
   md: 16,
   lg: 22
 };
+
+// DM Sans is loaded as a web font (see app/_layout.tsx); native platforms fall back to the
+// system sans-serif since no local font binary ships in this repo. Keep these as the only
+// fontFamily tokens referenced across the restyled screens/components.
+export const fonts = {
+  regular: 'DM Sans, -apple-system, Roboto, sans-serif',
+  medium: 'DM Sans, -apple-system, Roboto, sans-serif',
+  bold: 'DM Sans, -apple-system, Roboto, sans-serif',
+};
+
+export const type = {
+  xs12: 12,
+  sm14: 14,
+  md16: 16,
+  lg20: 20,
+  xl28: 28,
+  xxl40: 40,
+};
+
+// Soft, navy-tinted card shadow matching the Canva reference (never pure black).
+export const shadow = {
+  card: {
+    shadowColor: colors.navy,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+};
