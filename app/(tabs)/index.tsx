@@ -696,7 +696,7 @@ const styles = StyleSheet.create({
   // On mobile the hero now ends with the in-flow product photo (not an absolute-fill bleed
   // photo), so the -32 pull-up isn't needed — instead add ~36px of normal document-flow space
   // so "All Items" isn't crowded against the category chips.
-  mobileCatalogueBand: { marginTop: 8 },
+  mobileCatalogueBand: { marginTop: 25 },
   catalogueSection: {
     maxWidth: 1180,
     width: "100%",
