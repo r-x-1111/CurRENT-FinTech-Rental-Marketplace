@@ -219,9 +219,9 @@ export function riskFor(state: Marketplace, profile: Profile) {
   };
 }
 
-/** Rental-fee-based pricing assumption for the optional Rental Protection demo (informed by
- * Leechy's published 5% protection service fee), not an insurer quotation. */
-export const RENTAL_PROTECTION_RATE = 0.05;
+/** Illustrative per-seven-day rate for optional renter-purchased third-party insurance.
+ * 0.3% is a CurRENT demo assumption, NOT a quote or approved rate from an insurer. */
+export const RENTAL_PROTECTION_RATE = 0.003;
 
 /** Proposed maximum protection exposure (informed by Antbuildz Malaysia's published equipment
  * rental protection model) — a demo cap, not a guaranteed insurer payout. */
@@ -229,12 +229,14 @@ export const RENTAL_PROTECTION_LIMIT_CAP = 60000;
 
 /**
  * Optional Rental Protection fee (demo pricing assumption, not an insurer quotation).
- * Protection Fee = Total Rental Fee x 5%. No minimum, no seven-day billing periods — rental
- * duration is already reflected in the rental fee.
+ * Protection Fee = Validated Item Replacement Value x 0.3% x (Rental Days / 7).
+ * Duration is prorated continuously (no rounding up to whole weeks and no minimum fee).
+ * The third-party insurer would determine actual premiums and policy terms.
  */
-export function calculateProtectionFee(rentalFee: number): number {
-  if (!Number.isFinite(rentalFee) || rentalFee <= 0) return 0;
-  return Math.round(rentalFee * RENTAL_PROTECTION_RATE * 100) / 100;
+export function calculateProtectionFee(replacementValue: number, rentalDays: number): number {
+  if (!Number.isFinite(replacementValue) || replacementValue <= 0 ||
+      !Number.isFinite(rentalDays) || rentalDays <= 0) return 0;
+  return Math.round(replacementValue * RENTAL_PROTECTION_RATE * (rentalDays / 7) * 100) / 100;
 }
 
 /**
@@ -279,8 +281,9 @@ export function quoteFor(
     estimatedValue,
     risk.level,
   );
-  // Optional Rental Protection (demo only, 5% of the rental fee). Never factored into the security deposit.
-  const protection = protectedItem ? calculateProtectionFee(rentalFee) : 0;
+  // Optional third-party insurance (demo only): fair value x 0.3% x days/7.
+  // Never factored into the risk-based security deposit.
+  const protection = protectedItem ? calculateProtectionFee(estimatedValue, days) : 0;
   return {
     days,
     rentalFee,
