@@ -1559,6 +1559,9 @@ export default function ListingDetailScreen() {
                 <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
                   <ScrollView contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
                   <Text style={s.h2}>Rental Protection Details (Demo)</Text>
+                  <Text style={s.caption}>
+                    Optional third-party insurance protection for eligible accidental damage. Demo only — no actual insurance policy has been issued.
+                  </Text>
                   {!!quote && (() => {
                     const replacementValue = listing.estimatedValue || 0;
                     const basePremium = calculateProtectionBasePremium(replacementValue, quote.days);
