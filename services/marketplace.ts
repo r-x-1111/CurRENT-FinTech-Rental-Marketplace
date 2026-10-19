@@ -1017,7 +1017,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       // reflected in quote.protection/quote.total. The deposit and service fee calculations are untouched.
       booking.quote = quoteFor(state, user, listing, booking.start, booking.end, insuranceSelected);
       booking.insurance = insuranceSelected
-        ? { selected: true, premium: booking.quote.protection, referralIncome: 2 }
+        ? { selected: true, premium: booking.quote.protection, referralIncome: 0 }
         : null;
       booking.status = "upcoming";
       booking.payment = "paid";

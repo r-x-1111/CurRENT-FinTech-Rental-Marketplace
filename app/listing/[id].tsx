@@ -1458,14 +1458,14 @@ export default function ListingDetailScreen() {
               </View>
             )}
 
-            {/* Rental Protection (Optional) — demo only, 5% of the total rental fee */}
+            {/* Optional third-party Rental Protection (demo): 0.3% of value prorated by days/7 */}
             {renterRisk?.level !== "very_high" && quote && (
               <View style={[styles.insuranceCard, insuranceSelected && styles.insuranceCardSelected]}>
                 <View style={styles.insuranceHeaderRow}>
                   <Ionicons name="shield-checkmark-outline" size={18} color={colors.blue} />
                   <Text style={styles.insuranceTitle}>Rental Protection (Optional)</Text>
                 </View>
-                <Text style={styles.insuranceDescription}>Add optional protection for eligible accidental damage during your rental.</Text>
+                <Text style={styles.insuranceDescription}>Optional third-party insurance concept for eligible accidental damage during rental use (Demo).</Text>
                 <Pressable
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: insuranceSelected }}
@@ -1477,7 +1477,7 @@ export default function ListingDetailScreen() {
                     {insuranceSelected && <Ionicons name="checkmark" size={14} color={colors.white} />}
                   </View>
                   <Text style={styles.insuranceCheckboxLabel}>Add Rental Protection</Text>
-                  <Text style={styles.insurancePremium}>+{money(calculateProtectionFee(quote.rentalFee))}</Text>
+                  <Text style={styles.insurancePremium}>+{money(calculateProtectionFee(listing.estimatedValue || 0, quote.days))}</Text>
                 </Pressable>
                 <Pressable accessibilityRole="button" onPress={() => setShowInsuranceDetails(true)}>
                   <Text style={styles.insuranceLink}>View Protection Details</Text>
@@ -1494,29 +1494,29 @@ export default function ListingDetailScreen() {
               <Pressable style={styles.calendarModalOverlay} onPress={() => setShowInsuranceDetails(false)}>
                 <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
                   <ScrollView contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
-                  <Text style={s.h2}>Rental Protection (Demo)</Text>
+                  <Text style={s.h2}>Rental Protection — Third-Party Insurance (Demo)</Text>
                   {!!quote && (() => {
                     const replacementValue = listing.estimatedValue || 0;
-                    const protectionFee = calculateProtectionFee(quote.rentalFee);
+                    const protectionFee = calculateProtectionFee(replacementValue, quote.days);
                     const protectionLimit = calculateProtectionLimit(replacementValue);
                     const needsReview = requiresProtectionEligibilityReview(replacementValue);
                     return (
                       <>
                         <View style={styles.summaryRow}>
-                          <Text style={styles.summaryLabel}>Total Rental Fee</Text>
-                          <Text style={styles.summaryValue}>{money(quote.rentalFee)}</Text>
-                        </View>
-                        <View style={styles.summaryRow}>
-                          <Text style={styles.summaryLabel}>Protection Rate</Text>
-                          <Text style={styles.summaryValue}>5%</Text>
-                        </View>
-                        <Text style={[s.body, { marginTop: 10, fontWeight: "700" }]}>
-                          Protection Fee: {money(quote.rentalFee)} × 5% = {money(protectionFee)}
-                        </Text>
-                        <View style={[styles.summaryRow, { marginTop: 10 }]}>
-                          <Text style={styles.summaryLabel}>Item Replacement Value</Text>
+                          <Text style={styles.summaryLabel}>Item Fair / Replacement Value</Text>
                           <Text style={styles.summaryValue}>{money(replacementValue)}</Text>
                         </View>
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Illustrative Protection Rate</Text>
+                          <Text style={styles.summaryValue}>0.3% per 7 days</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Rental Duration</Text>
+                          <Text style={styles.summaryValue}>{quote.days} {quote.days === 1 ? "day" : "days"}</Text>
+                        </View>
+                        <Text style={[s.body, { marginTop: 10, fontWeight: "700" }]}>
+                          Protection Fee: {money(replacementValue)} × 0.3% × ({quote.days} / 7) = {money(protectionFee)}
+                        </Text>
                         <View style={styles.summaryRow}>
                           <Text style={styles.summaryLabel}>Proposed Protection Limit</Text>
                           <Text style={styles.summaryValue}>{money(protectionLimit)}</Text>
@@ -1531,7 +1531,7 @@ export default function ListingDetailScreen() {
                           </Text>
                         )}
                         <Text style={s.caption}>
-                          The protection fee is calculated from the total rental fee. Rental duration is already reflected in that fee, so there's no minimum charge and no seven-day billing period.
+                          The demo premium is based on the item's validated fair value and rental duration, prorated by days / 7. Days are not rounded up to full weeks, and no minimum fee applies. The 0.3% rate is an illustrative CurRENT assumption, not an insurer quotation.
                         </Text>
                       </>
                     );
@@ -1546,7 +1546,7 @@ export default function ListingDetailScreen() {
                     The protection fee is non-refundable once the applicable protected rental has begun, subject to the demonstrated cancellation terms. Your refundable security deposit remains separate from the protection fee.
                   </Text>
                   <Text style={s.caption}>
-                    This is a demonstration rental damage-protection model, not an issued insurance policy. The pricing is informed by published rental protection services, while the proposed RM{RENTAL_PROTECTION_LIMIT_CAP.toLocaleString()} limit is based on an industry example. Actual coverage, eligibility, claims and pricing require agreement with a licensed insurance provider or an appropriately established protection programme.
+                    This is a proposed renter-purchased insurance product provided by a third-party insurer, not CurRENT. CurRENT would facilitate the selection and claim process; the insurer would set actual premiums and terms, assess claims and pay approved compensation. No insurer is connected and no policy has been issued in this demo. The 0.3% weekly reference rate and the RM{RENTAL_PROTECTION_LIMIT_CAP.toLocaleString()} cap are illustrative assumptions only. Courier damage reports remain available whether or not Rental Protection is purchased.
                   </Text>
                   <Button secondary onPress={() => setShowInsuranceDetails(false)}>Close</Button>
                   </ScrollView>
