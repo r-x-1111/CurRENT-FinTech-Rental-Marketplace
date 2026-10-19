@@ -17,7 +17,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ListingGrid } from "../../components/ListingGrid";
 import { Empty } from "../../components/ui";
-import { colors, radius } from "../../constants/theme";
+import { colors } from "../../constants/theme";
 import { MOBILE_BROWSE_CATEGORIES, MobileBrowseCategory, locations, matchesMarketplaceLocation, mobileBrowseCategoryFor, mobileBrowseCategoryForParam } from "../../constants/categories";
 import { useMarketplace } from "../../context/Marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
@@ -136,31 +136,24 @@ export default function HomeScreen() {
         <View
           style={[styles.heroWrapper, isDesktop && styles.desktopHeroWrapper, isMobile && styles.mobileHeroWrapper]}
         >
-          {/* Full-bleed hero background photo, desktop/tablet only. Its own composition already
-              keeps ~55% of its left side as clean navy studio background and groups the camera/
-              MacBook/DualSense/projector/plant within the right ~45% — so used edge-to-edge at
-              the hero's own (wide) aspect ratio, that same balanced split carries straight
-              through onto the page with no separate panel, letterboxing or visible seam needed.
-              On mobile the hero box is much taller than the photo's native aspect ratio, so
-              "cover" would zoom in and push the product group up over the text — instead mobile
-              renders the photo in normal flow below the chips (see further down), clear of text. */}
-          {!isMobile && (
-            <Image
-              source={{ uri: "/hero/hero-products.png" }}
-              style={[StyleSheet.absoluteFill, webHeroImageCoolStyle]}
-              resizeMode="cover"
-            />
-          )}
+          {/* Full-bleed hero background photo. Its own composition already keeps ~55% of its
+              left side as clean navy studio background and groups the camera/MacBook/DualSense/
+              projector/plant within the right ~45% — so used edge-to-edge at the hero's own
+              aspect ratio, that same balanced split carries straight through onto the page with
+              no separate panel, letterboxing or visible seam needed. */}
+          <Image
+            source={{ uri: "/hero/hero-products.png" }}
+            style={[StyleSheet.absoluteFill, webHeroImageCoolStyle]}
+            resizeMode="cover"
+          />
           {/* Blend the photo's left edge into the blue backdrop instead of a visible rectangle. */}
-          {!isMobile && (
-            <LinearGradient
-              pointerEvents="none"
-              colors={[colors.paleBlue, "rgba(238,244,255,0)"]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.heroImageLeftFade}
-            />
-          )}
+          <LinearGradient
+            pointerEvents="none"
+            colors={[colors.paleBlue, "rgba(238,244,255,0)"]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.heroImageLeftFade}
+          />
           {/* 120px fade from transparent into the flat #F7F8FA that every other page uses as its
               background, so the hero ends with no hard line against the listings below. */}
           <LinearGradient
@@ -175,15 +168,15 @@ export default function HomeScreen() {
                 isMobile && styles.mobileHeroContent,
                 isDesktop && styles.desktopHeroContent,
                 { width: isDesktop ? (width >= 1600 ? "50%" : "58%") : "100%" },
+                { position: "relative" },
               ]}
             >
-              {/* Notification bell: laid out in-flow in the same row as the eyebrow badge (not
-                  absolutely positioned), so it's physically bounded by that row and can never
-                  float above the headline or below the search bar. */}
-              <View style={[styles.heroTopRow, isDesktop && styles.desktopHeroTopRow]}>
-                <View style={styles.eyebrowBadge}>
-                  <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
-                </View>
+              {/* Notification bell: vertically level with the eyebrow row (top: 8 here lines up
+                  the bell's centre with the label's centre). Horizontally it's anchored to the
+                  same maxWidth:620 column the search bar uses (not the wider hero content box),
+                  so its right edge always sits a fixed 18px inside the Search button's own right
+                  edge — correct at every desktop width, not just the hero's maximum width. */}
+              <View style={styles.heroNotificationAnchor} pointerEvents="box-none">
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={
@@ -204,6 +197,11 @@ export default function HomeScreen() {
                   )}
                 </Pressable>
               </View>
+              <View style={styles.heroTopRow}>
+                <View style={styles.eyebrowBadge}>
+                  <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
+                </View>
+              </View>
 
               {/* Main Headline */}
               <Text style={[styles.heroHeadline, isMobile && styles.mobileHeroHeadline]}>
@@ -211,7 +209,7 @@ export default function HomeScreen() {
               </Text>
 
               {/* Subtitle */}
-              <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead]}>
+              <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead, isMobile && width >= 375 && styles.mobileHeroSubheadWithProduct]}>
                 Useful things, nearby. Discover trusted rentals across Malaysia
                 or turn your idle gear into extra income.
               </Text>
@@ -333,17 +331,6 @@ export default function HomeScreen() {
                     })}
                   </ScrollView>
                 </View>
-
-                {/* Mobile-only product shot, in normal document flow below the chips — keeps the
-                    photo fully visible while guaranteeing it never overlaps the hero text above. */}
-                {isMobile && (
-                  <Image
-                    source={{ uri: "/hero/hero-products.png" }}
-                    style={[styles.mobileHeroImage, webHeroImageCoolStyle]}
-                    resizeMode="cover"
-                    accessibilityLabel="Cameras, a game controller, a laptop and a projector available to rent"
-                  />
-                )}
             </View>
 
           </View>
@@ -465,13 +452,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 14,
-  },
-  // Caps the row at the same width as the search bar below it (desktopSearchContainer's
-  // maxWidth: 620), so the bell's right edge lines up with the Search button's right edge
-  // instead of stretching to the wider hero content column's own edge.
-  desktopHeroTopRow: {
-    maxWidth: 596,
   },
   notificationCount: {
     minWidth: 17,
@@ -493,6 +473,7 @@ const styles = StyleSheet.create({
   },
   eyebrowBadge: {
     alignSelf: "flex-start",
+    marginTop: 20,
   },
   eyebrowText: {
     color: "#2563EB",
@@ -515,12 +496,7 @@ const styles = StyleSheet.create({
     maxWidth: 520,
   },
   mobileHeroSubhead: { fontSize: 13, lineHeight: 19 },
-  mobileHeroImage: {
-    width: "100%",
-    height: 150,
-    borderRadius: radius.md,
-    marginTop: 18,
-  },
+  mobileHeroSubheadWithProduct: { maxWidth: 210 },
   searchContainer: {
     backgroundColor: "white",
     borderRadius: 14,
@@ -642,13 +618,25 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 120,
   },
-  // Laid out in-flow (not absolutely positioned against the page or hero), so it's bounded by
-  // heroTopRow and can never visually exceed the headline/search bar above or below it.
+  // Spans the hero content column at the eyebrow label's height, capped at the same
+  // maxWidth:620 the search bar uses, with the bell right-aligned 18px in from that edge —
+  // so the bell's horizontal anchor is the search column's right edge, not the hero box's own.
+  heroNotificationAnchor: {
+    position: "absolute",
+    top: 8,
+    left: 0,
+    width: "100%",
+    maxWidth: 620,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    zIndex: 5,
+  },
   heroNotificationButton: {
     position: "relative",
     width: 40,
     height: 40,
     borderRadius: 20,
+    marginRight: 18,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.white,
