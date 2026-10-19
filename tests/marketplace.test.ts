@@ -20,8 +20,10 @@ import {
   availability,
   availabilityCalendar,
   calculateCancellationCutoff,
+  cancelledDepositReleaseDeadline,
   dateAfter,
   demoSlotAvailable,
+  effectiveDepositStatus,
   formatMalaysiaDateTime,
   formatScheduledReturnPickup,
   calculateProtectionFee,
@@ -38,7 +40,7 @@ import {
   toMalaysiaUtcTimestamp,
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
-import { calculateChargeableWeightKg, calculateVolumetricWeightKg, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, eligibleDeliveryVehicles, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, quoteDemoDelivery, recommendDispatchDate, selectListingDeliveryVehicle } from "../services/delivery";
+import { calculateChargeableWeightKg, calculateVolumetricWeightKg, deriveDeliveryRefundStatus, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, eligibleDeliveryVehicles, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, quoteDemoDelivery, recommendDispatchDate, selectListingDeliveryVehicle } from "../services/delivery";
 import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../services/geo";
 import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
 import { evaluateRentalOutcome } from "../services/riskScore";
@@ -343,10 +345,18 @@ test("historical regional delivery brackets and parcel limits drive demo quotes"
     "Interstate routes are not quoted");
 
   const seed = createSeed("admin_demo");
-  // Every paid fictional booking has one linked delivery receipt, alongside four standalone samples.
-  assert.equal(seed.deliveryHistory?.length, seed.bookings.length + 4);
+  // Every booking whose delivery fee was actually paid has one linked delivery receipt, alongside
+  // four standalone samples. A cancelled booking whose delivery was genuinely never paid (e.g.
+  // demo-booking-cancelled-1, an unresolved courier arrangement) must not get a fabricated one.
+  const neverPaidDeliveryCancelled = seed.bookings.filter(
+    (b) => b.deliveryDemo?.status === "required" && (b.status === "cancelled" || b.status === "rejected"),
+  );
+  assert.ok(neverPaidDeliveryCancelled.length >= 1);
+  const expectedLinked = seed.bookings.length - neverPaidDeliveryCancelled.length;
+  assert.equal(seed.deliveryHistory?.length, expectedLinked + 4);
   const linked = seed.deliveryHistory?.filter((entry) => !entry.sample) || [];
-  assert.equal(linked.length, seed.bookings.length);
+  assert.equal(linked.length, expectedLinked);
+  assert.ok(!linked.some((entry) => neverPaidDeliveryCancelled.some((b) => b.id === entry.bookingId)));
   assert.equal(new Set(linked.map((entry) => entry.bookingId)).size, linked.length);
   for (const entry of linked) {
     const booking = seed.bookings.find((b) => b.id === entry.bookingId);
@@ -356,6 +366,69 @@ test("historical regional delivery brackets and parcel limits drive demo quotes"
   }
   const penangSamples = (seed.deliveryHistory || []).filter((entry) => entry.sample && entry.area === "Penang");
   assert.ok(penangSamples.length >= 2, "Expected at least 2 fictional Penang demo delivery samples");
+});
+
+test("crossStateDeliveryEligibility classifies a listing from its own recorded parcel data, never a hardcoded status", async () => {
+  const { crossStateDeliveryEligibility } = await import("../services/delivery");
+
+  // No parcel data recorded at all — eligibility can't be assessed yet.
+  assert.equal(crossStateDeliveryEligibility({}), "requires_review");
+  assert.equal(
+    crossStateDeliveryEligibility({ parcelWeightKg: 2 /* no dimensions recorded */ }),
+    "requires_review",
+  );
+
+  // A normal, well within courier limits, parcel is eligible.
+  assert.equal(
+    crossStateDeliveryEligibility({ parcelWeightKg: 2, parcelDimensionsCm: { length: 30, width: 20, height: 15 } }),
+    "available",
+  );
+
+  // Any single oversized package (over 120cm on any side) blocks cross-state delivery outright —
+  // mirrors the real courier quote's own oversize rule, not an invented second check.
+  assert.equal(
+    crossStateDeliveryEligibility({ parcelWeightKg: 20, parcelDimensionsCm: { length: 200, width: 60, height: 60 } }),
+    "same_state_only",
+  );
+  assert.equal(
+    crossStateDeliveryEligibility({
+      parcelPackages: [
+        { weightKg: 2, dimensionsCm: { length: 30, width: 20, height: 15 } },
+        { weightKg: 5, dimensionsCm: { length: 150, width: 40, height: 40 } },
+      ],
+    }),
+    "same_state_only",
+  );
+
+  // Zero/invalid weight or dimensions can't be assessed either.
+  assert.equal(
+    crossStateDeliveryEligibility({ parcelWeightKg: 0, parcelDimensionsCm: { length: 30, width: 20, height: 15 } }),
+    "requires_review",
+  );
+});
+
+test("A listing whose parcel is too large for the courier blocks a cross-state checkout with a clear reason", () => {
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  // Find a seeded listing whose recorded parcel already exceeds the courier's 120cm limit on any
+  // side — courier can never quote it, regardless of route.
+  const oversizedListing = state.listings.find((l) =>
+    (l.parcelDimensionsCm && [l.parcelDimensionsCm.length, l.parcelDimensionsCm.width, l.parcelDimensionsCm.height].some((side) => side > 120)) ||
+    l.parcelPackages?.some((pkg) => [pkg.dimensionsCm.length, pkg.dimensionsCm.width, pkg.dimensionsCm.height].some((side) => side > 120)),
+  );
+  if (!oversizedListing) return; // No such fixture seeded — nothing to probe against.
+  assert.throws(
+    () => transition(state, {
+      type: "startDeliveryCheckout",
+      id: "cross-state-oversized-probe",
+      listingId: oversizedListing.id,
+      start: `${dateAfter(10)}T11:00:00+08:00`,
+      end: `${dateAfter(12)}T11:00:00+08:00`,
+      deliveryAddress: "George Town, Penang",
+      deliveryPostcode: "10000",
+    }),
+    /cannot be delivered across states|shipping eligibility must be reviewed|Delivery estimate unavailable/,
+  );
 });
 
 test("deriveDisplayDelivery connects Transaction Details / Rental Details to each booking's own saved delivery record", () => {
@@ -646,7 +719,7 @@ test("Payment & Transaction History: grouping by booking ID, subtotal/grand tota
     if (b.status === "cancelled" && b.payment === "refunded") {
       refundsTotal += Math.round((b.quote.rentalFee + b.quote.serviceFee + b.quote.protection) * 100) / 100;
     }
-    if (b.deposit === "released") refundsTotal += b.quote.deposit;
+    if (effectiveDepositStatus(b) === "released") refundsTotal += b.quote.deposit;
     if (delivery.status === "refunded_demo") refundsTotal += delivery.fee ?? 0;
     refundsTotal = Math.round(refundsTotal * 100) / 100;
     const netCost = Math.round((grandTotal - refundsTotal) * 100) / 100;
@@ -1054,7 +1127,7 @@ test("delivery demo receipt is stored separately before rental payment", () => {
     Math.round(pending.quote.rentalFee * 13) / 100);
 });
 
-test("cancelling an unfinished checkout after delivery is paid refunds the prepaid demo delivery fee, and a rejected rental-payment attempt never re-charges delivery", () => {
+test("cancelling an unfinished checkout after delivery is paid never fabricates a completed delivery refund, and a rejected rental-payment attempt never re-charges delivery", () => {
   const j = journey();
   const start = `${dateAfter(2)}T11:00:00+08:00`;
   const end = `${dateAfter(4)}T11:00:00+08:00`;
@@ -1064,13 +1137,19 @@ test("cancelling an unfinished checkout after delivery is paid refunds the prepa
   const paid = j.state.bookings.find((booking) => booking.id === "abandon-me")!;
   assert.equal(paid.deliveryDemo?.status, "paid_demo");
 
-  // Abandon the booking before paying the rental fee: the prepaid delivery amount is refunded
-  // (simulated), not left as a dangling paid record on a cancelled booking.
+  // Abandon the booking before paying the rental fee: delivery fees are the delivery company's
+  // responsibility, not CurRENT's, so cancelling must not invent a completed/approved refund —
+  // the fee stays recorded as "paid_demo", and refund eligibility is assessed separately
+  // (deriveDeliveryRefundStatus reports this exact case as "refund_pending", never "refunded").
   j.act({ type: "cancelDeliveryCheckout", bookingId: "abandon-me" });
   const cancelled = j.state.bookings.find((booking) => booking.id === "abandon-me")!;
   assert.equal(cancelled.status, "cancelled");
-  assert.equal(cancelled.deliveryDemo?.status, "refunded_demo");
-  assert.ok(cancelled.deliveryDemo?.refundedAt);
+  assert.equal(cancelled.deliveryDemo?.status, "paid_demo");
+  assert.equal(cancelled.deliveryDemo?.refundedAt, undefined);
+  assert.equal(
+    deriveDeliveryRefundStatus({ cancelled: true, deliveryStatus: cancelled.deliveryDemo?.status, legStarted: false }),
+    "refund_pending",
+  );
 
   // Separately: a rejected rental-payment attempt (e.g. someone else tries to pay it) must leave
   // the booking unconfirmed and retryable, and must never touch — let alone re-charge — delivery.
@@ -1671,6 +1750,90 @@ test("started 24-hour block pricing charges full days for partial blocks", () =>
   assert.equal(rentalDays("2026-11-01T10:00:00Z", "2026-11-03T17:00:00Z"), 3);
 });
 
+test("Renters may pick any start time, but the booking-creation boundary rejects a rental period that isn't an exact 24-hour multiple", async () => {
+  const { assertExact24HourRentalPeriod } = await import("../services/booking");
+
+  // Any start time is fine, as long as the end time matches it exactly N*24h later.
+  assert.doesNotThrow(() => assertExact24HourRentalPeriod("2026-10-20T10:00:00Z", "2026-10-21T10:00:00Z")); // 24h
+  assert.doesNotThrow(() => assertExact24HourRentalPeriod("2026-10-20T10:00:00Z", "2026-10-23T10:00:00Z")); // 72h
+  assert.doesNotThrow(() => assertExact24HourRentalPeriod("2026-10-20T15:00:00Z", "2026-10-22T15:00:00Z")); // 48h, 3pm start
+
+  // The spec's own invalid example: 20 Oct 10:00 AM -> 22 Oct 12:00 PM is 50 hours, not a multiple of 24.
+  assert.throws(
+    () => assertExact24HourRentalPeriod("2026-10-20T10:00:00Z", "2026-10-22T12:00:00Z"),
+    /complete 24-hour blocks/,
+  );
+
+  // `availability()` enforces the same rule at the actual new-booking entry point used by every
+  // checkout/Featured Rental/Request flow, independent of `rentalDays`' historical-data rounding.
+  const state = createSeed();
+  const listing = state.listings[0];
+  assert.throws(
+    () => availability(state, listing, "2026-10-20T10:00:00Z", "2026-10-22T12:00:00Z"),
+    /complete 24-hour blocks/,
+  );
+
+  // The task's full valid/invalid table, checked directly.
+  assert.doesNotThrow(() => assertExact24HourRentalPeriod("2026-10-20T10:00:00Z", "2026-10-21T10:00:00Z")); // 24h
+  assert.doesNotThrow(() => assertExact24HourRentalPeriod("2026-10-20T10:00:00Z", "2026-10-22T10:00:00Z")); // 48h
+  assert.doesNotThrow(() => assertExact24HourRentalPeriod("2026-10-20T11:00:00Z", "2026-10-23T11:00:00Z")); // 72h
+  assert.doesNotThrow(() => assertExact24HourRentalPeriod("2026-10-20T15:00:00Z", "2026-10-24T15:00:00Z")); // 96h
+  assert.throws(() => assertExact24HourRentalPeriod("2026-10-20T10:00:00Z", "2026-10-21T12:00:00Z"), /complete 24-hour blocks/); // 26h
+  assert.throws(() => assertExact24HourRentalPeriod("2026-10-20T10:00:00Z", "2026-10-22T11:00:00Z"), /complete 24-hour blocks/); // 49h
+  assert.throws(() => assertExact24HourRentalPeriod("2026-10-20T15:00:00Z", "2026-10-22T17:00:00Z"), /complete 24-hour blocks/); // 50h
+});
+
+test("A mismatched-duration booking is rejected end-to-end through the real reducer, not just the standalone validator", () => {
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+
+  // Valid 48-hour booking goes through, with the expected 2-day fee.
+  const listing = state.listings.find((l) => l.id === "sony-a7iii")!;
+  state = transition(state, {
+    type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
+    id: "booking-valid-48h",
+    listingId: "sony-a7iii",
+    start: `${dateAfter(15)}T11:00:00+08:00`,
+    end: `${dateAfter(17)}T11:00:00+08:00`,
+    paymentMethod: "Demo FPX",
+  });
+  const valid48h = state.bookings.find((b) => b.id === "booking-valid-48h")!;
+  assert.equal(valid48h.quote.days, 2);
+  assert.equal(valid48h.quote.rentalFee, listing.dailyPrice * 2);
+
+  // Submitting an invalid 26-hour duration directly through the reducer — bypassing any UI —
+  // must still be rejected, and must not create a booking record.
+  const bookingCountBefore = state.bookings.length;
+  assert.throws(
+    () => transition(state, {
+      type: "instantBook",
+      deliveryAddress: "Mont Kiara, Kuala Lumpur",
+      id: "booking-invalid-26h",
+      listingId: "sony-a7iii",
+      start: `${dateAfter(18)}T10:00:00+08:00`,
+      end: `${dateAfter(19)}T12:00:00+08:00`,
+      paymentMethod: "Demo FPX",
+    }),
+    /complete 24-hour blocks/,
+  );
+  assert.equal(state.bookings.length, bookingCountBefore, "An invalid-duration booking must never be created");
+
+  // Changing the start time changes which exact hour every valid end option must match — the
+  // booking panel derives this by locking the return clock time to the (possibly new) start
+  // clock time, so a 48-hour booking anchored at 3pm is just as valid as one anchored at 11am.
+  state = transition(state, {
+    type: "instantBook",
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
+    id: "booking-valid-48h-3pm",
+    listingId: "sony-a7iii",
+    start: `${dateAfter(20)}T15:00:00+08:00`,
+    end: `${dateAfter(22)}T15:00:00+08:00`,
+    paymentMethod: "Demo FPX",
+  });
+  assert.equal(state.bookings.find((b) => b.id === "booking-valid-48h-3pm")!.quote.days, 2);
+});
+
 test("simulated eKYC verification initializes risk score to 80 and unverified is N/A", () => {
   let state = createSeed();
   // Switch to unverified renter Chloe Ng
@@ -2250,7 +2413,12 @@ test("confirmed booking cancellation is available to both participants only befo
   const bCancelled = state.bookings.find((b) => b.id === "booking-cancel-ok")!;
   assert.equal(bCancelled.status, "cancelled");
   assert.equal(bCancelled.payment, "refunded");
-  assert.equal(bCancelled.deposit, "released");
+  // The deposit was genuinely held, so it's scheduled to release 5 Malaysia working days from
+  // cancellation — not released instantly, and never dated from the original rental end (`end`).
+  assert.equal(bCancelled.deposit, "release_pending");
+  assert.ok(bCancelled.depositReleasedAt);
+  assert.equal(bCancelled.depositReleasedAt, cancelledDepositReleaseDeadline(bCancelled.cancelledAt!));
+  assert.notEqual(bCancelled.depositReleasedAt, bCancelled.end);
   assert.equal(bCancelled.cancelledById, "owner-aiman");
   assert.ok(bCancelled.cancelledAt);
   assert.equal(bCancelled.start, start);
@@ -2329,6 +2497,98 @@ test("confirmed booking cancellation is available to both participants only befo
       }),
     /only until 24 hours/,
   );
+});
+
+test("Cancelled-booking deposit release: 5 Malaysia working days from cancellation, excluding weekends — never the original scheduled rental end date", () => {
+  // A weekday cancellation (Monday) releases the following Monday, skipping the weekend in
+  // between, and lands nowhere near the Oct/Nov/Dec scheduled rental end dates this bug produced.
+  assert.equal(cancelledDepositReleaseDeadline("2026-10-19T09:00:00Z"), "2026-10-26T09:00:00.000Z");
+
+  // A Friday cancellation must skip the entire following weekend, not just one day.
+  assert.equal(cancelledDepositReleaseDeadline("2026-10-23T09:00:00Z"), "2026-10-30T09:00:00.000Z");
+
+  // The example from the spec: cancellation approved Monday 19 October 2026 releases Monday
+  // 26 October 2026 (no Malaysia public holiday falls in that window).
+  assert.equal(cancelledDepositReleaseDeadline("2026-10-19T00:00:00Z").slice(0, 10), "2026-10-26");
+
+  // effectiveDepositStatus only reports "released" once the computed deadline has actually
+  // passed — a booking cancelled "now" must not show as released immediately.
+  const now = Date.parse("2026-10-19T10:00:00Z");
+  const justCancelled = { deposit: "release_pending" as const, depositReleasedAt: cancelledDepositReleaseDeadline("2026-10-19T09:00:00Z") };
+  assert.equal(effectiveDepositStatus(justCancelled, now), "release_pending");
+  const longSinceCancelled = { deposit: "release_pending" as const, depositReleasedAt: "2026-10-01T09:00:00Z" };
+  assert.equal(effectiveDepositStatus(longSinceCancelled, now), "released");
+  // Deposit states unrelated to cancellation pass through unchanged.
+  assert.equal(effectiveDepositStatus({ deposit: "held" as const }, now), "held");
+  assert.equal(effectiveDepositStatus({ deposit: "disputed" as const }, now), "disputed");
+
+  // Cancelling an unfinished checkout (deposit never collected) must never fabricate a release.
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "demo-renter" });
+  state = transition(state, {
+    type: "startDeliveryCheckout",
+    id: "booking-cancel-unpaid",
+    listingId: "sony-a7iii",
+    start: `${dateAfter(10)}T11:00:00+08:00`,
+    end: `${dateAfter(11)}T11:00:00+08:00`,
+    deliveryAddress: "Mont Kiara, Kuala Lumpur",
+    deliveryPostcode: "50480",
+    returnPickupTime: "15:00",
+  } as unknown as Action);
+  state = transition(state, { type: "cancelDeliveryCheckout", bookingId: "booking-cancel-unpaid" } as unknown as Action);
+  const neverPaid = state.bookings.find((b) => b.id === "booking-cancel-unpaid")!;
+  assert.equal(neverPaid.status, "cancelled");
+  assert.equal(neverPaid.deposit, "required", "Never collected — must not read as held/released");
+  assert.equal(neverPaid.depositReleasedAt, undefined);
+
+  // The four seeded demo cancellations must each show a release date within about a week of
+  // their recorded cancellation — never the "more than two months later" bug (a release date
+  // computed from the original scheduled rental end instead of the cancellation timestamp).
+  const seed = createSeed("admin_demo");
+  const seededCancellations = seed.bookings.filter((b) => b.status === "cancelled" && b.cancelledAt);
+  assert.ok(seededCancellations.length >= 4);
+  for (const booking of seededCancellations) {
+    if (booking.deposit === "required") continue; // nothing was ever collected to release
+    assert.ok(booking.depositReleasedAt, `${booking.id} must record a computed release deadline`);
+    const daysFromCancellation = (parseMalaysiaTimestamp(booking.depositReleasedAt!) - parseMalaysiaTimestamp(booking.cancelledAt!)) / 86400000;
+    assert.ok(daysFromCancellation <= 9, `${booking.id}: release deadline is ${daysFromCancellation.toFixed(1)} days after cancellation — expected at most ~9 (5 working days plus a weekend)`);
+    assert.notEqual(booking.depositReleasedAt, booking.end, `${booking.id}: release deadline must not equal the original scheduled rental end date`);
+  }
+});
+
+test("Delivery refunds are the delivery company's responsibility, never auto-approved just because a rental was cancelled", () => {
+  // deriveDeliveryRefundStatus: the full rule set, independent of any specific booking.
+  assert.equal(deriveDeliveryRefundStatus({ cancelled: false, deliveryStatus: undefined, legStarted: false }), "not_paid");
+  assert.equal(deriveDeliveryRefundStatus({ cancelled: false, deliveryStatus: "required", legStarted: false }), "not_paid");
+  assert.equal(deriveDeliveryRefundStatus({ cancelled: false, deliveryStatus: "paid_demo", legStarted: false }), "refund_not_required");
+  assert.equal(deriveDeliveryRefundStatus({ cancelled: true, deliveryStatus: "paid_demo", legStarted: false }), "refund_pending");
+  assert.equal(deriveDeliveryRefundStatus({ cancelled: true, deliveryStatus: "paid_demo", legStarted: true }), "refund_not_eligible");
+  // Only an already-recorded "refunded_demo" status reads back as an actual completed refund —
+  // never inferred purely from `cancelled`.
+  assert.equal(deriveDeliveryRefundStatus({ cancelled: true, deliveryStatus: "refunded_demo", legStarted: false }), "refunded");
+  assert.equal(deriveDeliveryRefundStatus({ cancelled: false, deliveryStatus: "refunded_demo", legStarted: false }), "refunded");
+
+  // repairDemoDeliveryPayments must never flip a delivery payment to "refunded_demo" just because
+  // the rental payment on a cancelled booking is "refunded" — and must leave a genuinely
+  // never-paid cancelled delivery ("required") alone rather than fabricating a paid receipt.
+  const seed = createSeed("admin_demo");
+  const luxuryWatchCancellation = seed.bookings.find((b) => b.id === "demo-booking-cancelled-1")!;
+  assert.equal(luxuryWatchCancellation.payment, "refunded");
+  assert.equal(luxuryWatchCancellation.deliveryDemo?.status, "required", "Delivery fee was never paid on this fixture and must not be fabricated as paid/refunded");
+  assert.equal(luxuryWatchCancellation.deliveryDemo?.refundedAt, undefined);
+
+  // Re-running the repair pass must be stable (idempotent) and must never introduce a
+  // "refunded_demo" delivery status purely from a refunded rental payment.
+  const reRepaired = repairDemoDeliveryPayments(seed);
+  for (const booking of reRepaired.bookings) {
+    if (booking.deliveryDemo?.status !== "refunded_demo") continue;
+    const original = seed.bookings.find((b) => b.id === booking.id);
+    assert.equal(
+      original?.deliveryDemo?.status,
+      "refunded_demo",
+      `${booking.id}: repair must not newly introduce "refunded_demo" — it only carries forward an already-recorded one`,
+    );
+  }
 });
 
 test("Lender Rental Details renders one persistent action panel without the old inline dispute workflow", () => {
@@ -2944,12 +3204,16 @@ test("Demo renter account carries 5 Rental Protection demo scenarios, one per st
   // risk-linked demo bookings (Camping Tent, Sony A7 III Mirrorless Camera); no separate
   // Rental Protection "completed" demo bookings exist any more.
 
-  // 5. Cancelled — GoPro HERO12 Black, full refund, matching deposit release
+  // 5. Cancelled — GoPro HERO12 Black, full refund, deposit release scheduled 5 Malaysia working
+  // days after cancellation (never dated from the original scheduled rental end, 27 Oct).
   const cancelled = byId("demo-booking-protection-cancelled");
   assert.equal(cancelled.title, "GoPro HERO12 Black");
   assert.equal(cancelled.status, "cancelled");
   assert.equal(cancelled.payment, "refunded");
-  assert.equal(cancelled.deposit, "released");
+  assert.equal(cancelled.deposit, "release_pending");
+  assert.ok(cancelled.depositReleasedAt, "Must record a computed deposit release deadline");
+  assert.equal(cancelled.depositReleasedAt, cancelledDepositReleaseDeadline(cancelled.cancelledAt!));
+  assert.notEqual(cancelled.depositReleasedAt, cancelled.end, "Release deadline must not equal the original scheduled rental end date");
   assert.equal(cancelled.insurance, null);
   assert.ok(cancelled.cancelledAt);
   assert.equal(cancelled.cancelledById, "demo-renter");
@@ -3730,79 +3994,66 @@ test("Section 14.4: Unmatched questions and Talk to a Human use the approved rep
   );
 });
 
-test("Section 14.3: Exactly six updated FAQs match founder screenshot copy and deposit rates", async () => {
-  const { sampleFaqs } = await import("../data/mock");
-  assert.equal(sampleFaqs.length, 6);
+test("Section 14.3: Full 30-question FAQ covers all six categories with correct fee/deposit figures and the coverage comparison table", async () => {
+  const { sampleFaqs, faqCategories } = await import("../data/mock");
+  assert.ok(sampleFaqs.length >= 30);
 
-  // Check Q1
-  assert.equal(sampleFaqs[0].question, "How does CurRENT verify users?");
-  assert.equal(
-    sampleFaqs[0].answer,
-    "Identity checks are completed by authorised external eKYC providers, subject to their terms.",
-  );
+  // All six categories are represented, in order, and nothing outside the approved set.
+  const seenCategories = [...new Set(sampleFaqs.map((f) => f.category))];
+  assert.deepEqual(seenCategories, [...faqCategories]);
+  for (const faq of sampleFaqs) {
+    assert.ok((faqCategories as readonly string[]).includes(faq.category));
+  }
 
-  // Check Q2
-  assert.equal(sampleFaqs[1].question, "How is the security deposit handled?");
-  assert.ok(
-    sampleFaqs[1].answer.includes(
-      "The refundable security deposit is risk-based.",
-    ),
-  );
+  // The stale 12% lender-commission wording must be gone everywhere; 13% is the current rate.
+  assert.ok(!sampleFaqs.some((f) => f.answer.includes("12%")));
+  const feeFaq = sampleFaqs.find((f) => f.question.startsWith("How much does CurRENT charge"));
+  assert.ok(feeFaq);
+  assert.ok(feeFaq!.answer.includes("5% of the rental fee, subject to a minimum charge of RM5"));
+  assert.ok(feeFaq!.answer.includes("13% of the rental fee for new bookings"));
+  assert.ok(feeFaq!.answer.includes("87%"));
 
-  // Check Q3 (Updated deposit rates)
-  assert.equal(
-    sampleFaqs[2].question,
-    "How is the security deposit calculated?",
-  );
-  assert.ok(
-    sampleFaqs[2].answer.includes(
-      "Low-risk rentals (score 80–100) require 5% of the item value, capped at RM500",
-    ),
-  );
-  assert.ok(
-    sampleFaqs[2].answer.includes(
-      "moderate-risk rentals (40–79) require 10%, capped at RM1,000",
-    ),
-  );
-  assert.ok(
-    sampleFaqs[2].answer.includes(
-      "high-risk rentals (30–39) require 15%, capped at RM1,500",
-    ),
-  );
-  assert.ok(
-    sampleFaqs[2].answer.includes(
-      "Very high-risk renters (0–29) must submit a request to CurRENT for review",
-    ),
-  );
+  // Deposit tiers match the live calculation in services/booking.ts.
+  const depositFaq = sampleFaqs.find((f) => f.question === "How is my security deposit calculated?");
+  assert.ok(depositFaq);
+  assert.ok(depositFaq!.answer.includes("5% of item value, capped at RM500"));
+  assert.ok(depositFaq!.answer.includes("10% of item value, capped at RM1,000"));
+  assert.ok(depositFaq!.answer.includes("15% of item value, capped at RM1,500"));
 
-  // Check Q4
-  assert.equal(sampleFaqs[3].question, "Can I rent out my own items?");
-  assert.ok(
-    sampleFaqs[3].answer.includes(
-      "Yes. CurRENT is designed to help individuals and businesses monetise underused items",
-    ),
-  );
+  // Rental Protection is consistently described as proposed third-party insurance, not CurRENT's own.
+  const protectionFaqs = sampleFaqs.filter((f) => f.category === "Optional Rental Protection");
+  assert.ok(protectionFaqs.length > 0);
+  assert.ok(protectionFaqs.every((f) => !/CurRENT (provides|underwrites|pays)( the)? insurance/i.test(f.answer)));
+  const whatIsProtection = protectionFaqs.find((f) => f.question === "What is Rental Protection?");
+  assert.ok(whatIsProtection!.answer.includes("not provided or underwritten by CurRENT"));
+  const premiumFaq = protectionFaqs.find((f) => f.question === "How much does Rental Protection cost?");
+  assert.ok(premiumFaq!.answer.includes("5% of the total rental fee"));
+  const maxFaq = protectionFaqs.find((f) => f.question === "What is the maximum Rental Protection coverage?");
+  assert.ok(maxFaq!.answer.includes("RM60,000"));
+  assert.ok(maxFaq!.answer.includes("not guaranteed compensation"));
 
-  // Check Q5
-  assert.equal(
-    sampleFaqs[4].question,
-    "How much does CurRENT charge borrowers and lenders?",
-  );
-  assert.equal(
-    sampleFaqs[4].answer,
-    "Borrowers are charged 5% of the rental value or a minimum of RM5, whichever is higher. Lenders are charged a 12% commission when a rental is successfully completed.",
-  );
+  // The Q21 comparison table: 16 situations, five columns, "Without Rental Protection" present.
+  const comparisonFaq = sampleFaqs.find((f) => !!f.coverageTable);
+  assert.ok(comparisonFaq);
+  assert.equal(comparisonFaq!.coverageTable!.length, 16);
+  for (const row of comparisonFaq!.coverageTable!) {
+    assert.ok(row.situation && row.withProtection && row.withoutProtection && row.deposit && row.deliveryCompensation);
+  }
 
-  // Check Q6
-  assert.equal(
-    sampleFaqs[5].question,
-    "Is Buy Now Pay Later (BNPL) available?",
-  );
-  assert.ok(
-    sampleFaqs[5].answer.includes(
-      "BNPL may be available for eligible high-value rental fees",
-    ),
-  );
+  // Delivery company compensation must not be framed as conditional on buying Rental Protection.
+  const deliveryClaimFaq = sampleFaqs.find((f) => f.question === "What happens if a delivery company damages or loses an item?");
+  assert.ok(deliveryClaimFaq);
+  assert.ok(deliveryClaimFaq!.answer.includes("do not need optional Rental Protection"));
+  assert.ok(deliveryClaimFaq!.answer.includes("does not automatically justify deducting"));
+});
+
+test("FAQ page and Help & Trust page render the same shared FAQ content", async () => {
+  const faqSource = require("fs").readFileSync(require("path").join(__dirname, "../app/faq.tsx"), "utf8");
+  const helpSource = require("fs").readFileSync(require("path").join(__dirname, "../app/help.tsx"), "utf8");
+  assert.ok(faqSource.includes("sampleFaqs"));
+  assert.ok(helpSource.includes("sampleFaqs"));
+  assert.ok(faqSource.includes("FaqAccordion"));
+  assert.ok(helpSource.includes("FaqAccordion"));
 });
 
 test("Confirm Received is gated by scheduled start and does not activate or reschedule a rental", () => {

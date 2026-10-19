@@ -176,6 +176,11 @@ export interface Booking {
   /** Renter's delivery postcode, stored alongside deliveryAddress so the fee can always be
    * recomputed from the same automatic postcode-distance formula used at checkout. */
   deliveryPostcode?: string;
+  /** When the refundable security deposit was (or, while still `release_pending`, will be)
+   * released — the single source of truth for any "deposit released" date shown in the UI.
+   * For a cancelled booking this is set to `cancelledDepositReleaseDeadline(cancelledAt)`
+   * (services/booking.ts), never the original scheduled rental end date. */
+  depositReleasedAt?: string;
   cancelledAt?: string;
   cancelledById?: string;
   createdAt: string;

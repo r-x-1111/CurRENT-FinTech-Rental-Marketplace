@@ -6,9 +6,12 @@ import { useMarketplace } from "../context/Marketplace";
 import {
   formatMalaysiaDateTime,
   formatScheduledReturnPickup,
+  formatShortDate,
   getEffectiveBookingStatus,
+  malaysiaDateKey,
   money,
 } from "../services/booking";
+import { DOMESTIC_COURIER_NAME } from "../services/delivery";
 import { colors } from "../constants/theme";
 
 export function BookingCard({
@@ -82,10 +85,16 @@ export function BookingCard({
     tagColor = "#B91C1C";
   }
 
-  const startFormatted = formatMalaysiaDateTime(
-    booking.start,
-  );
-  const endFormatted = formatScheduledReturnPickup(booking);
+  // Cross-state (Domestic Courier) bookings show dates only — courier transit was never
+  // scheduled to an exact hour, so showing one would misrepresent it as confirmed. The
+  // underlying booking.start/end timestamps are untouched; only this display differs.
+  const isCrossState = booking.deliveryDemo?.provider === DOMESTIC_COURIER_NAME;
+  const startFormatted = isCrossState
+    ? formatShortDate(malaysiaDateKey(booking.start))
+    : formatMalaysiaDateTime(booking.start);
+  const endFormatted = isCrossState
+    ? formatShortDate(malaysiaDateKey(booking.end))
+    : formatScheduledReturnPickup(booking);
 
   let dateInfo = `Scheduled rental start: ${startFormatted}`;
   if (isActive || isReturnPending) {

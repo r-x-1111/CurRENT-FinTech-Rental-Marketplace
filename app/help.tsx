@@ -114,7 +114,7 @@ export default function HelpScreen() {
         </View>
       </Card>
 
-      {/* Canonical 13 FAQs Accordion */}
+      {/* Shared FAQ content — same source as /faq, organised into six categories */}
       <Section title="Frequently Asked Questions (Section 14)" />
       <FaqAccordion faqs={sampleFaqs} />
     </Screen>

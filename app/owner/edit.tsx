@@ -828,11 +828,20 @@ export default function EditListing() {
               {selectedSlots.length}/8 selected (min 2 required)
             </Text>
           </View>
-          <Text style={[s.caption, { marginTop: -4, marginBottom: 10 }]}>
-            Select at least 2 of the 8 fixed delivery-start hours. Renters can only book during your chosen slots.
+          <Text style={[s.label, { fontSize: 12, marginTop: -4, marginBottom: 2 }]}>Local Delivery – GrabExpress (Demo)</Text>
+          <Text style={[s.caption, { marginTop: 0, marginBottom: 8 }]}>
+            Select at least 2 of the 8 fixed delivery-start hours. Renters using eligible local delivery routes can only book during your selected time slots.{"\n\n"}
+            For each selected delivery time, the delivery driver is scheduled to collect the item from you approximately 40 minutes before the renter's selected delivery time. For example, if the renter selects 2:00 PM, the estimated driver collection time is 1:20 PM.{"\n\n"}
+            These are simulated schedules, not confirmed GrabExpress bookings.
           </Text>
-          <Text style={[s.caption, { color: colors.navy, marginBottom: 10 }]}>
-            For each delivery time selected below, the delivery driver will arrive 40 minutes earlier to collect the item from you.
+          <Text style={[s.label, { fontSize: 12, marginBottom: 2 }]}>Cross-State Delivery – Domestic Courier (Demo)</Text>
+          <Text style={[s.caption, { marginTop: 0, marginBottom: 10 }]}>
+            Fixed hourly delivery slots do not apply to cross-state deliveries. Instead, CurRENT automatically recommends a dispatch date based on the renter's selected rental start date and the estimated courier transit time.{"\n\n"}
+            After receiving a cross-state booking, you will be asked to confirm the recommended dispatch date or propose an alternative arrangement.{"\n\n"}
+            For returns, the renter must drop off the securely packaged item at an eligible courier branch by the agreed return deadline. Courier arrival dates are estimates and are not guaranteed.
+          </Text>
+          <Text style={[s.caption, { marginTop: 0, marginBottom: 10, fontStyle: "italic" }]}>
+            The renter's delivery postcode is not known yet, so whether a booking uses local or cross-state delivery is determined later, at checkout.
           </Text>
           <View style={styles.fixedSlotsGrid}>
             {FIXED_DELIVERY_SLOTS.map((slot) => {

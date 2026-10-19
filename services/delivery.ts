@@ -228,6 +228,55 @@ export type DisplayDelivery = {
 };
 
 /**
+ * Delivery fees are paid to the delivery company (GrabExpress / Domestic Courier), not earned by
+ * CurRENT — CurRENT only simulates tracking the refund, it never issues one. These are the
+ * possible simulated refund-tracking statuses shown for a delivery payment; "refunded" is only
+ * ever reported when `deliveryStatus` is itself already "refunded_demo" — an explicitly recorded
+ * event elsewhere — never inferred merely because a rental booking was cancelled.
+ */
+export type DeliveryRefundStatus =
+  | "not_paid"
+  | "refund_not_required"
+  | "refund_pending"
+  | "refund_not_eligible"
+  | "refunded";
+
+export const DELIVERY_REFUND_STATUS_LABEL: Record<DeliveryRefundStatus, string> = {
+  not_paid: "Not Paid",
+  refund_not_required: "Refund Not Required",
+  refund_pending: "Refund Eligibility Pending (Demo)",
+  refund_not_eligible: "Refund Not Eligible (Demo)",
+  refunded: "Refunded (Simulated)",
+};
+
+/**
+ * Derives the refund-tracking status for one delivery leg (outbound or return), from facts
+ * already recorded on the booking — never invents a guaranteed refund, a fixed refund deadline,
+ * or an approved provider amount.
+ *
+ *  - Fee never paid                              -> "not_paid" (no refund shown)
+ *  - Paid, booking not cancelled                 -> "refund_not_required"
+ *  - Paid, cancelled, this leg hasn't started yet -> "refund_pending" (may be eligible, subject to
+ *    the provider's own cancellation terms — never assumed approved)
+ *  - Paid, cancelled, this leg already dispatched/completed -> "refund_not_eligible" (outbound
+ *    fees already spent are not automatically refunded; an in-transit parcel requires provider
+ *    review rather than an assumed refund)
+ *  - `deliveryStatus` already "refunded_demo"     -> "refunded" (a fact recorded elsewhere, e.g. an
+ *    abandoned pre-payment checkout that never reached a confirmed rental)
+ */
+export function deriveDeliveryRefundStatus(params: {
+  cancelled: boolean;
+  deliveryStatus: "required" | "paid_demo" | "refunded_demo" | undefined;
+  /** Has this specific leg (outbound or return) already been dispatched, collected or completed? */
+  legStarted: boolean;
+}): DeliveryRefundStatus {
+  if (params.deliveryStatus === "refunded_demo") return "refunded";
+  if (!params.deliveryStatus || params.deliveryStatus === "required") return "not_paid";
+  if (!params.cancelled) return "refund_not_required";
+  return params.legStarted ? "refund_not_eligible" : "refund_pending";
+}
+
+/**
  * Produces one consistent, display-ready delivery record for a booking, for use anywhere
  * CurRENT shows "GrabExpress Delivery (Demo)" details (Transaction Details, Rental Details, etc).
  * Prefers the booking's own saved deliveryDemo. Only falls back to a derived estimate when none
@@ -439,7 +488,7 @@ export const DOMESTIC_COURIER_PRICING_REFERENCE =
 
 /** Longest side a standard domestic courier parcel accepts in this demo. Beyond this, show
  * Special Delivery Quotation Required rather than a fabricated postage fee. */
-const COURIER_MAX_DIMENSION_CM = 120;
+export const COURIER_MAX_DIMENSION_CM = 120;
 
 const eastMalaysiaState = (state: string) => /^(sabah|sarawak|labuan)$/i.test(state);
 
@@ -459,6 +508,38 @@ export function calculateChargeableWeightKg(actualKg: number, dimensions: Parcel
 }
 
 export type ParcelPackage = { weightKg: number; dimensionsCm: ParcelDimensions };
+
+/**
+ * Cross-state delivery (Domestic Courier) eligibility for a listing — state-independent, so it
+ * can be shown on the product page and the booking panel before any delivery address is entered:
+ *  - "same_state_only": at least one recorded package exceeds the courier's accepted size, so no
+ *    cross-state route can ever quote (mirrors quoteDomesticCourierPackage's own oversize check —
+ *    this doesn't invent a new rule, it precomputes the existing one without needing a route).
+ *  - "requires_review": the listing hasn't recorded usable parcel weight/dimensions yet, so
+ *    eligibility can't be determined until that information is provided.
+ *  - "available": every recorded package is within the courier's accepted size.
+ */
+export type CrossStateDeliveryEligibility = "available" | "same_state_only" | "requires_review";
+
+export function crossStateDeliveryEligibility(listing: {
+  parcelWeightKg?: number;
+  parcelDimensionsCm?: ParcelDimensions;
+  parcelPackages?: ParcelPackage[];
+}): CrossStateDeliveryEligibility {
+  const packages: ParcelPackage[] = listing.parcelPackages?.length
+    ? listing.parcelPackages
+    : listing.parcelWeightKg != null && listing.parcelDimensionsCm
+      ? [{ weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm }]
+      : [];
+  if (packages.length === 0) return "requires_review";
+  for (const pkg of packages) {
+    if (!Number.isFinite(pkg.weightKg) || pkg.weightKg <= 0) return "requires_review";
+    const sides = [pkg.dimensionsCm.length, pkg.dimensionsCm.width, pkg.dimensionsCm.height];
+    if (sides.some((side) => !Number.isFinite(side) || side <= 0)) return "requires_review";
+    if (sides.some((side) => side > COURIER_MAX_DIMENSION_CM)) return "same_state_only";
+  }
+  return "available";
+}
 
 export type DomesticCourierQuote = {
   courierName: string;

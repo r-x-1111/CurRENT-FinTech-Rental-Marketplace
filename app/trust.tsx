@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Notice, Screen, Section, s } from "../components/ui";
+import { Screen, Section, s } from "../components/ui";
 import { RiskGauge } from "../components/RiskGauge";
 import { colors } from "../constants/theme";
 
@@ -15,8 +15,6 @@ export default function TrustScreen() {
       title="Trust"
       subtitle="Confidence, built into the journey. Simple signals and partner-supported services help renters and owners make better decisions before booking."
     >
-      <Notice text="CurRENT is a classroom simulation. Identity checks, payments, deposits, insurance and delivery are not performed by real providers. Do not submit identity documents or bank credentials." />
-
       <Section title="Why CurRENT Is Safer" />
       <View
         style={[
@@ -36,7 +34,7 @@ export default function TrustScreen() {
           <Text style={styles.trustCardTitle}>Verified Users</Text>
           <Text style={styles.trustCardBody}>
             Identity checks are completed by authorised external eKYC
-            providers before booking (simulated in demo). New verified renters begin at score 80 Low.
+            providers before booking (simulated in demo). New verified renters begin at score 80 - Low Risk.
           </Text>
         </View>
 
@@ -76,7 +74,7 @@ export default function TrustScreen() {
           <Text style={styles.trustCardTitle}>Item Protection</Text>
           <Text style={styles.trustCardBody}>
             Eligible high-value items may receive protection of up to RM60,000
-            through an authorised external insurance partner (future concept).
+            through an authorised external insurance partner, subject to eligibility and policy terms.
           </Text>
         </View>
       </View>

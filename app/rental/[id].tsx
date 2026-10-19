@@ -21,10 +21,13 @@ import { HoldToConfirmButton } from "../../components/HoldToConfirm";
 import { BookingSummary } from "../../components/BookingSummary";
 import { deriveDisplayDelivery, DOMESTIC_COURIER_NAME } from "../../services/delivery";
 import {
+  effectiveDepositStatus,
   formatMalaysiaDateTime,
   formatScheduledReturnPickup,
+  formatShortDate,
   getEffectiveBookingStatus,
   isCancellationEligible,
+  malaysiaDateKey,
   money,
   parseMalaysiaTimestamp,
   riskFor,
@@ -205,7 +208,7 @@ export default function RentalDetail() {
       await actAndPersist({ type: "booking", id, operation: "cancel" });
       setCancelConfirmationVisible(false);
       setSuccessNotice(
-        "Booking cancelled. The simulated ledger now shows the rental and service fees as refunded and the deposit as released. No real payment or refund occurred.",
+        "Booking cancelled. The simulated ledger now shows the rental and service fees as refunded; the refundable deposit is scheduled to release within 5 Malaysia working days of this cancellation. No real payment or refund occurred.",
       );
     } catch (e) {
       setCancelError((e as Error).message);
@@ -407,16 +410,32 @@ export default function RentalDetail() {
             Rental period
           </Text>
           <View style={{ alignItems: "flex-end", gap: 2 }}>
-            <Text style={[s.body, { textAlign: "right" }]}>
-              {formatMalaysiaDateTime(b.start)}
-            </Text>
-            <Text style={[s.body, { textAlign: "right" }]}>
-              to {formatMalaysiaDateTime(b.end)}
-            </Text>
-            <Text style={s.caption}>
-              {b.quote.days} {b.quote.days === 1 ? "day" : "days"} · Delivery
-              Only
-            </Text>
+            {displayDelivery.method === "Domestic Courier (Demo)" ? (
+              <>
+                {/* Cross-state: dates only — courier transit was never scheduled to an exact
+                    hour, so showing one (e.g. "06:00 PM") would misrepresent it as confirmed.
+                    b.start/b.end themselves are untouched; this only changes how they're shown. */}
+                <Text style={[s.body, { textAlign: "right" }]}>
+                  {formatShortDate(malaysiaDateKey(b.start))} – {formatShortDate(malaysiaDateKey(b.end))}
+                </Text>
+                <Text style={s.caption}>
+                  Duration: {b.quote.days * 24} hours ({b.quote.days} {b.quote.days === 1 ? "day" : "days"}) · Delivery Only
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={[s.body, { textAlign: "right" }]}>
+                  {formatMalaysiaDateTime(b.start)}
+                </Text>
+                <Text style={[s.body, { textAlign: "right" }]}>
+                  to {formatMalaysiaDateTime(b.end)}
+                </Text>
+                <Text style={s.caption}>
+                  {b.quote.days} {b.quote.days === 1 ? "day" : "days"} · Delivery
+                  Only
+                </Text>
+              </>
+            )}
           </View>
         </View>
       </Card>
@@ -1197,10 +1216,45 @@ export default function RentalDetail() {
           View Delivery Receipt
         </Button>
       )}
-      {/* ACTIVITY TIMELINE — derived from existing booking/dispute timestamps, no new storage */}
+      {/* ACTIVITY TIMELINE — derived from existing booking/dispute timestamps, no new storage.
+          Cross-state (Domestic Courier) history shows dates only, never a specific hour/minute —
+          courier transit was never scheduled to an exact time, so showing one would misrepresent
+          it as confirmed. Same-state (GrabExpress) history is unchanged and keeps full date+time.
+          The underlying timestamps are untouched; only this display formatting differs. */}
       <Section title="Activity Timeline" />
       <Card>
         {(() => {
+          const crossState = displayDelivery.method === "Domestic Courier (Demo)";
+          // Cross-state bookings that reached a normal (non-cancelled, non-disputed) lifecycle use
+          // a fixed, named 11-step sequence so renters/lenders see every stage the courier process
+          // is supposed to go through — showing "Not Recorded" for any step this demo never
+          // actually captured, rather than inventing a timestamp or silently hiding the step.
+          // Cancelled/disputed bookings fall back to the general-purpose timeline below, which
+          // already handles those cases correctly.
+          if (crossState && b.status !== "cancelled" && b.status !== "rejected" && !existingDispute) {
+            const crossStateEvents: { label: string; at: string | null }[] = [
+              { label: "Booking confirmed", at: b.createdAt },
+              { label: "Payment completed (Demo)", at: b.payment === "paid" || b.payment === "refunded" ? b.createdAt : null },
+              { label: "Item dispatched by lender", at: b.lenderOutboundDispatchConfirmedAt || null },
+              { label: "Item delivered to renter", at: b.renterReceivedAt || null },
+              { label: "Rental started", at: b.activationTimestamp || null },
+              { label: "Rental period ended", at: parseMalaysiaTimestamp(b.end) <= Date.now() ? b.end : null },
+              { label: "Item handed to return courier", at: b.deliveryDemo?.returnDropoffConfirmedAt || null },
+              { label: "Item received by lender", at: b.actualReturnTimestamp || null },
+              { label: "Lender confirmed clean return", at: b.lenderReturnConfirmedAt || null },
+              { label: "Security deposit released", at: b.deposit === "released" ? (b.lenderReturnConfirmedAt || b.actualReturnTimestamp || null) : null },
+              { label: "Rental completed", at: b.status === "completed" ? (b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.end) : null },
+            ];
+            return crossStateEvents.map((event, index) => (
+              <View key={`${event.label}-${index}`} style={styles.timelineRow}>
+                <View style={styles.timelineDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.bold}>{event.label}</Text>
+                  <Text style={s.caption}>{event.at ? formatShortDate(malaysiaDateKey(event.at)) : "Not Recorded"}</Text>
+                </View>
+              </View>
+            ));
+          }
           const events: { label: string; at: string }[] = [];
           events.push({ label: "Booking confirmed", at: b.createdAt });
           if (b.payment === "paid" || b.payment === "refunded") events.push({ label: "Payment completed (Demo)", at: b.createdAt });
@@ -1215,9 +1269,27 @@ export default function RentalDetail() {
           } else if (b.lenderReturnConfirmedAt) {
             events.push({ label: "Lender confirmed clean return", at: b.lenderReturnConfirmedAt });
           }
-          if (!existingDispute && b.deposit === "released") events.push({ label: "Security deposit released", at: b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.end });
+          // A cancelled booking's deposit release is never dated from the original scheduled
+          // rental end (b.end) — that's often weeks or months after the cancellation itself.
+          // It's dated from the computed release deadline (cancelledDepositReleaseDeadline),
+          // stored on depositReleasedAt, and the event only claims "released" once that deadline
+          // has actually passed (effectiveDepositStatus) rather than assuming an instant release.
+          if (!existingDispute && b.status !== "cancelled" && b.status !== "rejected" && b.deposit === "released") {
+            events.push({ label: "Security deposit released", at: b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.end });
+          }
           if (b.status === "completed") events.push({ label: "Rental completed", at: b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.end });
-          if (b.status === "cancelled") events.push({ label: `Booking cancelled${b.cancelledById === b.renterId ? " by renter" : " by lender"}`, at: b.cancelledAt || b.createdAt });
+          if (b.status === "cancelled") {
+            events.push({ label: `Booking cancelled${b.cancelledById === b.renterId ? " by renter" : " by lender"}`, at: b.cancelledAt || b.createdAt });
+            if (!existingDispute && b.depositReleasedAt) {
+              const released = effectiveDepositStatus(b) === "released";
+              events.push({
+                label: released ? "Security deposit released (Demo)" : "Security deposit release scheduled (Demo)",
+                at: b.depositReleasedAt,
+              });
+            } else if (!existingDispute && b.deposit === "required") {
+              events.push({ label: "Deposit not charged — checkout was cancelled before payment", at: b.cancelledAt || b.createdAt });
+            }
+          }
           if (b.payment === "refunded") events.push({ label: "Payment refunded (Demo)", at: b.cancelledAt || b.createdAt });
           events.sort((x, y) => x.at.localeCompare(y.at));
           return events.map((event, index) => (
@@ -1225,7 +1297,7 @@ export default function RentalDetail() {
               <View style={styles.timelineDot} />
               <View style={{ flex: 1 }}>
                 <Text style={s.bold}>{event.label}</Text>
-                <Text style={s.caption}>{formatMalaysiaDateTime(event.at)}</Text>
+                <Text style={s.caption}>{crossState ? formatShortDate(malaysiaDateKey(event.at)) : formatMalaysiaDateTime(event.at)}</Text>
               </View>
             </View>
           ));

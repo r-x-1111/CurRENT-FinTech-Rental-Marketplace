@@ -9,6 +9,7 @@ import {
   availability,
   calculateCancellationCutoff,
   calculateDurationMinutes,
+  cancelledDepositReleaseDeadline,
   formatMalaysiaDateTime,
   getEffectiveBookingStatus,
   isCancellationEligible,
@@ -24,7 +25,8 @@ import {
 } from "./deposit";
 import { evaluateRentalOutcome, tierForScore } from "./riskScore";
 import { createSeed } from "../data/seed";
-import { addDaysToDateString, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "./delivery";
+import { addDaysToDateString, crossStateDeliveryEligibility, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "./delivery";
+import { estimatePostcodeDistance } from "./geo";
 
 export type Action =
   | { type: "login"; userId: string | null }
@@ -713,6 +715,22 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const courierReturn = !returnEstimate ? quoteAutomaticDomesticCourier({ ...courierParcel,
         pickupPostcode: action.deliveryPostcode, deliveryPostcode: listing.pickupPostcode }) : null;
       const isCourier = !outboundEstimate && !!courierOutbound;
+      // Explicit, user-facing cross-state eligibility check — backs up the listing-page warning
+      // so an unsupported cross-state booking can never be submitted directly, even bypassing the
+      // UI. Only applies when the postcodes actually resolve to different states; an in-state
+      // route that simply falls outside GrabExpress's pricing brackets still uses the generic
+      // "Delivery estimate unavailable" message below via the normal courier-quote fallback.
+      if (!outboundEstimate && !courierOutbound) {
+        const route = estimatePostcodeDistance(listing.pickupPostcode, action.deliveryPostcode);
+        if (route && route.pickup.state.toLowerCase() !== route.delivery.state.toLowerCase()) {
+          const eligibility = crossStateDeliveryEligibility(listing);
+          if (eligibility === "same_state_only") {
+            requireThat(false, "This item cannot be delivered across states due to its size, weight or shipping requirements. Please select a delivery address within the same state to continue.");
+          } else if (eligibility === "requires_review") {
+            requireThat(false, "This item is not currently available for cross-state delivery. Its shipping eligibility must be reviewed before a cross-state booking can proceed.");
+          }
+        }
+      }
       requireThat((outboundEstimate && returnEstimate) || (courierOutbound && courierReturn),
         "Delivery estimate unavailable. Check the pickup and delivery postcodes and route.");
       requireThat(!state.bookings.some((booking) => booking.id === action.id), "This checkout already exists.");
@@ -1035,13 +1053,12 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       booking.status = "cancelled";
       booking.cancelledAt = now;
       booking.cancelledById = user.id;
-      // The rental itself was never confirmed/charged, so any prepaid demo delivery fee is
-      // refunded (simulated) rather than left as a dangling paid record on an abandoned booking.
-      if (booking.deliveryDemo?.status === "paid_demo") {
-        booking.deliveryDemo.status = "refunded_demo";
-        booking.deliveryDemo.refundedAt = now;
-        booking.deliveryDemo.refundedAt = now;
-      }
+      // Delivery refunds are the delivery company's responsibility, not CurRENT's — a cancelled
+      // rental never by itself means GrabExpress/J&T Express has approved or completed a refund.
+      // A prepaid delivery fee here stays recorded as "paid_demo"; services/delivery.ts
+      // deriveDeliveryRefundStatus() reports it as refund-eligibility-pending for display (the
+      // outbound courier/vehicle was never dispatched, since the rental itself was never
+      // confirmed), not as an already-completed refund.
       break;
     }
 
@@ -1189,13 +1206,18 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       b.status = "cancelled";
       b.payment = "refunded";
-      b.deposit = "released";
+      // The deposit was genuinely held (this path requires payment === "paid"), so it releases
+      // within 5 Malaysia working days of this cancellation — never on the original scheduled
+      // rental end date. effectiveDepositStatus() reports "released" automatically once that
+      // deadline has actually passed.
+      b.deposit = "release_pending";
       b.cancelledAt = now;
       b.cancelledById = user.id;
+      b.depositReleasedAt = cancelledDepositReleaseDeadline(now);
       const actor = owner ? "lender" : "renter";
       notify(
         b.renterId,
-        `Booking for ${b.title} was cancelled by the ${actor}. The simulated ledger now records a full rental/service fee refund, deposit release, and RM0 cancellation fee. No real funds were moved.`,
+        `Booking for ${b.title} was cancelled by the ${actor}. The simulated ledger now records a full rental/service fee refund and RM0 cancellation fee; the deposit release is scheduled for ${formatMalaysiaDateTime(b.depositReleasedAt)} (5 working days from cancellation). No real funds were moved.`,
         b.id,
       );
       notify(

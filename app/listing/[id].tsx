@@ -49,13 +49,14 @@ import {
   toMalaysiaUtcTimestamp,
 } from "../../services/booking";
 import { colors, radius } from "../../constants/theme";
+import { bookingTypography } from "../../constants/bookingTypography";
 import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
 import { SuccessBurst } from "../../components/SuccessBurst";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
-import { resolvePostcodeCoordinate } from "../../services/geo";
-import { addDaysToDateString, deliveryRateDescription, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "../../services/delivery";
+import { estimatePostcodeDistance, resolvePostcodeCoordinate } from "../../services/geo";
+import { addDaysToDateString, crossStateDeliveryEligibility, deliveryRateDescription, DOMESTIC_COURIER_NAME, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, recommendDispatchDate } from "../../services/delivery";
 
 export const FIXED_DELIVERY_SLOTS = [
   { value: "10:00", label: "10:00 AM", shortLabel: "10 AM" },
@@ -140,11 +141,19 @@ export default function ListingDetailScreen() {
   // The billed rental duration/fees still use the pickup time for both ends of the 24-hour
   // cycle, exactly as before — selecting a return pickup time below never changes this.
   const returnTime = effectivePickupTime;
-  // Renter-selected courier collection time, independent of the delivery arrival time above.
-  // Purely a scheduling/display field (see services/booking.ts formatScheduledReturnPickup) —
-  // it never feeds into rental duration or fee calculations.
+  // Lock the time-slot pickers only once the delivery fee has actually been paid for this
+  // checkout — an in-progress, unpaid checkout record must not block the renter from still
+  // adjusting their pickup/return time before paying.
+  const deliveryTimeSlotsLocked = checkoutBooking?.deliveryDemo?.status === "paid_demo";
+  // Renter-selected courier collection time. This must always be the same clock hour as the
+  // delivery arrival time above — any other combination would visually suggest a rental period
+  // that isn't an exact 24-hour multiple, even though billing itself already ignores this field.
+  // Locking it here keeps what's shown consistent with what's actually charged.
   const [returnPickupTime, setReturnPickupTime] = useState(checkoutBooking?.returnPickupTime || "");
   const returnSlotUnavailable = (slot: string) => {
+    // Only the slot matching the delivery arrival time ever produces a valid 24-hour-multiple
+    // rental period; every other slot is disabled regardless of demo availability.
+    if (slot !== effectivePickupTime) return true;
     if (state.mode === "admin_demo" && listing && isDemoSeededListing(listing.id) && end &&
       !demoSlotAvailable(listing.id, end, slot)) return true;
     // Same-day rental: the courier can't collect before the item has even arrived.
@@ -155,6 +164,20 @@ export default function ListingDetailScreen() {
     returnPickupTime && availableSlots.some((s) => s.value === returnPickupTime) && !returnSlotUnavailable(returnPickupTime)
       ? returnPickupTime
       : "";
+  // Keep the return pickup selection in lock-step with the delivery arrival time: auto-select
+  // the one valid matching slot, and clear a previous selection the instant it stops matching
+  // (e.g. the renter changes the arrival time or the rental dates).
+  useEffect(() => {
+    if (deliveryTimeSlotsLocked) return;
+    if (!effectivePickupTime) return;
+    if (returnPickupTime === effectivePickupTime) return;
+    if (!returnSlotUnavailable(effectivePickupTime)) {
+      setReturnPickupTime(effectivePickupTime);
+    } else if (returnPickupTime) {
+      setReturnPickupTime("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectivePickupTime, start, end, deliveryTimeSlotsLocked]);
   // Domestic Courier (Demo) scheduling — used instead of the hourly slots above when the
   // resolved delivery method is the cross-state courier, not GrabExpress. The renter never
   // types these dates: CurRENT recommends the outbound dispatch date and the return dispatch
@@ -260,6 +283,12 @@ export default function ListingDetailScreen() {
   const onDeliveryNotesChange = markAddressEdited(setDeliveryNotes);
 
   const { width } = useWindowDimensions();
+  // Shared booking-interface typography scale (see constants/bookingTypography.ts): main section
+  // headings, subheadings and the final total step down one size on mobile widths.
+  const typeMobile = width < 768;
+  const sectionHeadingStyle = bookingTypography.sectionHeading(typeMobile);
+  const subheadingStyle = bookingTypography.subheading(typeMobile);
+  const totalAmountStyle = bookingTypography.totalAmount(typeMobile);
 
   if (
     !listing ||
@@ -294,6 +323,14 @@ export default function ListingDetailScreen() {
     ? quoteAutomaticDomesticCourier({ ...courierParcel, pickupPostcode: postcode, deliveryPostcode: listing.pickupPostcode })
     : null;
   const isCourierDelivery = !deliveryEstimate && !!courierEstimate;
+  // Cross-state detection compares the pickup and delivery postcodes' actual recorded states —
+  // independent of whether GrabExpress's limited pricing brackets happen to cover the route — so
+  // a renter entering an out-of-state address sees the right reason immediately, even before a
+  // courier quote is attempted.
+  const deliveryRoute = deliveryLocalityIsComplete() ? estimatePostcodeDistance(listing.pickupPostcode, postcode) : null;
+  const isActuallyCrossState = !!deliveryRoute && deliveryRoute.pickup.state.toLowerCase() !== deliveryRoute.delivery.state.toLowerCase();
+  const listingCrossStateEligibility = crossStateDeliveryEligibility(listing);
+  const crossStateBlocked = isActuallyCrossState && listingCrossStateEligibility !== "available";
   const twoWayDeliveryFee = deliveryEstimate && returnDeliveryEstimate
     ? Math.round((deliveryEstimate.fee + returnDeliveryEstimate.fee) * 100) / 100
     : courierEstimate && returnCourierEstimate
@@ -301,7 +338,7 @@ export default function ListingDetailScreen() {
     : null;
   // J&T Express's own published Peninsular Malaysia estimate; East Malaysia has no equivalent
   // published reference this demo can cite, so hasEstimate is false there (see
-  // hasReliableCourierTransitEstimate) and the UI shows "To Be Confirmed" instead.
+  // hasReliableCourierTransitEstimate) and the UI shows "Pending Update" instead.
   const hasCourierEstimate = courierEstimate ? hasReliableCourierTransitEstimate(courierEstimate.zone) : false;
   const courierTransit = hasCourierEstimate ? estimatedCourierTransitDays(courierEstimate!.zone) : null;
   // CurRENT recommends this automatically — the renter never schedules the lender's courier
@@ -327,10 +364,6 @@ export default function ListingDetailScreen() {
     : !resolvePostcodeCoordinate(postcode)
     ? { message: "Postcode not recognised. Please verify your postcode or select your locality.", action: "" }
     : { message: "Special Delivery Quotation Required for this route or parcel — it exceeds the local vehicle and standard courier parcel limits.", action: "View Delivery Details" };
-  // Lock the time-slot pickers only once the delivery fee has actually been paid for this
-  // checkout — an in-progress, unpaid checkout record must not block the renter from still
-  // adjusting their pickup/return time before paying.
-  const deliveryTimeSlotsLocked = checkoutBooking?.deliveryDemo?.status === "paid_demo";
   // Only re-require a delivery payment when the renter's delivery POSTCODE actually changed
   // from the one the paid delivery checkout was calculated and charged against — compared
   // directly against the booking's own stored postcode, not a freshly recomputed distance
@@ -713,9 +746,27 @@ export default function ListingDetailScreen() {
             </Text>
           </View>
 
-          <Text style={[s.body, { marginVertical: 20 }]}>
+          <Text style={[s.body, { marginTop: 20, marginBottom: 8 }]}>
             {listing.description}
           </Text>
+          <View style={{ marginBottom: 20 }}>
+            <Badge
+              text={
+                listingCrossStateEligibility === "available"
+                  ? "Cross-State Delivery Available"
+                  : listingCrossStateEligibility === "same_state_only"
+                    ? "Same-State Delivery Only"
+                    : "Cross-State Delivery Subject to Approval"
+              }
+              tone={
+                listingCrossStateEligibility === "available"
+                  ? "green"
+                  : listingCrossStateEligibility === "same_state_only"
+                    ? "amber"
+                    : "blue"
+              }
+            />
+          </View>
 
           {/* Owner info card */}
           <Card>
@@ -800,9 +851,9 @@ export default function ListingDetailScreen() {
             {/* Header: Price */}
             <View style={styles.bookingCardHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={s.title}>
+                <Text style={bookingTypography.dailyPrice(typeMobile)}>
                   {money(listing.dailyPrice)}
-                  <Text style={s.caption}> / day</Text>
+                  <Text style={bookingTypography.note}> / day</Text>
                 </Text>
               </View>
               <Badge
@@ -1086,27 +1137,44 @@ export default function ListingDetailScreen() {
             <View style={styles.arrangementSection}>
               <View style={styles.arrangementHeaderRow}>
                 <Ionicons name="time-outline" size={16} color={colors.navy} />
-                <Text style={styles.arrangementTitle}>
+                <Text style={sectionHeadingStyle}>
                   Delivery & Return Arrangement
                 </Text>
               </View>
 
-              {isCourierDelivery ? (
+              {crossStateBlocked ? (
+                <View style={styles.crossStateWarningBox}>
+                  <Ionicons name="information-circle-outline" size={16} color={colors.navy} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.crossStateWarningTitle}>
+                      {listingCrossStateEligibility === "same_state_only" ? "Cross-State Delivery Unavailable" : "Cross-State Delivery Requires Approval"}
+                    </Text>
+                    <Text style={styles.crossStateWarningText}>
+                      {listingCrossStateEligibility === "same_state_only"
+                        ? "This item cannot be delivered across states due to its size, weight or shipping requirements. Please select a delivery address within the same state to continue."
+                        : "This item is not currently available for cross-state delivery. Its shipping eligibility must be reviewed before a cross-state booking can proceed."}
+                    </Text>
+                  </View>
+                </View>
+              ) : isCourierDelivery ? (
                 !dispatchDateFeasible ? (
                   <View style={{ marginTop: 8 }}>
-                    <Text style={styles.slotSectionTitle}>Selected Rental Dates Unavailable for Courier Delivery</Text>
+                    <Text style={subheadingStyle}>Selected Rental Dates Unavailable for Courier Delivery</Text>
                     <Text style={styles.slotSectionDescription}>
                       Your selected rental start date does not allow sufficient estimated shipping time. Please choose a later rental date.
                     </Text>
                   </View>
                 ) : (
                   <>
+                    <Text style={styles.slotSectionDescription}>
+                      Cross-state courier delivery and return dates are subject to transit conditions and courier availability. Exact arrival and pickup times cannot be guaranteed.
+                    </Text>
                     {/* Outbound Shipping — CurRENT recommends the dispatch date automatically; the
                         renter never schedules the lender's courier pickup directly. The lender
                         confirms (or proposes an alternate) via Confirm Outbound Dispatch
                         Arrangement on their Rental Details screen once the booking is paid. */}
                     <View style={{ marginTop: 8 }}>
-                      <Text style={styles.slotSectionTitle}>Planned Dispatch Date</Text>
+                      <Text style={subheadingStyle}>Preferred Delivery Date</Text>
                       <Text style={styles.slotSectionDescription}>
                         Automatically recommended by CurRENT.
                       </Text>
@@ -1125,7 +1193,7 @@ export default function ListingDetailScreen() {
                           : "Awaiting Lender Confirmation"}
                       </Text>
                       <Text style={styles.fieldSubtext}>
-                        Estimated Arrival: {estimatedDeliveryRange ? `${estimatedDeliveryRange.start} – ${estimatedDeliveryRange.end}` : "To Be Confirmed"}
+                        Estimated Arrival: {estimatedDeliveryRange ? `${estimatedDeliveryRange.start} – ${estimatedDeliveryRange.end}` : "Pending Update"}
                       </Text>
                     </View>
 
@@ -1134,7 +1202,7 @@ export default function ListingDetailScreen() {
                         courier branch drop-off, not a scheduled pickup — the renter never
                         arranges courier collection. */}
                     <View style={{ marginTop: 8 }}>
-                      <Text style={styles.slotSectionTitle}>Return Drop-off Date</Text>
+                      <Text style={subheadingStyle}>Planned Return Date</Text>
                       <Text style={styles.slotSectionDescription}>
                         Automatically suggested using your rental end date.
                       </Text>
@@ -1161,7 +1229,7 @@ export default function ListingDetailScreen() {
                         Please securely package the item and drop it off at an eligible courier branch by the agreed return deadline.
                       </Text>
                       <Text style={styles.fieldSubtext}>
-                        Estimated Return Arrival: {estimatedReturnRange ? `${estimatedReturnRange.start} – ${estimatedReturnRange.end}` : "To Be Confirmed"}
+                        Estimated Return Arrival: {estimatedReturnRange ? `${estimatedReturnRange.start} – ${estimatedReturnRange.end}` : "Pending Update"}
                       </Text>
                       <Text style={styles.fieldSubtext}>
                         Demo scheduling based on published courier transit estimates. Dates are provisional and are not confirmed J&T Express bookings or tracking information.
@@ -1173,9 +1241,9 @@ export default function ListingDetailScreen() {
                 <>
                   {/* Scheduled Delivery Time Slots */}
                   <View style={{ marginTop: 8 }}>
-                    <Text style={styles.slotSectionTitle}>Scheduled Delivery Arrival Time</Text>
+                    <Text style={subheadingStyle}>Scheduled Delivery Arrival Time</Text>
                     <Text style={styles.slotSectionDescription}>
-                      Select the time when the item should arrive at your delivery address.
+                      Select your preferred time for the item to arrive at your delivery address. This is a preferred time, not a guaranteed courier appointment.
                     </Text>
                     <Text style={styles.slotListLabel}>Available delivery time slots</Text>
                     <View style={styles.timeSlotsRow}>
@@ -1213,9 +1281,9 @@ export default function ListingDetailScreen() {
                   {/* Scheduled Return Pickup Time — selected independently of the delivery arrival
                       time above; never changes the rental's billed duration or dates. */}
                   <View style={{ marginTop: 8 }}>
-                    <Text style={styles.slotSectionTitle}>Scheduled Return Pickup Time</Text>
+                    <Text style={subheadingStyle}>Scheduled Return Pickup Time</Text>
                     <Text style={styles.slotSectionDescription}>
-                      Select when the courier should collect the item from your address and return it to the owner.
+                      Select your preferred time for the courier to collect the item from your address and return it to the owner. This is a preferred time, not a guaranteed courier appointment.
                     </Text>
                     <Text style={styles.slotListLabel}>Available return pickup time slots</Text>
                     <View style={styles.timeSlotsRow}>
@@ -1253,7 +1321,11 @@ export default function ListingDetailScreen() {
                 </>
               )}
 
-              {!!(effectivePickupTime && effectiveReturnPickupTime && start && end) && (
+              {/* Cross-state courier bookings never had a renter-selected hour to show here —
+                  effectivePickupTime silently defaults to a fallback slot even when no GrabExpress
+                  time slot was ever rendered, which used to display a fabricated hour (e.g.
+                  "11 AM") on a route where only a date, never a time, was ever agreed. */}
+              {!isCourierDelivery && !!(effectivePickupTime && effectiveReturnPickupTime && start && end) && (
                 <View style={styles.returnTimeCard}>
                   <Text style={styles.returnTimeLabel}>Delivery & Return Schedule</Text>
                   <View style={styles.returnTimeRow}>
@@ -1270,7 +1342,7 @@ export default function ListingDetailScreen() {
               {/* Collection: Delivery Only (fixed per V3.23 Section 7) */}
               <View style={{ marginTop: 8 }}>
                 <View style={styles.fieldLabelRow}>
-                  <Text style={styles.fieldLabel}>Fulfilment</Text>
+                  <Text style={sectionHeadingStyle}>Fulfilment</Text>
                 </View>
                 <View style={styles.deliveryOnlyPill}>
                   <Ionicons name="car-outline" size={14} color={colors.blue} />
@@ -1283,7 +1355,7 @@ export default function ListingDetailScreen() {
             <View style={styles.deliveryAddressSection} onLayout={(e) => setAddressSectionY(e.nativeEvent.layout.y)}>
               <View style={styles.arrangementHeaderRow}>
                 <Ionicons name="location-outline" size={15} color={colors.navy} />
-                <Text style={styles.arrangementTitle}>Address</Text>
+                <Text style={sectionHeadingStyle}>Address</Text>
               </View>
 
               {demoSavedAddresses.length > 0 && (
@@ -1463,9 +1535,9 @@ export default function ListingDetailScreen() {
               <View style={[styles.insuranceCard, insuranceSelected && styles.insuranceCardSelected]}>
                 <View style={styles.insuranceHeaderRow}>
                   <Ionicons name="shield-checkmark-outline" size={18} color={colors.blue} />
-                  <Text style={styles.insuranceTitle}>Rental Protection (Optional)</Text>
+                  <Text style={sectionHeadingStyle}>Rental Protection (Optional · Demo)</Text>
                 </View>
-                <Text style={styles.insuranceDescription}>Add optional protection for eligible accidental damage during your rental.</Text>
+                <Text style={styles.insuranceDescription}>Optional protection for eligible accidental damage. Demo only — no actual insurance policy is issued.</Text>
                 <Pressable
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: insuranceSelected }}
@@ -1495,6 +1567,7 @@ export default function ListingDetailScreen() {
                 <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
                   <ScrollView contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
                   <Text style={s.h2}>Rental Protection (Demo)</Text>
+                  <Text style={styles.insuranceDescription}>Optional insurance is proposed for eligible accidental damage while the item is in your possession. A third-party insurer would provide the coverage, assess claims and pay approved compensation — CurRENT only facilitates the service.</Text>
                   {!!quote && (() => {
                     const replacementValue = listing.estimatedValue || 0;
                     const protectionFee = calculateProtectionFee(quote.rentalFee);
@@ -1502,6 +1575,7 @@ export default function ListingDetailScreen() {
                     const needsReview = requiresProtectionEligibilityReview(replacementValue);
                     return (
                       <>
+                        <Text style={[s.body, { marginTop: 8, fontWeight: "700" }]}>Protection Fee</Text>
                         <View style={styles.summaryRow}>
                           <Text style={styles.summaryLabel}>Total Rental Fee</Text>
                           <Text style={styles.summaryValue}>{money(quote.rentalFee)}</Text>
@@ -1510,10 +1584,13 @@ export default function ListingDetailScreen() {
                           <Text style={styles.summaryLabel}>Protection Rate</Text>
                           <Text style={styles.summaryValue}>5%</Text>
                         </View>
-                        <Text style={[s.body, { marginTop: 10, fontWeight: "700" }]}>
-                          Protection Fee: {money(quote.rentalFee)} × 5% = {money(protectionFee)}
-                        </Text>
-                        <View style={[styles.summaryRow, { marginTop: 10 }]}>
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Premium</Text>
+                          <Text style={styles.summaryValue}>{money(protectionFee)}</Text>
+                        </View>
+
+                        <Text style={[s.body, { marginTop: 8, fontWeight: "700" }]}>Proposed Coverage Limit</Text>
+                        <View style={styles.summaryRow}>
                           <Text style={styles.summaryLabel}>Item Replacement Value</Text>
                           <Text style={styles.summaryValue}>{money(replacementValue)}</Text>
                         </View>
@@ -1526,27 +1603,22 @@ export default function ListingDetailScreen() {
                           <Text style={styles.summaryValue}>{money(RENTAL_PROTECTION_LIMIT_CAP)}</Text>
                         </View>
                         {needsReview && (
-                          <Text style={[s.caption, { color: colors.danger, marginTop: 4 }]}>
-                            This item's replacement value exceeds the proposed RM{RENTAL_PROTECTION_LIMIT_CAP.toLocaleString()} maximum and is flagged for manual protection eligibility review.
+                          <Text style={[s.caption, { color: colors.danger, marginTop: 2 }]}>
+                            This item's replacement value exceeds the proposed maximum and is flagged for manual eligibility review.
                           </Text>
                         )}
-                        <Text style={s.caption}>
-                          The protection fee is calculated from the total rental fee. Rental duration is already reflected in that fee, so there's no minimum charge and no seven-day billing period.
-                        </Text>
+                        <Text style={s.caption}>These are proposed maximum exposures, not guaranteed payouts.</Text>
                       </>
                     );
                   })()}
-                  <Text style={[s.body, { marginTop: 10, fontWeight: "700" }]}>
-                    Proposed Protection Limit: Up to RM{RENTAL_PROTECTION_LIMIT_CAP.toLocaleString()} (Demo)
-                  </Text>
-                  <Text style={s.body}>
-                    The proposed coverage limit is based on the item's replacement value, subject to the RM{RENTAL_PROTECTION_LIMIT_CAP.toLocaleString()} maximum and eligibility review. This is a proposed maximum exposure, not an automatically guaranteed payout.
-                  </Text>
-                  <Text style={s.body}>
-                    The protection fee is non-refundable once the applicable protected rental has begun, subject to the demonstrated cancellation terms. Your refundable security deposit remains separate from the protection fee.
-                  </Text>
+
+                  <Text style={[s.body, { marginTop: 8, fontWeight: "700" }]}>Important Information</Text>
                   <Text style={s.caption}>
-                    This is a demonstration rental damage-protection model, not an issued insurance policy. The pricing is informed by published rental protection services, while the proposed RM{RENTAL_PROTECTION_LIMIT_CAP.toLocaleString()} limit is based on an industry example. Actual coverage, eligibility, claims and pricing require agreement with a licensed insurance provider or an appropriately established protection programme.
+                    Your refundable security deposit is separate from this premium. Delivery damage is handled through the applicable delivery company's own compensation process. See the FAQ for full terms, exclusions and claim details.
+                  </Text>
+
+                  <Text style={[s.caption, { marginTop: 4 }]}>
+                    Demo only — no real insurance policy or insurer partnership exists. The premium and coverage limits shown are demonstration assumptions.
                   </Text>
                   <Button secondary onPress={() => setShowInsuranceDetails(false)}>Close</Button>
                   </ScrollView>
@@ -1577,9 +1649,9 @@ export default function ListingDetailScreen() {
                 ? totals.grandTotal : totals.subtotal;
               return (
                 <View style={styles.summaryContainer}>
-                  <Text style={styles.summaryTitle}>Booking Summary</Text>
+                  <Text style={[sectionHeadingStyle, { marginBottom: 10 }]}>Booking Summary</Text>
 
-                  <Text style={styles.summarySectionLabel}>Paid to CurRENT</Text>
+                  <Text style={[bookingTypography.smallLabel, styles.summarySectionLabel]}>Paid to CurRENT</Text>
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>
                       Rental fee · {quote.days}{" "}
@@ -1623,10 +1695,15 @@ export default function ListingDetailScreen() {
                   </View>
 
                   <View style={styles.summaryDivider} />
-                  <Text style={styles.summarySectionLabel}>
+                  <Text style={[bookingTypography.smallLabel, styles.summarySectionLabel]}>
                     {isCourierDelivery ? "Domestic Courier (Demo)" : "Delivery · GrabExpress (Demo)"}
                   </Text>
-                  {hasAddress ? (
+                  {crossStateBlocked ? (
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Delivery fee</Text>
+                      <Text style={[styles.summaryValue, { color: colors.danger }]}>Cross-State Delivery Unavailable</Text>
+                    </View>
+                  ) : hasAddress ? (
                     <>
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>
@@ -1709,8 +1786,8 @@ export default function ListingDetailScreen() {
 
                   <View style={styles.summaryDivider} />
                   <View style={styles.summaryRowTotal}>
-                    <Text style={styles.summaryTotalLabel}>{totalLabel}</Text>
-                    <Text style={styles.summaryTotalValue}>{money(totalValue)}</Text>
+                    <Text style={subheadingStyle}>{totalLabel}</Text>
+                    <Text style={totalAmountStyle}>{money(totalValue)}</Text>
                   </View>
                   <Text style={styles.depositNote}>
                     {!renterRisk?.canDirectBook
@@ -1734,12 +1811,12 @@ export default function ListingDetailScreen() {
               <View style={styles.checkoutPanel}>
                 <View style={styles.deliveryHeaderRow}>
                   <Ionicons name={isCourierDelivery ? "cube-outline" : "bicycle-outline"} size={16} color={colors.navy} />
-                  <Text style={styles.checkoutTitle}>{isCourierDelivery ? "Domestic Courier (Demo)" : "GrabExpress Delivery (Demo)"}</Text>
+                  <Text style={sectionHeadingStyle}>{isCourierDelivery ? "Domestic Courier (Demo)" : "GrabExpress Delivery (Demo)"}</Text>
                 </View>
                 <Row label="Delivery payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Demo Payment Completed" : deliveryDetailsChanged ? "New calculation and payment required" : "Awaiting Payment"} />
                 {checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged
                   ? <Button secondary onPress={() => router.push(`/delivery-demo/${checkoutBooking.id}` as never)}>View Receipt</Button>
-                  : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() ||
+                  : <Button disabled={isPaying || !user || !deliveryAddressIsComplete() || crossStateBlocked ||
                       !((deliveryEstimate && returnDeliveryEstimate && effectiveReturnPickupTime) ||
                         (courierEstimate && returnCourierEstimate && returnDispatchDate && dispatchDateFeasible)) ||
                       !!checkoutBooking} onPress={() => void handleDeliveryDemo()}>
@@ -1767,7 +1844,7 @@ export default function ListingDetailScreen() {
               <>
                 <Notice text="Demo payment only. No real funds or banking credentials are collected." />
                 <View style={styles.checkoutPanel}>
-                  <Text style={styles.checkoutTitle}>CurRENT Rental Payment</Text>
+                  <Text style={sectionHeadingStyle}>CurRENT Rental Payment</Text>
                   <View style={styles.paymentMethodRow}>
                     <Pressable
                       accessibilityRole="button"
@@ -1849,6 +1926,7 @@ export default function ListingDetailScreen() {
                       !start ||
                       !end ||
                       !!dateError ||
+                      crossStateBlocked ||
                       checkoutBooking?.deliveryDemo?.status !== "paid_demo" ||
                       deliveryDetailsChanged ||
                       listing.ownerId === user?.id
@@ -2157,7 +2235,7 @@ const styles = StyleSheet.create({
     borderColor: PANEL_SECTION_BORDER,
     borderRadius: PANEL_SECTION_RADIUS,
     padding: 16,
-    marginTop: 12,
+    marginTop: 20,
     gap: 8,
   },
   arrangementHeaderRow: {
@@ -2168,48 +2246,32 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     paddingBottom: 6,
   },
-  arrangementTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.navy,
-  },
+  // arrangementTitle unused directly — "Delivery & Return Arrangement" / "Address" now render
+  // with the shared sectionHeadingStyle.
   fieldLabelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 4,
   },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.navy,
-  },
+  // fieldLabel unused directly — "Fulfilment" now renders with the shared sectionHeadingStyle.
   fieldSubtext: {
     fontSize: 10,
     color: colors.muted,
   },
-  slotSectionTitle: {
-    alignSelf: "stretch",
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.navy,
-    flexShrink: 1,
-  },
+  // slotSectionTitle unused directly — section subheadings ("Scheduled Delivery Arrival Time",
+  // "Scheduled Return Pickup Time") now render with the shared subheadingStyle.
   slotSectionDescription: {
     alignSelf: "stretch",
-    marginTop: 8,
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.muted,
+    marginTop: 6,
     flexShrink: 1,
+    ...bookingTypography.description,
   },
   slotListLabel: {
     alignSelf: "stretch",
     marginTop: 10,
     marginBottom: 8,
-    fontSize: 11,
-    fontWeight: "600",
-    color: colors.navy,
+    ...bookingTypography.fieldLabel,
   },
   timeSlotsRow: {
     flexDirection: "row",
@@ -2229,11 +2291,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.blue,
     borderColor: colors.blue,
   },
-  timeSlotText: {
-    fontSize: 11,
-    color: colors.navy,
-    fontWeight: "600",
-  },
+  timeSlotText: { ...bookingTypography.timeSlotButton },
   timeSlotTextSelected: {
     color: "white",
     fontWeight: "700",
@@ -2245,6 +2303,19 @@ const styles = StyleSheet.create({
     marginTop: 12,
     alignItems: "center",
   },
+  crossStateWarningBox: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: colors.paleBlue,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    alignItems: "flex-start",
+  },
+  crossStateWarningTitle: { fontSize: 13, fontWeight: "700", color: colors.navy, marginBottom: 2 },
+  crossStateWarningText: { fontSize: 12, lineHeight: 17, color: colors.navy },
   cancellationNoticeText: {
     flex: 1,
     fontSize: 12,
@@ -2257,7 +2328,7 @@ const styles = StyleSheet.create({
     borderColor: PANEL_SECTION_BORDER,
     borderRadius: PANEL_SECTION_RADIUS,
     padding: 16,
-    marginTop: 12,
+    marginTop: 20,
     gap: 6,
   },
   insuranceCardSelected: {
@@ -2265,8 +2336,9 @@ const styles = StyleSheet.create({
     borderColor: colors.blue,
   },
   insuranceHeaderRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  insuranceTitle: { fontSize: 14, fontWeight: "800", color: colors.navy },
-  insuranceDescription: { fontSize: 11, color: colors.muted, lineHeight: 15 },
+  // insuranceTitle unused directly — "Rental Protection (Optional · Demo)" now renders with the
+  // shared sectionHeadingStyle so it matches every other main section heading.
+  insuranceDescription: { ...bookingTypography.description, lineHeight: 20 },
   insuranceRow: { flexDirection: "row", alignItems: "center", gap: 9, marginTop: 4 },
   checkbox: {
     width: 20,
@@ -2279,9 +2351,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checkboxChecked: { backgroundColor: colors.blue, borderColor: colors.blue },
-  insuranceCheckboxLabel: { flex: 1, fontSize: 12, fontWeight: "600", color: colors.navy },
-  insurancePremium: { fontSize: 13, fontWeight: "800", color: colors.navy },
-  insuranceLink: { fontSize: 11, fontWeight: "700", color: colors.blue, marginTop: 2 },
+  insuranceCheckboxLabel: { flex: 1, ...bookingTypography.fieldLabel },
+  insurancePremium: { ...bookingTypography.pricingValue },
+  insuranceLink: { fontSize: 13, fontWeight: "700", color: bookingTypography.action.color, marginTop: 2 },
   insuranceModalCard: {
     backgroundColor: colors.white,
     borderRadius: 16,
@@ -2298,49 +2370,33 @@ const styles = StyleSheet.create({
     borderColor: PANEL_SUMMARY_BORDER,
     borderRadius: PANEL_SECTION_RADIUS,
     padding: 16,
-    marginTop: 12,
+    marginTop: 20,
   },
-  summaryTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.navy,
-    marginBottom: 8,
-  },
+  // summaryTitle unused directly — "Booking Summary" now renders with the shared
+  // sectionHeadingStyle (kept the marginBottom via an inline style on that Text).
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 3,
+    paddingVertical: 5,
   },
-  summaryLabel: {
-    fontSize: 12,
-    color: colors.navy,
-  },
+  summaryLabel: { fontSize: 13, fontWeight: "400", color: bookingTypography.description.color },
   summarySectionLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.slate,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
+    // Font size/weight/colour come from the shared subheading style (see sectionHeadingStyle /
+    // subheadingStyle above); this entry only adds the extra vertical spacing.
     marginTop: 4,
     marginBottom: 2,
   },
   summaryLinkText: {
-    fontSize: 11,
-    color: colors.blue,
+    fontSize: 13,
+    color: bookingTypography.action.color,
     fontWeight: "600",
     marginTop: 2,
     marginBottom: 2,
   },
-  summaryValue: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.navy,
-  },
+  summaryValue: { ...bookingTypography.pricingValue },
   depositNote: {
-    fontSize: 11,
-    color: colors.slate,
-    lineHeight: 15,
+    ...bookingTypography.note,
     marginTop: 4,
     marginBottom: 6,
   },
@@ -2355,16 +2411,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 2,
   },
-  summaryTotalLabel: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.navy,
-  },
-  summaryTotalValue: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: colors.blue,
-  },
+  // summaryTotalLabel / summaryTotalValue unused directly — "Total for this rental" now renders
+  // with the shared subheadingStyle (label) and totalAmountStyle (value).
   reviewApplicationCard: {
     backgroundColor: colors.paleBlue,
     borderWidth: 1,
@@ -2408,7 +2456,7 @@ const styles = StyleSheet.create({
     borderColor: PANEL_SECTION_BORDER,
     borderRadius: PANEL_SECTION_RADIUS,
     padding: 16,
-    marginTop: 12,
+    marginTop: 20,
     gap: 10,
   },
   deliveryInputs: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
@@ -2438,11 +2486,8 @@ const styles = StyleSheet.create({
   deliveryToggleText: { fontSize: 12, fontWeight: "700", color: colors.blue },
   deliveryDetails: { gap: 8, paddingTop: 2 },
   deliveryDetailLabel: { fontSize: 11, fontWeight: "600", color: colors.navy },
-  checkoutTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: colors.navy,
-  },
+  // checkoutTitle unused directly — "GrabExpress Delivery (Demo)" / "CurRENT Rental Payment" now
+  // render with the shared sectionHeadingStyle.
   paymentMethodRow: {
     flexDirection: "row",
     gap: 8,
@@ -2517,7 +2562,7 @@ const styles = StyleSheet.create({
     borderColor: PANEL_SECTION_BORDER,
     borderRadius: PANEL_SECTION_RADIUS,
     padding: 16,
-    marginTop: 12,
+    marginTop: 20,
     gap: 4,
   },
   deliveryAddressSubtext: {
@@ -2530,10 +2575,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   inputLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: colors.navy,
-    marginBottom: 2,
+    ...bookingTypography.fieldLabel,
+    marginBottom: 4,
   },
   addressInput: {
     backgroundColor: "white",

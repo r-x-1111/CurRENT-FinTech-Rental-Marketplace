@@ -176,6 +176,92 @@ export function rentalDays(start: string, end: string) {
   return days;
 }
 
+/**
+ * Renters pick any available start date and time, but the rental end must land on an exact
+ * 24-hour multiple of that start (24h, 48h, 72h, ...), not merely round up to one. The booking
+ * UI already enforces this by locking the return clock time to the selected start clock time
+ * (see `effectivePickupTime`/`returnTime` in app/listing/[id].tsx), so this is a defence-in-depth
+ * guard at the actual booking-creation boundary — not a replacement for `rentalDays`, which keeps
+ * its existing ceil-to-next-day rounding for display and for already-recorded historical data.
+ */
+export function assertExact24HourRentalPeriod(start: string, end: string) {
+  const startTime = parseTimestamp(start);
+  const endTime = parseTimestamp(end);
+  const diffMinutes = (endTime - startTime) / 60000;
+  if (diffMinutes <= 0 || diffMinutes % 1440 !== 0) {
+    throw new Error(
+      "Rental periods must be booked in complete 24-hour blocks from your selected start time (24, 48, 72 hours, and so on).",
+    );
+  }
+}
+
+/**
+ * Best-effort Malaysia public holiday calendar for the demo period (2026), used only to skip
+ * non-working days when computing the cancelled-deposit release deadline below. Fixed-date
+ * national holidays are exact; the moon-based ones (Chinese New Year, Hari Raya, Wesak, Deepavali,
+ * Awal Muharram, Maulidur Rasul) are reasonable estimates for 2026, not an authoritative/legal
+ * source — fine for this classroom demo, not for real compliance use.
+ */
+export const MALAYSIA_PUBLIC_HOLIDAYS_2026 = new Set([
+  "2026-01-01", // New Year's Day
+  "2026-02-17", // Chinese New Year (day 1)
+  "2026-02-18", // Chinese New Year (day 2)
+  "2026-03-20", // Hari Raya Aidilfitri (day 1, estimated)
+  "2026-03-21", // Hari Raya Aidilfitri (day 2, estimated)
+  "2026-05-01", // Labour Day
+  "2026-05-27", // Hari Raya Haji (estimated)
+  "2026-05-31", // Wesak Day (estimated)
+  "2026-06-16", // Awal Muharram (estimated)
+  "2026-08-26", // Maulidur Rasul (estimated)
+  "2026-08-31", // Merdeka Day
+  "2026-09-16", // Malaysia Day
+  "2026-11-08", // Deepavali (estimated)
+  "2026-12-25", // Christmas Day
+]);
+
+function isMalaysiaWorkingDay(dateKey: string): boolean {
+  const weekday = new Date(`${dateKey}T00:00:00Z`).getUTCDay(); // 0 = Sun, 6 = Sat
+  return weekday !== 0 && weekday !== 6 && !MALAYSIA_PUBLIC_HOLIDAYS_2026.has(dateKey);
+}
+
+/**
+ * Adds `workingDays` Malaysia working days (skipping Saturdays, Sundays and the holidays above)
+ * to a timestamp, keeping the same time-of-day. Used to compute the deposit release deadline for
+ * a cancelled booking — never the originally scheduled rental end date.
+ */
+export function addMalaysiaWorkingDays(timestamp: string, workingDays: number): string {
+  let cursor = parseTimestamp(timestamp);
+  let remaining = workingDays;
+  while (remaining > 0) {
+    cursor += 86400000;
+    if (isMalaysiaWorkingDay(malaysiaDateKey(cursor))) remaining -= 1;
+  }
+  return new Date(cursor).toISOString();
+}
+
+/** A cancelled booking's refundable deposit releases within 5 Malaysia working days of
+ * cancellation approval — never calculated from the original scheduled rental end date. */
+export function cancelledDepositReleaseDeadline(cancelledAt: string): string {
+  return addMalaysiaWorkingDays(cancelledAt, 5);
+}
+
+/**
+ * The deposit status actually in effect right now for a cancelled booking: once the computed
+ * release deadline has passed, a "release_pending" deposit is treated as released even though the
+ * stored enum value was set at cancellation time (this demo has no background job to flip it).
+ * Non-cancellation deposit states (held, disputed, required, already released) pass through.
+ */
+export function effectiveDepositStatus(
+  booking: { deposit: Booking["deposit"]; depositReleasedAt?: string | null },
+  now: number = Date.now(),
+): Booking["deposit"] {
+  if (booking.deposit === "release_pending" && booking.depositReleasedAt &&
+    now >= parseTimestamp(booking.depositReleasedAt)) {
+    return "released";
+  }
+  return booking.deposit;
+}
+
 export function riskFor(state: Marketplace, profile: Profile) {
   if (profile.verification !== "verified") {
     return {
@@ -331,6 +417,7 @@ export function availability(
   exceptId?: string,
 ) {
   rentalDays(start, end);
+  assertExact24HourRentalPeriod(start, end);
   if (malaysiaDateKey(start) > LAST_BOOKABLE_DATE || malaysiaDateKey(end) > LAST_BOOKABLE_DATE)
     throw new Error("Bookings must end by 31 December 2026.");
   if (start < dateAfter())

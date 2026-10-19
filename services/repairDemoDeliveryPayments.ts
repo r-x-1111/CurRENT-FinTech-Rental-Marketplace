@@ -45,6 +45,12 @@ export function repairDemoDeliveryPayments(source: Marketplace): Marketplace {
     const fee = roundMoney((outbound?.fee ?? fallbackOutbound!.fee) + (inbound?.fee ?? fallbackInbound!.fee));
 
     const previous = booking.deliveryDemo;
+    // A cancelled booking whose delivery fee was genuinely never paid (the fixture explicitly
+    // records status "required", e.g. an unfinished/unresolved courier arrangement) must stay
+    // that way — the rental payment being refunded is not evidence that a delivery fee was ever
+    // collected, let alone refunded. Regenerating a "paid" receipt here would invent a payment
+    // (and, previously, a delivery refund) that never happened.
+    if (previous?.status === "required" && (booking.status === "cancelled" || booking.status === "rejected")) continue;
     const hasValidPaidRecord = previous && previous.status !== "required" &&
       previous.outboundFee != null && previous.returnFee != null &&
       roundMoney(previous.outboundFee + previous.returnFee) === previous.fee &&
@@ -52,7 +58,13 @@ export function repairDemoDeliveryPayments(source: Marketplace): Marketplace {
     if (!hasValidPaidRecord) {
       const paidAt = previous?.paidAt || new Date(Date.parse(booking.createdAt) - 60_000).toISOString();
       const receiptReference = previous?.receiptReference || `DEMO-GE-${booking.id.toUpperCase()}`;
-      const status = booking.payment === "refunded" ? "refunded_demo" : "paid_demo";
+      // Never derive the delivery payment's refund status from the rental payment's own refund
+      // status — a cancelled rental does not by itself mean GrabExpress/J&T Express has approved
+      // or completed a delivery refund. Only an already-recorded "refunded_demo" fixture carries
+      // that status forward; every other case is "paid_demo" (the fee was collected) and the
+      // actual refund eligibility is assessed separately (see services/delivery.ts
+      // deriveDeliveryRefundStatus, used for display).
+      const status = previous?.status === "refunded_demo" ? "refunded_demo" : "paid_demo";
       booking.deliveryPostcode = deliveryPostcode;
       const origin = listing?.privateMeetingVenue || listing?.location || legacyPickup?.address || previous?.origin || "";
       if (grabOutbound && grabInbound) {

@@ -32,6 +32,7 @@ export default function MessagesScreen() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const opened = useRef("");
+  const openedBooking = useRef("");
   const lastRead = useRef("");
   const scroll = useRef<ScrollView>(null);
 
@@ -70,19 +71,28 @@ export default function MessagesScreen() {
     if (chat) setSelected(chat.id);
   }, [state.chatConversations, state.mode, params.listingId, user?.id]);
   useEffect(() => {
-    if (!params.bookingId || !user) return;
+    if (!params.bookingId) { openedBooking.current = ""; return; }
+    // Auto-select this booking's conversation only once per navigation into the screen — without
+    // this guard, the 15-second poll / realtime refresh() above keeps changing `shared`'s
+    // reference while params.bookingId is still present in the URL, re-running this effect and
+    // forcibly snapping `selected` back to this booking's chat, so the renter could never switch
+    // to another conversation in the sidebar.
+    if (openedBooking.current === params.bookingId) return;
+    if (!user) return;
     const booking = state.bookings.find((item) => item.id === params.bookingId && [item.renterId, item.ownerId].includes(user.id));
     if (!booking) return;
     if (state.mode === "admin_demo") {
       const linked = state.chatConversations?.find((chat) => chat.listingId === booking.listingId && chat.renterId === booking.renterId && chat.ownerId === booking.ownerId);
+      openedBooking.current = params.bookingId;
       setSelected(linked?.id || `booking:${booking.id}`);
       return;
     }
     const linked = shared.find((chat) => chat.listing_id === booking.listingId && chat.renter_id === booking.renterId && chat.owner_id === booking.ownerId);
-    if (linked) { setSelected(linked.id); return; }
+    if (linked) { openedBooking.current = params.bookingId; setSelected(linked.id); return; }
     const renterName = state.profiles.find((profile) => profile.id === booking.renterId)?.name || "Renter";
+    const bookingId = params.bookingId;
     void openBookingConversation(booking.listingId, booking.ownerId, booking.renterId, renterName)
-      .then(async (chat) => { setSelected(chat.id); await refresh(); })
+      .then(async (chat) => { openedBooking.current = bookingId; setSelected(chat.id); await refresh(); })
       .catch((failure) => setError((failure as Error).message));
   }, [params.bookingId, shared, state.bookings, state.chatConversations, state.mode, state.profiles, user?.id]);
   useEffect(() => {

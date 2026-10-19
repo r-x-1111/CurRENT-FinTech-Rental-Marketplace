@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Card, Notice, Screen, Section, s } from "../components/ui";
+import { Card, Screen, Section, s } from "../components/ui";
 import { colors } from "../constants/theme";
 
 export default function HowItWorksScreen() {
@@ -11,8 +11,6 @@ export default function HowItWorksScreen() {
       title="How CurRENT Works"
       subtitle="A simple way to rent. Step-by-step guide for peer-to-peer rentals across Malaysia."
     >
-      <Notice text="CurRENT is a classroom simulation. Identity checks, payments, deposits, insurance and delivery are not performed by real providers. Do not submit identity documents or bank credentials." />
-
       <Section title="A simple way to rent" />
       <Card>
         <View style={styles.stepRow}>
@@ -59,7 +57,7 @@ export default function HowItWorksScreen() {
               <Text style={styles.stepTitle}>Pay</Text>
             </View>
             <Text style={s.caption}>
-              Select FPX and complete the simulated demo payment. No real money or bank credentials are used.
+              Complete your payment securely through an authorised payment provider.
             </Text>
           </View>
         </View>

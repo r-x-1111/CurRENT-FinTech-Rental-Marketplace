@@ -10,6 +10,7 @@ import type {
   PlatformReviewRequest,
 } from "../types/marketplace";
 import { DEMO_SAVED_DELIVERY_ADDRESSES } from "../services/demoWorkspaceDefaults";
+import { cancelledDepositReleaseDeadline } from "../services/booking";
 import { demoDeliverySamples } from "./demoDeliveryHistory";
 import { demoDestinationPostcode } from "../services/demoDeliveryLocations";
 import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
@@ -554,9 +555,14 @@ export function createAdminDemoSeed(): Marketplace {
       },
       riskScore: 78,
       payment: "refunded",
-      deposit: "released",
+      deposit: "release_pending",
       paymentMethod: "Demo FPX",
       createdAt: "2026-10-05T10:00:00Z",
+      // Cancelled shortly after booking, not at the original scheduled rental end — the deposit
+      // release deadline is computed from this timestamp (5 Malaysia working days), never from
+      // the scheduled rental end date above.
+      cancelledAt: "2026-10-05T11:00:00Z",
+      depositReleasedAt: cancelledDepositReleaseDeadline("2026-10-05T11:00:00Z"),
       scheduledPickup: "2026-11-20T10:00:00Z",
       scheduledReturn: "2026-11-22T10:00:00Z",
       cancellationCutoff: "2026-11-19T10:00:00Z",
@@ -584,8 +590,10 @@ export function createAdminDemoSeed(): Marketplace {
       },
       riskScore: 78,
       payment: "refunded",
-      deposit: "released",
+      deposit: "release_pending",
       createdAt: "2026-10-06T09:00:00Z",
+      cancelledAt: "2026-10-06T10:00:00Z",
+      depositReleasedAt: cancelledDepositReleaseDeadline("2026-10-06T10:00:00Z"),
       scheduledPickup: "2026-11-25T09:00:00Z",
       scheduledReturn: "2026-11-27T09:00:00Z",
       cancellationCutoff: "2026-11-24T09:00:00Z",
@@ -613,8 +621,10 @@ export function createAdminDemoSeed(): Marketplace {
       },
       riskScore: 78,
       payment: "refunded",
-      deposit: "released",
+      deposit: "release_pending",
       createdAt: "2026-10-07T12:00:00Z",
+      cancelledAt: "2026-10-07T13:00:00Z",
+      depositReleasedAt: cancelledDepositReleaseDeadline("2026-10-07T13:00:00Z"),
       scheduledPickup: "2026-11-28T14:00:00Z",
       scheduledReturn: "2026-11-30T14:00:00Z",
       cancellationCutoff: "2026-11-27T14:00:00Z",
@@ -964,7 +974,7 @@ export function createAdminDemoSeed(): Marketplace {
       },
       riskScore: 84,
       payment: "refunded",
-      deposit: "released",
+      deposit: "release_pending",
       paymentMethod: "Demo FPX",
       insurance: null,
       createdAt: "2026-10-12T09:00:00Z",
@@ -972,6 +982,7 @@ export function createAdminDemoSeed(): Marketplace {
       scheduledReturn: "2026-10-27T03:00:00Z",
       cancellationCutoff: "2026-10-24T03:00:00Z",
       cancelledAt: "2026-10-14T09:30:00Z",
+      depositReleasedAt: cancelledDepositReleaseDeadline("2026-10-14T09:30:00Z"),
       cancelledById: "demo-renter",
       contextMode: "admin_demo",
     },

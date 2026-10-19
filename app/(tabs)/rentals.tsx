@@ -8,13 +8,15 @@ import { BookingSummary } from "../../components/BookingSummary";
 import { MorphIcon } from "../../components/MorphIcon";
 import { useMarketplace } from "../../context/Marketplace";
 import {
+  effectiveDepositStatus,
+  formatMalaysiaDateTime,
   formatShortDate,
   getBookingTotals,
   getEffectiveBookingStatus,
   money,
   parseMalaysiaTimestamp,
 } from "../../services/booking";
-import { deriveDisplayDelivery, type DisplayDelivery } from "../../services/delivery";
+import { DELIVERY_REFUND_STATUS_LABEL, deriveDeliveryRefundStatus, deriveDisplayDelivery, type DisplayDelivery } from "../../services/delivery";
 import { colors } from "../../constants/theme";
 import { GuestAuthGate } from "../../components/GuestAuth";
 import type { Booking } from "../../types/marketplace";
@@ -86,10 +88,17 @@ export default function RentalsScreen() {
     }
   }).sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId));
 
-  function depositStatusLabel(status: Booking["deposit"]): string {
+  function depositStatusLabel(b: Booking): string {
+    const status = effectiveDepositStatus(b);
+    const cancelled = b.status === "cancelled" || b.status === "rejected";
+    // A cancelled/rejected booking whose deposit was never actually collected (the checkout was
+    // abandoned before payment) should never be labelled "Required" — there's nothing left to pay.
+    if (cancelled && status === "required") return "Deposit Not Charged";
     switch (status) {
       case "held": return "Held securely";
-      case "release_pending": return "Release pending";
+      case "release_pending": return cancelled && b.depositReleasedAt
+        ? `Release pending (by ${formatShortDate(b.depositReleasedAt)})`
+        : "Release pending";
       case "released": return "Released";
       case "disputed": return "Held for dispute review";
       case "required": return "Required";
@@ -100,8 +109,9 @@ export default function RentalsScreen() {
   function statusChipFor(b: Booking): { text: string; tone: "red" | "grey" | "amber" | "blue" | "green" } {
     if (b.status === "disputed") return { text: "Disputed", tone: "red" };
     if (b.status === "cancelled" || b.status === "rejected") return { text: b.payment === "refunded" ? "Cancelled · Refunded" : "Cancelled", tone: "grey" };
-    if (b.deposit === "release_pending") return { text: "Deposit release pending", tone: "amber" };
-    if (b.deposit === "released") return { text: "Completed · Deposit released", tone: "green" };
+    const depositStatus = effectiveDepositStatus(b);
+    if (depositStatus === "release_pending") return { text: "Deposit release pending", tone: "amber" };
+    if (depositStatus === "released") return { text: "Completed · Deposit released", tone: "green" };
     return { text: "Deposit held", tone: "blue" };
   }
 
@@ -149,11 +159,11 @@ export default function RentalsScreen() {
         date: (b.cancelledAt || b.createdAt).slice(0, 10),
       });
     }
-    if (b.deposit === "released") {
+    if (effectiveDepositStatus(b) === "released") {
       refundRows.push({
         label: "Security deposit refund",
         amount: b.quote.deposit,
-        date: (b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.cancelledAt || b.createdAt).slice(0, 10),
+        date: (b.depositReleasedAt || b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.cancelledAt || b.createdAt).slice(0, 10),
       });
     }
     if (delivery.status === "refunded_demo") {
@@ -195,7 +205,10 @@ export default function RentalsScreen() {
       (c.booking.deliveryDemo?.status === "paid_demo" || c.booking.deliveryDemo?.status === "refunded_demo" ? c.booking.deliveryDemo.fee : 0), 0) * 100) / 100;
     const totalRefunded = Math.round(cards.reduce((sum, c) => sum + c.refundsTotal, 0) * 100) / 100;
     const depositsInEscrow = Math.round(
-      cards.reduce((sum, c) => sum + (c.booking.deposit === "held" || c.booking.deposit === "release_pending" ? c.booking.quote.deposit : 0), 0) * 100,
+      cards.reduce((sum, c) => {
+        const status = effectiveDepositStatus(c.booking);
+        return sum + (status === "held" || status === "release_pending" ? c.booking.quote.deposit : 0);
+      }, 0) * 100,
     ) / 100;
 
     const filters = ["All", "Paid", "Deposit held", "Release pending", "Refunded", "Delivery"];
@@ -203,8 +216,8 @@ export default function RentalsScreen() {
       if (historySearch.trim() && !c.booking.title.toLowerCase().includes(historySearch.trim().toLowerCase())) return false;
       switch (historyFilter) {
         case "Paid": return c.booking.payment === "paid";
-        case "Deposit held": return c.booking.deposit === "held";
-        case "Release pending": return c.booking.deposit === "release_pending";
+        case "Deposit held": return effectiveDepositStatus(c.booking) === "held";
+        case "Release pending": return effectiveDepositStatus(c.booking) === "release_pending";
         case "Refunded": return c.refundsTotal > 0;
         case "Delivery": return c.delivery.status !== "self_pickup";
         default: return true;
@@ -280,7 +293,7 @@ export default function RentalsScreen() {
                     <Text style={styles.txAmount}>{money(card.grandTotal)}</Text>
                   </View>
                   <View style={s.row}>
-                    <Text style={styles.txItemTitle}>Deposit {depositStatusLabel(b.deposit).toLowerCase()}</Text>
+                    <Text style={styles.txItemTitle}>Deposit {depositStatusLabel(b).toLowerCase()}</Text>
                     <Text style={styles.txItemTitle}>{money(b.quote.deposit)}</Text>
                   </View>
                 </View>
@@ -313,7 +326,7 @@ export default function RentalsScreen() {
                     </>
                   )}
                   <Row label="Refundable security deposit" value={money(b.quote.deposit)} />
-                  <Text style={styles.ledgerLineStatus}>{depositStatusLabel(b.deposit)}</Text>
+                  <Text style={styles.ledgerLineStatus}>{depositStatusLabel(b)}</Text>
                   <View style={s.row}><Text style={s.bold}>Subtotal</Text><Text style={[styles.txAmount, { fontSize: 14 }]}>{money(card.totals.subtotal)}</Text></View>
 
                   <View style={styles.modalDivider} />
@@ -351,7 +364,7 @@ export default function RentalsScreen() {
                           <Row label="Courier" value={card.delivery.courierName || "Unavailable"} />
                           <Row label="Shipping Zone" value={card.delivery.shippingZone || "Unavailable"} />
                           <Row label="Chargeable Weight" value={card.delivery.chargeableWeightKg != null ? `${card.delivery.chargeableWeightKg} kg` : "Unavailable"} />
-                          {!!card.delivery.dispatchDate && <Row label="Planned Dispatch Date" value={card.delivery.dispatchDate} />}
+                          {!!card.delivery.dispatchDate && <Row label="Preferred Delivery Date" value={card.delivery.dispatchDate} />}
                           <Row label="Lender confirmation" value={
                             card.delivery.outboundDispatchStatus === "confirmed" ? "Confirmed"
                               : card.delivery.outboundDispatchStatus === "drop_off" ? "Drop-off Arrangement"
@@ -360,15 +373,18 @@ export default function RentalsScreen() {
                               : "Not Recorded"} />
                           <Row label="Estimated Delivery" value={
                             card.delivery.estimatedDeliveryRangeStart && card.delivery.estimatedDeliveryRangeEnd
-                              ? `${card.delivery.estimatedDeliveryRangeStart} – ${card.delivery.estimatedDeliveryRangeEnd}` : "To Be Confirmed"} />
+                              ? `${card.delivery.estimatedDeliveryRangeStart} – ${card.delivery.estimatedDeliveryRangeEnd}` : "Pending Update"} />
+                          <Row label="Confirmed Delivery Date and Time" value={b.renterReceivedAt ? formatMalaysiaDateTime(b.renterReceivedAt) : "Pending — Not Yet Confirmed"} />
                           {!!card.delivery.outboundTrackingRef && <Row label="Outbound tracking reference" value={card.delivery.outboundTrackingRef} />}
-                          {!!card.delivery.returnDispatchDeadline && <Row label="Return Drop-off Date" value={card.delivery.returnDispatchDeadline} />}
+                          {!!card.delivery.returnDispatchDeadline && <Row label="Planned Return Date" value={card.delivery.returnDispatchDeadline} />}
+                          <Text style={s.caption}>Cross-state courier delivery and return dates are subject to transit conditions and courier availability. Exact arrival and pickup times cannot be guaranteed.</Text>
                           <Row label="Return Method" value="Courier Branch Drop-off" />
                           <Row label="Return drop-off status" value={card.delivery.returnDropoffConfirmedAt ? `Confirmed ${card.delivery.returnDropoffConfirmedAt.slice(0, 10)}` : "Pending renter drop-off"} />
+                          <Row label="Actual Return Handover Date and Time" value={b.actualReturnTimestamp ? formatMalaysiaDateTime(b.actualReturnTimestamp) : "Pending — Not Yet Confirmed"} />
                           {!!card.delivery.returnTrackingRef && <Row label="Return tracking reference" value={card.delivery.returnTrackingRef} />}
                           <Row label="Estimated Return Arrival" value={
                             card.delivery.estimatedReturnRangeStart && card.delivery.estimatedReturnRangeEnd
-                              ? `${card.delivery.estimatedReturnRangeStart} – ${card.delivery.estimatedReturnRangeEnd}` : "To Be Confirmed"} />
+                              ? `${card.delivery.estimatedReturnRangeStart} – ${card.delivery.estimatedReturnRangeEnd}` : "Pending Update"} />
                           {(card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee) != null && <View style={s.row}><Text style={s.caption}>Outbound postage{b.deliveryDemo?.status === "required" || card.delivery.outboundFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.outboundFee ?? card.delivery.estimatedOutboundFee)!)}</Text></View>}
                           {(card.delivery.returnFee ?? card.delivery.estimatedReturnFee) != null && <View style={s.row}><Text style={s.caption}>Return postage{b.deliveryDemo?.status === "required" || card.delivery.returnFee == null ? " (estimate)" : ""}</Text><Text style={s.caption}>{money((card.delivery.returnFee ?? card.delivery.estimatedReturnFee)!)}</Text></View>}
                           {card.deliveryPaid && b.deliveryDemo
@@ -376,6 +392,13 @@ export default function RentalsScreen() {
                             : card.delivery.estimatedTwoWayFee != null && <View style={s.row}><Text style={s.bold}>Estimated two-way postage</Text><Text style={s.bold}>{money(card.delivery.estimatedTwoWayFee)}</Text></View>}
                           <View style={s.row}><Text style={s.caption}>Postage amount paid</Text><Text style={s.caption}>{money(card.deliveryPaid ? b.deliveryDemo?.fee || 0 : 0)}</Text></View>
                           <Row label="Payment status" value={card.delivery.status === "paid_demo" ? "Paid (Demo)" : card.delivery.status === "refunded_demo" ? "Refunded (Demo)" : "Awaiting Payment"} />
+                          {(b.status === "cancelled" || b.status === "rejected") && b.deliveryDemo && b.deliveryDemo.status !== "required" && (
+                            <>
+                              <Row label="Outbound postage refund" value={DELIVERY_REFUND_STATUS_LABEL[deriveDeliveryRefundStatus({ cancelled: true, deliveryStatus: b.deliveryDemo.status, legStarted: !!b.lenderHandoverAt })]} />
+                              <Row label="Return postage refund" value={DELIVERY_REFUND_STATUS_LABEL[deriveDeliveryRefundStatus({ cancelled: true, deliveryStatus: b.deliveryDemo.status, legStarted: !!b.actualReturnTimestamp })]} />
+                              <Text style={s.caption}>Delivery payments and refunds are handled by the applicable delivery company, not CurRENT. This platform currently simulates delivery refund tracking. Actual refund eligibility, amounts and processing times depend on the delivery provider's policies.</Text>
+                            </>
+                          )}
                         </View>
                       )}
                       {showBreakdown && card.delivery.method !== "Domestic Courier (Demo)" && (
@@ -391,6 +414,13 @@ export default function RentalsScreen() {
                             : card.delivery.estimatedTwoWayFee != null && <View style={s.row}><Text style={s.bold}>Estimated two-way delivery fee</Text><Text style={s.bold}>{money(card.delivery.estimatedTwoWayFee)}</Text></View>}
                           <View style={s.row}><Text style={s.caption}>Delivery amount paid</Text><Text style={s.caption}>{money(card.deliveryPaid ? b.deliveryDemo?.fee || 0 : 0)}</Text></View>
                           <Row label="Payment status" value={card.delivery.status === "paid_demo" ? "Paid (Demo)" : card.delivery.status === "refunded_demo" ? "Refunded (Demo)" : "Awaiting Payment"} />
+                          {(b.status === "cancelled" || b.status === "rejected") && b.deliveryDemo && b.deliveryDemo.status !== "required" && (
+                            <>
+                              <Row label="Outbound delivery refund" value={DELIVERY_REFUND_STATUS_LABEL[deriveDeliveryRefundStatus({ cancelled: true, deliveryStatus: b.deliveryDemo.status, legStarted: !!b.lenderHandoverAt })]} />
+                              <Row label="Return delivery refund" value={DELIVERY_REFUND_STATUS_LABEL[deriveDeliveryRefundStatus({ cancelled: true, deliveryStatus: b.deliveryDemo.status, legStarted: !!b.actualReturnTimestamp })]} />
+                              <Text style={s.caption}>Delivery payments and refunds are handled by the applicable delivery company, not CurRENT. This platform currently simulates delivery refund tracking. Actual refund eligibility, amounts and processing times depend on the delivery provider's policies.</Text>
+                            </>
+                          )}
                         </View>
                       )}
                             <Button secondary onPress={() => setExpandedDeliveryBreakdown((prev) => { const next = new Set(prev); next.delete(b.id); return next; })}>Close</Button>
@@ -435,7 +465,7 @@ export default function RentalsScreen() {
                     <View style={s.row}><Text style={[s.caption, { color: colors.green }]}>Refunded so far</Text><Text style={[styles.txAmount, { color: colors.green }]}>+ {money(card.refundsTotal)}</Text></View>
                   )}
                   <View style={s.row}><Text style={s.bold}>Net cost</Text><Text style={[styles.txAmount, { fontSize: 16 }]}>{money(card.netCost)}</Text></View>
-                  <Text style={s.caption}>Includes {money(b.quote.deposit)} refundable deposit ({depositStatusLabel(b.deposit).toLowerCase()})</Text>
+                  <Text style={s.caption}>Includes {money(b.quote.deposit)} refundable deposit ({depositStatusLabel(b).toLowerCase()})</Text>
                   </View>}
                 </View>
               )}
