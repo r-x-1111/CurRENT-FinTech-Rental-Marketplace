@@ -26,7 +26,8 @@ export const sampleReviews: SampleReview[] = [
   },
 ];
 
-// Section 14.3: Canonical 6 FAQs from founder screenshot
+// FAQ shared by the profile FAQ screen and Help & Trust page. Keep pricing and insurer
+// responsibility consistent with checkout; all cover and premiums are classroom demos.
 export const sampleFaqs: FaqItem[] = [
   {
     question: "How does CurRENT verify users?",
@@ -51,12 +52,47 @@ export const sampleFaqs: FaqItem[] = [
   {
     question: "How much does CurRENT charge borrowers and lenders?",
     answer:
-      "Borrowers are charged 5% of the rental value or a minimum of RM5, whichever is higher. Lenders are charged a 12% commission when a rental is successfully completed.",
+      "Renters pay a CurRENT service fee of 5% of the rental fee (minimum RM5). New bookings have a 13% lender commission. Optional third-party Rental Protection, risk-based refundable deposits, and two-way delivery charges are separate from these platform fees.",
   },
   {
     question: "Is Buy Now Pay Later (BNPL) available?",
     answer:
-      "BNPL may be available for eligible high-value rental fees through an authorised external provider. Security deposits are paid separately and are not financed through BNPL.",
+      "CurRENT offers simulated FPX and BNPL checkout methods. BNPL in this classroom demo does not create a real financing agreement or live instalment plan.",
+  },
+  {
+    question: "What is optional Rental Protection?",
+    answer:
+      "Rental Protection (Third-Party Insurance — Demo) is an optional renter-purchased concept for eligible accidental physical damage during authorised rental use. A proposed independent insurer, not CurRENT, would provide coverage, decide claims and pay approved compensation. No policy has been issued and no insurer is connected in this prototype.",
+  },
+  {
+    question: "How is the Rental Protection fee calculated?",
+    answer:
+      "For the demo, Protection Fee = validated Item Fair / Replacement Value × 0.3% × (Rental Days ÷ 7), rounded to the nearest sen. For example, RM4,000 × 0.003 × (2 ÷ 7) = RM3.43. The duration is prorated: it is NOT rounded up to seven-day blocks and there is no RM5 minimum protection fee. The 0.3% rate is a CurRENT assumption, not an actual insurer-approved premium.",
+  },
+  {
+    question: "Does Rental Protection cover delivery damage?",
+    answer:
+      "The proposed standard Rental Protection focuses on accidental damage during authorised rental use. Courier damage is handled through the separate courier-damage reporting and claims process for all renters, whether or not they purchased protection. Transit cover would require an insurer's explicit policy terms; it is not automatically included.",
+  },
+  {
+    question: "Can I report courier damage without purchasing Rental Protection?",
+    answer:
+      "Yes. Anyone involved in the rental may report damage to CurRENT. CurRENT can help coordinate an applicable courier claim, but any compensation depends on courier terms, eligibility, evidence and claim approval. Demo delivery services do not provide actual courier compensation. A renter's deposit is not automatically deducted for damage caused by the courier.",
+  },
+  {
+    question: "Who processes an insurance claim and pays for approved damage?",
+    answer:
+      "The renter or lender may report damage to CurRENT. CurRENT would help collect evidence and facilitate submission, while the third-party insurer would decide who can formally submit the claim, evaluate eligibility and pay approved compensation under its policy. The insurer's decisions and payments are simulated in this prototype.",
+  },
+  {
+    question: "What happens to my deposit if an item is damaged?",
+    answer:
+      "The refundable security deposit can remain held during investigation. For eligible accidental damage during rental use, an approved third-party insurance claim would be considered before applying the deposit to any verified remaining renter liability. If the loss is fully covered and nothing else is owed, the deposit is refunded. Lenders cannot receive double compensation.",
+  },
+  {
+    question: "What is the proposed Rental Protection coverage limit?",
+    answer:
+      "The prototype illustrates a maximum of RM60,000 or the item's validated replacement value, whichever is lower, subject to item eligibility and review. This is a design benchmark, not an issued policy or a guaranteed payout. Final limits, exclusions, deductibles and premiums require an actual insurer's agreement.",
   },
 ];
 
