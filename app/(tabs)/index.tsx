@@ -17,7 +17,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ListingGrid } from "../../components/ListingGrid";
 import { Empty } from "../../components/ui";
-import { colors } from "../../constants/theme";
+import { colors, radius } from "../../constants/theme";
 import { MOBILE_BROWSE_CATEGORIES, MobileBrowseCategory, locations, matchesMarketplaceLocation, mobileBrowseCategoryFor, mobileBrowseCategoryForParam } from "../../constants/categories";
 import { useMarketplace } from "../../context/Marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
@@ -136,24 +136,31 @@ export default function HomeScreen() {
         <View
           style={[styles.heroWrapper, isDesktop && styles.desktopHeroWrapper, isMobile && styles.mobileHeroWrapper]}
         >
-          {/* Full-bleed hero background photo. Its own composition already keeps ~55% of its
-              left side as clean navy studio background and groups the camera/MacBook/DualSense/
-              projector/plant within the right ~45% — so used edge-to-edge at the hero's own
-              aspect ratio, that same balanced split carries straight through onto the page with
-              no separate panel, letterboxing or visible seam needed. */}
-          <Image
-            source={{ uri: "/hero/hero-products.png" }}
-            style={[StyleSheet.absoluteFill, webHeroImageCoolStyle]}
-            resizeMode="cover"
-          />
+          {/* Full-bleed hero background photo, desktop/tablet only. Its own composition already
+              keeps ~55% of its left side as clean navy studio background and groups the camera/
+              MacBook/DualSense/projector/plant within the right ~45% — so used edge-to-edge at
+              the hero's own (wide) aspect ratio, that same balanced split carries straight
+              through onto the page with no separate panel, letterboxing or visible seam needed.
+              On mobile the hero box is much taller than the photo's native aspect ratio, so
+              "cover" would zoom in and push the product group up over the text — instead mobile
+              renders the photo in normal flow below the chips (see further down), clear of text. */}
+          {!isMobile && (
+            <Image
+              source={{ uri: "/hero/hero-products.png" }}
+              style={[StyleSheet.absoluteFill, webHeroImageCoolStyle]}
+              resizeMode="cover"
+            />
+          )}
           {/* Blend the photo's left edge into the blue backdrop instead of a visible rectangle. */}
-          <LinearGradient
-            pointerEvents="none"
-            colors={[colors.paleBlue, "rgba(238,244,255,0)"]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.heroImageLeftFade}
-          />
+          {!isMobile && (
+            <LinearGradient
+              pointerEvents="none"
+              colors={[colors.paleBlue, "rgba(238,244,255,0)"]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={styles.heroImageLeftFade}
+            />
+          )}
           {/* 120px fade from transparent into the flat #F7F8FA that every other page uses as its
               background, so the hero ends with no hard line against the listings below. */}
           <LinearGradient
@@ -204,7 +211,7 @@ export default function HomeScreen() {
               </Text>
 
               {/* Subtitle */}
-              <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead, isMobile && width >= 375 && styles.mobileHeroSubheadWithProduct]}>
+              <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead]}>
                 Useful things, nearby. Discover trusted rentals across Malaysia
                 or turn your idle gear into extra income.
               </Text>
@@ -326,6 +333,17 @@ export default function HomeScreen() {
                     })}
                   </ScrollView>
                 </View>
+
+                {/* Mobile-only product shot, in normal document flow below the chips — keeps the
+                    photo fully visible while guaranteeing it never overlaps the hero text above. */}
+                {isMobile && (
+                  <Image
+                    source={{ uri: "/hero/hero-products.png" }}
+                    style={[styles.mobileHeroImage, webHeroImageCoolStyle]}
+                    resizeMode="cover"
+                    accessibilityLabel="Cameras, a game controller, a laptop and a projector available to rent"
+                  />
+                )}
             </View>
 
           </View>
@@ -336,7 +354,7 @@ export default function HomeScreen() {
             Full-bleed light-blue band so the colour runs edge-to-edge with no seam against
             the hero above it, regardless of viewport width; inner content stays centred.
            ========================================================================= */}
-        <View style={styles.catalogueBand}>
+        <View style={[styles.catalogueBand, isMobile && styles.mobileCatalogueBand]}>
         <View style={[styles.catalogueSection, isMobile && styles.mobileCatalogueSection]}>
           <View style={[styles.catalogueControlsRow, isMobile && styles.mobileCatalogueControlsRow]}>
             {/* Left: Results count & active category indicator */}
@@ -447,6 +465,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    marginTop: 14,
   },
   // Caps the row at the same width as the search bar below it (desktopSearchContainer's
   // maxWidth: 620), so the bell's right edge lines up with the Search button's right edge
@@ -496,7 +515,12 @@ const styles = StyleSheet.create({
     maxWidth: 520,
   },
   mobileHeroSubhead: { fontSize: 13, lineHeight: 19 },
-  mobileHeroSubheadWithProduct: { maxWidth: 210 },
+  mobileHeroImage: {
+    width: "100%",
+    height: 150,
+    borderRadius: radius.md,
+    marginTop: 18,
+  },
   searchContainer: {
     backgroundColor: "white",
     borderRadius: 14,
@@ -635,6 +659,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.offWhite,
     marginTop: -32,
   },
+  // On mobile the hero now ends with the in-flow product photo (not an absolute-fill bleed
+  // photo), so the -32 pull-up isn't needed — instead add ~36px of normal document-flow space
+  // so "All Items" isn't crowded against the category chips.
+  mobileCatalogueBand: { marginTop: 36 },
   catalogueSection: {
     maxWidth: 1180,
     width: "100%",
