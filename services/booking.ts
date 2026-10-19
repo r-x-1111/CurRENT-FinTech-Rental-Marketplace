@@ -17,6 +17,10 @@ export function formatShortDate(dateKey: string): string {
   return `${day} ${months[month - 1]} ${year}`;
 }
 export const LAST_BOOKABLE_DATE = "2026-12-31";
+/** Presenter-owned demo listings can use future periods after the original 2026 fixture window. */
+export function allowsFutureDemoAvailability(state: Marketplace, listing: Listing): boolean {
+  return state.mode === "admin_demo" && listing.ownerId === "demo-renter";
+}
 const DEMO_FIRST_DATE = "2026-10-01";
 const DEMO_SLOTS = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
 const DEMO_SEEDED_IDS = new Set(seededListings.map((listing) => listing.id));
@@ -308,6 +312,7 @@ export function riskFor(state: Marketplace, profile: Profile) {
 /** Illustrative per-seven-day rate for optional renter-purchased third-party insurance.
  * 0.3% is a CurRENT demo assumption, NOT a quote or approved rate from an insurer. */
 export const RENTAL_PROTECTION_RATE = 0.003;
+export const RENTAL_PROTECTION_MINIMUM_FEE = 5;
 
 /** Proposed maximum protection exposure (informed by Antbuildz Malaysia's published equipment
  * rental protection model) — a demo cap, not a guaranteed insurer payout. */
@@ -315,14 +320,19 @@ export const RENTAL_PROTECTION_LIMIT_CAP = 60000;
 
 /**
  * Optional Rental Protection fee (demo pricing assumption, not an insurer quotation).
- * Protection Fee = Validated Item Replacement Value x 0.3% x (Rental Days / 7).
- * Duration is prorated continuously (no rounding up to whole weeks and no minimum fee).
+ * Protection Fee = MAX(RM5, Validated Item Replacement Value x 0.3% x (Rental Days / 7)).
+ * Duration is prorated without rounding up to whole weeks; the minimum applies once per booking.
  * The third-party insurer would determine actual premiums and policy terms.
  */
-export function calculateProtectionFee(replacementValue: number, rentalDays: number): number {
+export function calculateProtectionBasePremium(replacementValue: number, rentalDays: number): number {
   if (!Number.isFinite(replacementValue) || replacementValue <= 0 ||
       !Number.isFinite(rentalDays) || rentalDays <= 0) return 0;
   return Math.round(replacementValue * RENTAL_PROTECTION_RATE * (rentalDays / 7) * 100) / 100;
+}
+
+export function calculateProtectionFee(replacementValue: number, rentalDays: number): number {
+  const calculated = calculateProtectionBasePremium(replacementValue, rentalDays);
+  return calculated > 0 ? Math.max(RENTAL_PROTECTION_MINIMUM_FEE, calculated) : 0;
 }
 
 /**
@@ -367,7 +377,7 @@ export function quoteFor(
     estimatedValue,
     risk.level,
   );
-  // Optional third-party insurance (demo only): fair value x 0.3% x days/7.
+  // Optional third-party insurance (demo only): fair value x 0.3% x days/7, RM5 minimum.
   // Never factored into the risk-based security deposit.
   const protection = protectedItem ? calculateProtectionFee(estimatedValue, days) : 0;
   return {
@@ -421,7 +431,7 @@ export function availability(
 ) {
   rentalDays(start, end);
   assertExact24HourRentalPeriod(start, end);
-  if (malaysiaDateKey(start) > LAST_BOOKABLE_DATE || malaysiaDateKey(end) > LAST_BOOKABLE_DATE)
+  if (!allowsFutureDemoAvailability(state, listing) && (malaysiaDateKey(start) > LAST_BOOKABLE_DATE || malaysiaDateKey(end) > LAST_BOOKABLE_DATE))
     throw new Error("Bookings must end by 31 December 2026.");
   if (start < dateAfter())
     throw new Error("Select today or a future collection date.");
@@ -505,7 +515,7 @@ export function availabilityCalendar(
     const outsideWindow =
       listing.status !== "published" ||
       date < dateAfter() ||
-      date > LAST_BOOKABLE_DATE ||
+      (!allowsFutureDemoAvailability(state, listing) && date > LAST_BOOKABLE_DATE) ||
       (state.mode === "admin_demo" && DEMO_SEEDED_IDS.has(listing.id) && !DEMO_SLOTS.some((slot) =>
         (listing.deliveryTimeSlots?.length ? listing.deliveryTimeSlots.includes(slot) :
           !listing.pickupTimeWindows?.length || listing.pickupTimeWindows.some((window) => window.start <= slot && slot <= window.end)) &&

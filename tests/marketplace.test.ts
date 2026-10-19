@@ -26,6 +26,7 @@ import {
   effectiveDepositStatus,
   formatMalaysiaDateTime,
   formatScheduledReturnPickup,
+  calculateProtectionBasePremium,
   calculateProtectionFee,
   calculateProtectionLimit,
   requiresProtectionEligibilityReview,
@@ -1505,8 +1506,8 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
     rentalFee: 90,
     serviceFee: 5,
     deposit: 200,
-    protection: 3.43,
-    total: 298.43,
+    protection: 5,
+    total: 300,
   });
   assert.deepEqual(calculateOwnerPayout(90), {
     commission: 11.7,
@@ -1538,11 +1539,14 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(1)), /1 to 90/);
   assert.throws(() => rentalDays(dateAfter(1), dateAfter(92)), /1 to 90/);
 });
-test("optional third-party insurance demo prorates 0.3% of fair value by rental days / 7 without week rounding", () => {
-  assert.equal(calculateProtectionFee(4000, 2), 3.43);
+test("optional third-party insurance demo prorates 0.3% by days with one RM5 booking minimum", () => {
+  assert.equal(calculateProtectionBasePremium(1200, 2), 1.03);
+  assert.equal(calculateProtectionBasePremium(4000, 2), 3.43);
+  assert.equal(calculateProtectionFee(4000, 2), 5);
   assert.equal(calculateProtectionFee(4000, 7), 12);
   assert.equal(calculateProtectionFee(4000, 8), 13.71);
-  assert.equal(calculateProtectionFee(1200, 2), 1.03);
+  assert.equal(calculateProtectionFee(1200, 2), 5);
+  assert.equal(calculateProtectionFee(6000, 3), 7.71);
   assert.equal(calculateProtectionFee(0, 2), 0);
   assert.equal(calculateProtectionFee(4000, 0), 0);
   assert.equal(calculateProtectionLimit(500), 500);
@@ -1559,6 +1563,8 @@ test("optional third-party insurance demo prorates 0.3% of fair value by rental 
   assert.ok(selected.protection > 0);
   assert.equal(selected.deposit, unselected.deposit, "Protection must never change the risk-based security deposit.");
   assert.equal(selected.total, unselected.total + selected.protection);
+  const historicalPaid = createSeed("admin_demo").bookings.find((booking) => booking.id === "demo-booking-protection-upcoming")!;
+  assert.equal(historicalPaid.quote.protection, 10.5, "Previously paid demo booking premiums remain stored at their historical amounts.");
 });
 test("the final available date can be rented with an exclusive next-day return", () => {
   const state = createSeed();
@@ -2406,6 +2412,20 @@ test("Demo projector retains prefilled parcel data and recalculates eligibility 
   assert.equal(saved.parcelDimensionsCm?.length, 121);
   assert.equal(crossStateDeliveryEligibility(saved), "same_state_only");
   assert.deepEqual(saved.images, projector.images);
+});
+
+test("Presenter-owned demo listings remain bookable in a saved future availability period", () => {
+  let state = transition(createSeed("admin_demo"), { type: "login", userId: "demo-renter" });
+  const projector = state.listings.find((item) => item.id === "demo-portable-projector")!;
+  state = transition(state, {
+    type: "saveListing",
+    listing: { ...projector, availableFrom: "2027-01-05", availableTo: "2027-02-05", availabilityPeriods: [{ start: "2027-01-05", end: "2027-02-05" }] },
+  });
+  const saved = state.listings.find((item) => item.id === projector.id)!;
+  assert.equal(availabilityCalendar(state, saved, 1, "2027-01-05")[0].status, "available");
+  assert.doesNotThrow(() => availability(state, saved,
+    toMalaysiaUtcTimestamp("2027-01-05", "10:00"),
+    toMalaysiaUtcTimestamp("2027-01-06", "10:00")));
 });
 
 test("Demo lender upcoming delivery hours are valid Malaysia time", () => {
@@ -4237,9 +4257,13 @@ test("Section 14.3: Full 30-question FAQ covers all six categories with correct 
   assert.ok(protectionFaqs.every((f) => !/CurRENT (provides|underwrites|pays)( the)? insurance/i.test(f.answer)));
   const whatIsProtection = protectionFaqs.find((f) => f.question === "What is Rental Protection?");
   assert.ok(whatIsProtection!.answer.includes("not provided or underwritten by CurRENT"));
-  const premiumFaq = protectionFaqs.find((f) => f.question === "How much does Rental Protection cost?");
+  const premiumFaq = protectionFaqs.find((f) => f.question === "How is Rental Protection calculated?");
   assert.ok(premiumFaq!.answer.includes("0.3%"));
   assert.ok(premiumFaq!.answer.includes("Rental Days"));
+  assert.ok(premiumFaq!.answer.includes("MAX(RM5"));
+  assert.ok(sampleFaqs.some((f) => f.question === "Why is there a minimum protection fee?"));
+  assert.ok(sampleFaqs.some((f) => f.question === "Who provides Rental Protection?"));
+  assert.ok(sampleFaqs.some((f) => f.question === "Does Rental Protection cover courier damage?"));
   const maxFaq = protectionFaqs.find((f) => f.question === "What is the maximum Rental Protection coverage?");
   assert.ok(maxFaq!.answer.includes("RM60,000"));
   assert.ok(maxFaq!.answer.includes("not guaranteed compensation"));
@@ -4247,7 +4271,7 @@ test("Section 14.3: Full 30-question FAQ covers all six categories with correct 
   // No FAQ answer may still describe the retired flat "5% of the rental fee" protection
   // premium — every protection answer must track the current fair-value/0.3%-per-7-days formula.
   assert.ok(!sampleFaqs.some((f) => /\b5%\b.*(?:rental fee|protection|insurance)/i.test(f.answer) || /(?:protection|insurance).*\b5%\b/i.test(f.answer)));
-  const sameAsDepositFaq = sampleFaqs.find((f) => f.question === "Is Rental Protection the same as a refundable security deposit?");
+  const sameAsDepositFaq = sampleFaqs.find((f) => f.question === "How does Rental Protection differ from the security deposit?");
   assert.ok(sameAsDepositFaq!.answer.includes("0.3%"));
 
   // The delivery-fee FAQ explains the postcode → Haversine → ×1.3 estimation and that cross-state
@@ -4256,7 +4280,11 @@ test("Section 14.3: Full 30-question FAQ covers all six categories with correct 
   assert.ok(deliveryFeeFaq);
   assert.ok(deliveryFeeFaq!.answer.includes("1.3"));
   assert.ok(deliveryFeeFaq!.answer.includes("straight-line distance"));
-  assert.ok(deliveryFeeFaq!.answer.includes("shipping regions"));
+  assert.ok(deliveryFeeFaq!.answer.includes("shipping region"));
+  const deliveryFaq = sampleFaqs.find((f) => f.question === "How does CurRENT delivery work?");
+  assert.ok(deliveryFaq!.answer.includes("Fragile handling alone does not prevent cross-state delivery"));
+  const paymentFaq = sampleFaqs.find((f) => f.question.includes("Buy Now Pay Later"));
+  assert.ok(paymentFaq!.answer.includes("does not create instalments or run a credit check"));
 
   // The Q21 comparison table: 16 situations, five columns, "Without Rental Protection" present.
   const comparisonFaq = sampleFaqs.find((f) => !!f.coverageTable);

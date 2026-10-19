@@ -857,7 +857,7 @@ export function createAdminDemoSeed(): Marketplace {
         rentalFee: 240,
         serviceFee: 12,
         deposit: 175, // Low Risk: 5% of RM3,500 estimated value
-        protection: 10.5, // MAX(5, 3500 * 0.003 * CEIL(3/7))
+        protection: 10.5, // Historical paid premium; preserve the stored booking amount.
         total: 437.5,
       },
       riskScore: 84,
@@ -933,7 +933,7 @@ export function createAdminDemoSeed(): Marketplace {
         rentalFee: 140,
         serviceFee: 7,
         deposit: 60, // Low Risk: 5% of RM1,200 estimated value
-        protection: 5, // MAX(5, 1200 * 0.003 * CEIL(5/7))
+        protection: 5, // Historical paid premium; preserve the stored booking amount.
         total: 212,
       },
       riskScore: 84,
@@ -1003,7 +1003,7 @@ export function createAdminDemoSeed(): Marketplace {
         rentalFee: 70,
         serviceFee: 5,
         deposit: 90, // Low Risk: 5% of RM1,800 replacement value
-        protection: 5.4, // MAX(5, 1800 * 0.003 * CEIL(2/7))
+        protection: 5.4, // Historical paid premium; preserve the stored booking amount.
         total: 170.4,
       },
       riskScore: 84,

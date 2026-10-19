@@ -836,7 +836,7 @@ export default function EditListing() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Next month"
-                  disabled={calendarYear >= 2026 && calendarMonthIndex >= 11}
+                  disabled={!demoAccount && calendarYear >= 2026 && calendarMonthIndex >= 11}
                   onPress={() =>
                     setCalendarMonth(
                       new Date(calendarYear, calendarMonthIndex + 1, 1),
@@ -876,8 +876,8 @@ export default function EditListing() {
                           <Pressable
                             key={choice}
                             accessibilityRole="button"
-                            accessibilityState={{ selected, disabled: calendarSelector === "year" && choice > 2026 }}
-                            disabled={calendarSelector === "year" && choice > 2026}
+                            accessibilityState={{ selected, disabled: calendarSelector === "year" && !demoAccount && choice > 2026 }}
+                            disabled={calendarSelector === "year" && !demoAccount && choice > 2026}
                             onPress={() => {
                               setCalendarMonth(
                                 calendarSelector === "month"
@@ -895,7 +895,7 @@ export default function EditListing() {
                               style={[
                                 styles.calendarChoiceText,
                                 selected && styles.calendarChoiceTextSelected,
-                                calendarSelector === "year" && choice > 2026 && { color: colors.muted, opacity: 0.45 },
+                                calendarSelector === "year" && !demoAccount && choice > 2026 && { color: colors.muted, opacity: 0.45 },
                               ]}
                             >
                               {label}

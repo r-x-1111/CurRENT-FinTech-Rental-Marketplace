@@ -52,7 +52,7 @@ export const sampleReviews: SampleReview[] = [
 // six-question founder-screenshot set). Kept as a single shared source for the FAQ page and the
 // Help & Trust page. All insurance, delivery and payment flows referenced below are simulated.
 // Keep pricing and insurer responsibility consistent with checkout — Rental Protection answers
-// below must track services/booking.ts's actual fair-value/0.3%-per-7-days formula.
+// below must track services/booking.ts's fair-value/0.3%-per-7-days formula and RM5 minimum.
 export const sampleFaqs: FaqItem[] = [
   // CATEGORY A. ABOUT CurRENT
   {
@@ -65,13 +65,13 @@ export const sampleFaqs: FaqItem[] = [
     category: "About CurRENT",
     question: "How do I rent an item on CurRENT?",
     answer:
-      "1. Browse available items and select the item you want.\n2. Choose your rental start date and your preferred start time from the available slots.\n3. Enter your delivery information and review the estimated two-way delivery fee.\n4. Complete the simulated delivery payment.\n5. Review the rental fee, CurRENT service fee, refundable security deposit and optional Rental Protection.\n6. Complete the simulated rental payment using an available payment method.\n7. Receive the rented item and submit the required condition evidence.\n8. Return the item according to the agreed arrangements.\n9. The lender inspects the returned item before the refundable deposit is released or any dispute is assessed.\n\nEligible renters can book directly according to their Rental Risk Score. Renters who require Platform Review must complete the applicable assessment process before booking.",
+      "1. Browse available items and select the item you want.\n2. Choose your rental dates and an available start time. Local delivery uses the lender's selected hourly slots; cross-state courier bookings use recommended dispatch dates instead.\n3. Enter your delivery information and review the estimated two-way delivery fee.\n4. Complete the simulated delivery payment.\n5. Review the rental fee, CurRENT service fee, refundable security deposit and optional Rental Protection.\n6. Complete the simulated rental payment using an available payment method.\n7. Receive the rented item and submit the required condition evidence.\n8. Return the item according to the agreed arrangements.\n9. The lender inspects the returned item before the refundable deposit is released or any dispute is assessed.\n\nEligible renters can book directly according to their Rental Risk Score. Renters who require Platform Review must complete the applicable assessment process before booking.",
   },
   {
     category: "About CurRENT",
     question: "Can I choose any rental start time, and how are rental periods measured?",
     answer:
-      "Yes. You can select your preferred rental start date and start time from the available time slots — CurRENT does not lock everyone to a fixed starting hour such as 10 AM.\n\nRental periods are only available in complete 24-hour blocks measured from that start time: 24 hours (1 day), 48 hours (2 days), 72 hours (3 days) and so on. Your return time automatically matches your selected start time, so every rental you book is an exact multiple of 24 hours — CurRENT does not accept a return time that would create a partial block, such as 50 hours.\n\nThe rental fee is calculated as the daily rental price multiplied by the number of complete 24-hour periods. Choosing a different start time does not change this calculation; it only shifts which clock hour each 24-hour period runs from.",
+      "You can select a rental start date and an available start time. For local delivery, the lender's selected hourly slots apply; cross-state courier dispatch is recommended by date instead of using those local slots.\n\nRental periods are only available in complete 24-hour blocks measured from that start time: 24 hours (1 day), 48 hours (2 days), 72 hours (3 days) and so on. Your return time automatically matches your selected start time, so every rental you book is an exact multiple of 24 hours — CurRENT does not accept a return time that would create a partial block, such as 50 hours.\n\nThe rental fee is calculated as the daily rental price multiplied by the number of complete 24-hour periods. Choosing a different start time does not change this calculation; it only shifts which clock hour each 24-hour period runs from.",
   },
   {
     category: "About CurRENT",
@@ -133,9 +133,21 @@ export const sampleFaqs: FaqItem[] = [
   },
   {
     category: "Optional Rental Protection",
-    question: "How much does Rental Protection cost?",
+    question: "How is Rental Protection calculated?",
     answer:
-      "Under CurRENT's proposed demo model, Protection Fee = validated Item Fair / Replacement Value × 0.3% × (Rental Days ÷ 7).\n\nFor example, for an item worth RM4,000 rented for 2 days: RM4,000 × 0.3% × (2 ÷ 7) = RM3.43.\n\nThe rental duration is prorated — it is not rounded up to full seven-day blocks, and there is no minimum protection charge in the demo.\n\nThe protection premium is separate from your refundable security deposit, CurRENT service fee and delivery charges.\n\nUnder the proposed demo terms, the protection fee becomes non-refundable once the protected rental begins, subject to the applicable cancellation conditions. Before the rental begins, any refund depends on those conditions.\n\nThe 0.3% weekly reference rate is a simulation assumption, not an actual insurer quotation.",
+      "CurRENT uses an illustrative formula based on the item's validated replacement value and rental duration:\n\nProtection Fee = MAX(RM5, Item Fair Value × 0.3% × Rental Days / 7).\n\nFor example, if an item is valued at RM4,000 and rented for two days, the calculated premium is RM3.43. As this is below the RM5 minimum, the final protection fee is RM5.\n\nThe 0.3% rate is prorated over seven days. The RM5 minimum applies once per protected booking, not once per day. The premium is separate from the refundable security deposit, platform service fee and delivery charges.\n\nUnder the proposed demo terms, the protection fee becomes non-refundable once the protected rental begins, subject to the applicable cancellation conditions. Before the rental begins, any refund depends on those conditions.\n\nThis is a demo pricing assumption, not an insurer-approved premium.",
+  },
+  {
+    category: "Optional Rental Protection",
+    question: "Why is there a minimum protection fee?",
+    answer:
+      "CurRENT applies a proposed RM5 minimum per protected booking to avoid extremely small illustrative premiums for short rentals or lower-value items. The minimum is a prototype pricing assumption and would need to be reviewed by an insurance partner before commercial launch.",
+  },
+  {
+    category: "Optional Rental Protection",
+    question: "Who provides Rental Protection?",
+    answer:
+      "CurRENT proposes offering renter-purchased insurance through an independent licensed third-party insurance company. The insurer would determine actual premiums, underwriting eligibility, deductibles, coverage terms, claim decisions and approved compensation. CurRENT would facilitate selection, simulated payment, incident reporting and claim submission, but would not act as the insurer. The insurer's policy would determine who can formally submit a claim. No insurance policy has been issued in the current demo.",
   },
   {
     category: "Optional Rental Protection",
@@ -151,9 +163,9 @@ export const sampleFaqs: FaqItem[] = [
   },
   {
     category: "Optional Rental Protection",
-    question: "Does Rental Protection cover damage during delivery?",
+    question: "Does Rental Protection cover courier damage?",
     answer:
-      "Not automatically. Standard optional Rental Protection should not be described as covering damage during transportation unless the eventual third-party insurance policy expressly includes shipping risks.\n\nDamage or loss occurring during delivery should be reported through the applicable delivery company compensation process. Eligible delivery company compensation may be available whether or not the renter purchased optional Rental Protection.\n\nCurRENT helps coordinate the relevant claim but does not guarantee approval or compensation.",
+      "Courier-related damage and loss claims are handled separately through the relevant delivery company's claims process and are available whether or not the renter purchases optional Rental Protection. Insurance would cover transit damage only if explicitly included in the eventual third-party policy.\n\nCurRENT helps coordinate reporting but does not guarantee approval or compensation.",
   },
   {
     category: "Optional Rental Protection",
@@ -181,9 +193,9 @@ export const sampleFaqs: FaqItem[] = [
   },
   {
     category: "Optional Rental Protection",
-    question: "Is Rental Protection the same as a refundable security deposit?",
+    question: "How does Rental Protection differ from the security deposit?",
     answer:
-      "No. Rental Protection is a proposed third-party insurance product intended to compensate eligible insured damage following an approved claim. The refundable security deposit is money held as financial security against verified renter liability.\n\nRental Protection is optional and has a proposed premium of the item's validated fair/replacement value × 0.3% × (rental days ÷ 7). The refundable deposit is calculated using the renter's risk level and the item's estimated value instead.\n\nPurchasing Rental Protection does not remove the requirement to pay the applicable refundable security deposit.",
+      "The security deposit is mandatory, refundable and based on the renter's risk score and item value. Rental Protection is an optional, separate premium intended for eligible accidental damage during rental use. Its illustrative price is MAX(RM5, item fair value × 0.3% × rental days / 7).\n\nApproved insurance compensation would be considered before applying the deposit to any verified remaining renter liability. No duplicate compensation is permitted. Purchasing Rental Protection does not remove the applicable refundable security deposit.",
   },
 
   // CATEGORY D. RENTAL PROTECTION AND COMPENSATION COMPARISON
@@ -223,19 +235,19 @@ export const sampleFaqs: FaqItem[] = [
     category: "Delivery and Delivery Company Compensation",
     question: "How does CurRENT delivery work?",
     answer:
-      "CurRENT supports two simulated delivery arrangements.\n\nLocal Delivery: eligible Klang Valley routes use GrabExpress (Demo). The platform automatically selects a suitable Motorcycle, Car or MPV according to the parcel information and delivery requirements.\n\nCross-State or Out-of-Area Delivery: eligible routes use Domestic Courier (Demo). The shipping estimate considers parcel chargeable weight, dimensions and applicable regional rates.\n\nBoth outbound and return delivery charges are calculated and paid upfront in the simulated checkout. These arrangements do not represent live courier bookings.",
+      "CurRENT supports two simulated delivery arrangements.\n\nLocal or Same-State Delivery: eligible routes use GrabExpress (Demo). The platform automatically selects a suitable Motorcycle, Car or MPV according to the parcel information and delivery requirements. Some local rates outside Klang Valley are CurRENT demo assumptions.\n\nCross-State Delivery: eligible routes use Domestic Courier (Demo). Eligibility is determined from the saved package weight, dimensions, shipping characteristics and any explicit platform restriction. Fragile handling alone does not prevent cross-state delivery. The shipping estimate considers parcel chargeable weight, dimensions and applicable regional rates.\n\nBoth outbound and return delivery charges are calculated and paid upfront in the simulated checkout. These arrangements do not represent live courier bookings.",
   },
   {
     category: "Delivery and Delivery Company Compensation",
     question: "How are delivery fees calculated?",
     answer:
-      "CurRENT estimates local delivery fees using the lender's pickup postcode and the renter's delivery postcode. Both postcodes are converted into approximate coordinates to calculate a straight-line distance. CurRENT then applies a 1.3 adjustment factor to estimate the travel distance in kilometres.\n\nThe estimated distance is used with the automatically selected Motorcycle, Car or MPV and the applicable GrabExpress-inspired pricing rules.\n\nFor cross-state deliveries, postage is estimated using shipping regions, parcel weight and dimensions instead of kilometres.\n\nBoth outbound and return delivery charges are calculated separately and combined into the total two-way fee.\n\nAll delivery fees are simulated estimates. CurRENT does not use a live Google Maps routing API or courier pricing API.",
+      "CurRENT estimates local delivery fees using the lender's pickup postcode and the renter's destination postcode. Both postcodes are resolved into approximate coordinates. The straight-line distance between them is multiplied by an assumed road-distance adjustment factor of 1.3. The resulting approximate kilometres are used with the automatically selected Motorcycle, Car or MPV and the applicable GrabExpress-inspired rate. This is not a live driving-distance quotation.\n\nFor cross-state Domestic Courier (Demo), postcodes identify the shipping region. Volumetric weight = length × width × height / 6000. Chargeable weight is the greater of actual and volumetric weight, rounded up to 0.5 kg, then priced using the configured shipping-zone rate. Kilometre-based local delivery pricing is not used.\n\nOutbound and return charges are calculated separately and combined into the total two-way delivery fee. All delivery fees are simulated estimates; CurRENT does not use a live routing or courier pricing API.",
   },
   {
     category: "Delivery and Delivery Company Compensation",
     question: "How do cross-state delivery and returns work?",
     answer:
-      "For cross-state rentals, CurRENT recommends shipping arrangements according to the rental dates and available courier transit estimates. The lender confirms the outbound dispatch arrangement.\n\nFor returns, the renter securely packages the rented item and drops it off at an eligible courier branch by the agreed return deadline.\n\nEstimated arrival dates are provided only when suitable reference information is available. CurRENT does not guarantee exact courier arrival dates or live tracking. All shipping arrangements are simulated.",
+      "For cross-state rentals, CurRENT recommends shipping arrangements according to the rental dates and available courier transit estimates. Local hourly delivery slots do not determine cross-state courier dispatch. The lender confirms the outbound dispatch arrangement.\n\nFor returns, the renter securely packages the rented item and drops it off at an eligible courier branch by the agreed return deadline.\n\nEstimated arrival dates are provided only when suitable reference information is available. CurRENT does not guarantee exact courier arrival dates or live tracking. All shipping arrangements are simulated.",
   },
   {
     category: "Delivery and Delivery Company Compensation",
@@ -255,7 +267,7 @@ export const sampleFaqs: FaqItem[] = [
     category: "Payments, Fees and Disputes",
     question: "Can I pay using FPX or Buy Now Pay Later (BNPL)?",
     answer:
-      "You can complete your payment securely through an authorised payment provider, using FPX or Buy Now Pay Later (BNPL). In the current demo, both payment methods are simulated — no real bank transactions, financing agreements or external provider approvals occur through the demo.\n\nThe selected payment method is reflected consistently in the relevant rental and transaction history records. Actual BNPL eligibility, financing conditions and payment terms would depend on a future authorised provider.",
+      "The current checkout offers simulated FPX and BNPL selections. Both record the same full checkout amount immediately; the BNPL option does not create instalments or run a credit check. No real bank transaction, financing agreement or external provider approval occurs in the demo.\n\nThe selected payment method is reflected in the relevant rental and transaction history records. Actual BNPL eligibility, financing conditions and payment terms would depend on a future authorised provider.",
   },
   {
     category: "Payments, Fees and Disputes",

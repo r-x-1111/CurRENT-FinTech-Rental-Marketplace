@@ -29,10 +29,13 @@ import { useMarketplace } from "../../context/Marketplace";
 import {
   availability,
   availabilityCalendar,
+  allowsFutureDemoAvailability,
+  calculateProtectionBasePremium,
   calculateProtectionFee,
   calculateProtectionLimit,
   requiresProtectionEligibilityReview,
   RENTAL_PROTECTION_LIMIT_CAP,
+  RENTAL_PROTECTION_MINIMUM_FEE,
   demoSlotAvailable,
   isDemoSeededListing,
   dateAfter,
@@ -101,6 +104,7 @@ export default function ListingDetailScreen() {
   const { id, checkoutId } = useLocalSearchParams<{ id: string; checkoutId?: string }>();
   const { state, user, act, actAndPersist } = useMarketplace();
   const listing = state.listings.find((l) => l.id === id);
+  const futureDemoDates = !!listing && allowsFutureDemoAvailability(state, listing);
   const checkoutBooking = state.bookings.find((booking) =>
     booking.id === checkoutId && booking.renterId === user?.id && booking.listingId === id && booking.status === "payment_required");
   // 8 Fixed Delivery Slots filtered by lender's selection (Section 4.3, 7.1, 17.8)
@@ -200,6 +204,7 @@ export default function ListingDetailScreen() {
     () => checkoutBooking?.deliveryDemo?.status === "paid_demo",
   );
   const [showDeliveryDetails, setShowDeliveryDetails] = useState(false);
+  const [showEligibilityPopup, setShowEligibilityPopup] = useState(false);
   const [insuranceSelected, setInsuranceSelected] = useState(false);
   const [showInsuranceDetails, setShowInsuranceDetails] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
@@ -749,19 +754,26 @@ export default function ListingDetailScreen() {
           <Text style={[s.body, { marginTop: 20, marginBottom: 8 }]}>
             {listing.description}
           </Text>
-          <View style={{ marginBottom: 20, gap: 4 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${CROSS_STATE_ELIGIBILITY_BADGE[listingCrossStateEligibility]}. View delivery eligibility explanation`}
+            onPress={() => setShowEligibilityPopup(true)}
+            style={{ marginBottom: 20, alignSelf: "flex-start" }}
+          >
             <Badge
               text={CROSS_STATE_ELIGIBILITY_BADGE[listingCrossStateEligibility]}
-              tone={
-                listingCrossStateEligibility === "available"
-                  ? "green"
-                  : listingCrossStateEligibility === "same_state_only"
-                    ? "amber"
-                    : "blue"
-              }
+              tone={listingCrossStateEligibility === "available" ? "green" : listingCrossStateEligibility === "same_state_only" ? "amber" : "blue"}
             />
-            <Text style={s.caption}>Delivery eligibility is automatically determined using the item's packaged weight, dimensions and shipping requirements.</Text>
-          </View>
+          </Pressable>
+          <Modal visible={showEligibilityPopup} transparent animationType="fade" onRequestClose={() => setShowEligibilityPopup(false)}>
+            <Pressable style={styles.calendarModalOverlay} onPress={() => setShowEligibilityPopup(false)}>
+              <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
+                <Text style={s.h2}>{CROSS_STATE_ELIGIBILITY_BADGE[listingCrossStateEligibility]}</Text>
+                <Text style={s.caption}>Delivery eligibility is automatically determined using the item's packaged weight, dimensions and shipping requirements.</Text>
+                <Button secondary onPress={() => setShowEligibilityPopup(false)}>Close</Button>
+              </Pressable>
+            </Pressable>
+          </Modal>
 
           {/* Owner info card */}
           <Card>
@@ -944,7 +956,7 @@ export default function ListingDetailScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Next month"
-                  disabled={calendarYear >= 2026 && calendarMonthIndex >= 11}
+                  disabled={!futureDemoDates && calendarYear >= 2026 && calendarMonthIndex >= 11}
                   onPress={() => changeDisplayedMonth(1)}
                   style={styles.calendarNavButton}
                 >
@@ -1060,8 +1072,8 @@ export default function ListingDetailScreen() {
                           <Pressable
                             key={`${calendarPicker}-${option.value}`}
                             accessibilityRole="button"
-                            accessibilityState={{ selected, disabled: calendarPicker === "year" && option.value > 2026 }}
-                            disabled={calendarPicker === "year" && option.value > 2026}
+                            accessibilityState={{ selected, disabled: calendarPicker === "year" && !futureDemoDates && option.value > 2026 }}
+                            disabled={calendarPicker === "year" && !futureDemoDates && option.value > 2026}
                             onPress={() => {
                               setCalendarMonth((current) =>
                                 new Date(
@@ -1088,7 +1100,7 @@ export default function ListingDetailScreen() {
                                 styles.calendarModalOptionText,
                                 selected &&
                                   styles.calendarModalOptionTextSelected,
-                                calendarPicker === "year" && option.value > 2026 && { color: colors.muted, opacity: 0.45 },
+                                calendarPicker === "year" && !futureDemoDates && option.value > 2026 && { color: colors.muted, opacity: 0.45 },
                               ]}
                             >
                               {option.label}
@@ -1511,14 +1523,13 @@ export default function ListingDetailScreen() {
               </View>
             )}
 
-            {/* Optional third-party Rental Protection (demo): 0.3% of value prorated by days/7 */}
+            {/* Optional third-party Rental Protection (demo): prorated 0.3% rate, RM5 minimum */}
             {renterRisk?.level !== "very_high" && quote && (
               <View style={[styles.insuranceCard, insuranceSelected && styles.insuranceCardSelected]}>
                 <View style={styles.insuranceHeaderRow}>
                   <Ionicons name="shield-checkmark-outline" size={18} color={colors.blue} />
-                  <Text style={sectionHeadingStyle}>Rental Protection (Optional · Demo)</Text>
+                  <Text style={sectionHeadingStyle}>Rental Protection (Optional — Third-Party Insurance Demo)</Text>
                 </View>
-                <Text style={styles.insuranceDescription}>Optional third-party insurance concept for eligible accidental damage during rental use (Demo).</Text>
                 <Pressable
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: insuranceSelected }}
@@ -1547,36 +1558,43 @@ export default function ListingDetailScreen() {
               <Pressable style={styles.calendarModalOverlay} onPress={() => setShowInsuranceDetails(false)}>
                 <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
                   <ScrollView contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
-                  <Text style={s.h2}>Rental Protection — Third-Party Insurance (Demo)</Text>
+                  <Text style={s.h2}>Rental Protection Details (Demo)</Text>
                   {!!quote && (() => {
                     const replacementValue = listing.estimatedValue || 0;
+                    const basePremium = calculateProtectionBasePremium(replacementValue, quote.days);
                     const protectionFee = calculateProtectionFee(replacementValue, quote.days);
                     const protectionLimit = calculateProtectionLimit(replacementValue);
                     const needsReview = requiresProtectionEligibilityReview(replacementValue);
                     return (
                       <>
-                        <Text style={[s.body, { marginTop: 8, fontWeight: "700" }]}>Protection Fee</Text>
                         <View style={styles.summaryRow}>
                           <Text style={styles.summaryLabel}>Item Fair / Replacement Value</Text>
                           <Text style={styles.summaryValue}>{money(replacementValue)}</Text>
                         </View>
                         <View style={styles.summaryRow}>
-                          <Text style={styles.summaryLabel}>Illustrative Protection Rate</Text>
+                          <Text style={styles.summaryLabel}>Protection Rate</Text>
                           <Text style={styles.summaryValue}>0.3% per 7 days</Text>
                         </View>
                         <View style={styles.summaryRow}>
                           <Text style={styles.summaryLabel}>Rental Duration</Text>
                           <Text style={styles.summaryValue}>{quote.days} {quote.days === 1 ? "day" : "days"}</Text>
                         </View>
-                        <Text style={[s.body, { marginTop: 10, fontWeight: "700" }]}>
-                          Protection Fee: {money(replacementValue)} × 0.3% × ({quote.days} / 7) = {money(protectionFee)}
-                        </Text>
+                        <View style={styles.summaryRow}>
+                          <Text style={styles.summaryLabel}>Minimum Protection Fee</Text>
+                          <Text style={styles.summaryValue}>{money(RENTAL_PROTECTION_MINIMUM_FEE)}</Text>
+                        </View>
+                        <Text style={s.caption}>Protection Fee = MAX(RM5, Item Fair Value × 0.003 × Rental Days / 7)</Text>
+                        <Text style={s.body}>Calculated Premium: {money(replacementValue)} × 0.003 × ({quote.days} / 7) = {money(basePremium)}</Text>
+                        <View style={styles.summaryRow}>
+                          <Text style={[styles.summaryLabel, { fontWeight: "700" }]}>Final Protection Fee</Text>
+                          <Text style={[styles.summaryValue, { fontWeight: "700" }]}>{money(protectionFee)}</Text>
+                        </View>
                         <View style={styles.summaryRow}>
                           <Text style={styles.summaryLabel}>Proposed Protection Limit</Text>
                           <Text style={styles.summaryValue}>{money(protectionLimit)}</Text>
                         </View>
                         <View style={styles.summaryRow}>
-                          <Text style={styles.summaryLabel}>Proposed Maximum</Text>
+                          <Text style={styles.summaryLabel}>Proposed Maximum Coverage</Text>
                           <Text style={styles.summaryValue}>{money(RENTAL_PROTECTION_LIMIT_CAP)}</Text>
                         </View>
                         {needsReview && (
@@ -1584,19 +1602,16 @@ export default function ListingDetailScreen() {
                             This item's replacement value exceeds the proposed maximum and is flagged for manual eligibility review.
                           </Text>
                         )}
-                        <Text style={s.caption}>
-                          The demo premium is based on the item's validated fair value and rental duration, prorated by days / 7. Days are not rounded up to full weeks, and no minimum fee applies. The 0.3% rate is an illustrative CurRENT assumption, not an insurer quotation.
-                        </Text>
+                        <Text style={s.caption}>Your protection fee is calculated using the item's fair value and rental duration. A minimum fee of RM5 applies per booking. The seven-day rate is prorated, rather than charged in full for every started week.</Text>
                       </>
                     );
                   })()}
 
-                  <Text style={[s.body, { marginTop: 8, fontWeight: "700" }]}>Important Information</Text>
                   <Text style={s.caption}>
-                    This is a proposed renter-purchased insurance product provided by a third-party insurer, not CurRENT. CurRENT would facilitate the selection and claim process; the insurer would set actual premiums and terms, assess claims and pay approved compensation. No insurer is connected and no policy has been issued in this demo. The 0.3% weekly reference rate and the RM{RENTAL_PROTECTION_LIMIT_CAP.toLocaleString()} cap are illustrative assumptions only. Courier damage reports remain available whether or not Rental Protection is purchased.
+                    This is a simulated third-party insurance concept. The 0.3% rate, RM5 minimum and proposed coverage limit are illustrative assumptions, not quotations or policy terms approved by an insurance company. Actual premiums, eligibility, coverage, exclusions and claim decisions would be determined by a licensed third-party insurer.
                   </Text>
                   <Text style={s.caption}>
-                    Your refundable security deposit is separate from this premium, and delivery damage is handled through the applicable delivery company's own compensation process. See the FAQ for full terms, exclusions and claim details.
+                    CurRENT would facilitate selection, simulated payment, incident reporting and claim submission, but would not act as the insurer. The insurer's policy would determine who can formally submit a claim. Your refundable security deposit remains separate, and courier damage is handled through the delivery company's claims process. See the FAQ for full terms.
                   </Text>
                   <Button secondary onPress={() => setShowInsuranceDetails(false)}>Close</Button>
                   </ScrollView>
@@ -1723,7 +1738,7 @@ export default function ListingDetailScreen() {
                           <Row label="Delivery Address" value={currentDeliveryAddress} />
                           <Row label="Estimated Distance (Demo)" value={`${deliveryEstimate.distanceKm} km (estimated, not a measured route)`} />
                           <Text style={styles.fieldSubtext}>
-                            Distance is estimated using the pickup and delivery postcodes. CurRENT calculates the approximate straight-line distance and applies a 1.3 road-distance adjustment factor. Actual driving distances and courier charges may differ.
+                            The lender's pickup postcode and your destination postcode are resolved to approximate coordinates. CurRENT estimates straight-line distance between them and multiplies it by 1.3 as an assumed road-distance adjustment. The resulting approximate kilometres feed the selected Motorcycle, Car or MPV rate. This is not a live driving-distance quotation.
                           </Text>
                           <Row label="Vehicle" value={deliveryEstimate.vehicle} />
                           <Row label="Payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Paid (Demo)" : "Awaiting Payment"} />
@@ -1741,7 +1756,7 @@ export default function ListingDetailScreen() {
                           <Row label="Delivery Address" value={currentDeliveryAddress} />
                           <Row label="Courier" value={DOMESTIC_COURIER_NAME} />
                           <Text style={styles.fieldSubtext}>
-                            Domestic courier postage is estimated using the pickup and destination postcodes to identify the shipping region, together with the parcel's weight and dimensions. Charges are based on CurRENT's configured demo rate table, not live J&T Express quotations.
+                            Domestic courier postage uses the pickup and destination postcodes to identify the shipping region. Volumetric weight = length × width × height ÷ 6000; chargeable weight is the greater of actual and volumetric weight, rounded up to 0.5 kg. CurRENT applies its configured shipping-zone rate to each package, then combines separate outbound and return charges. Kilometre-based local rates do not apply. This is not a live J&T Express quotation.
                           </Text>
                           <Row label="Shipping Zone" value={courierEstimate.zone} />
                           <Row label="Chargeable Weight" value={`${courierEstimate.chargeableWeightKg} kg (volumetric: ${courierEstimate.volumetricWeightKg} kg)`} />
