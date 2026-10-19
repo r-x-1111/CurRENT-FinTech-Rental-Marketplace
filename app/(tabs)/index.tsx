@@ -341,7 +341,7 @@ export default function HomeScreen() {
                 </ScrollView>
               )}
 
-                <Text style={styles.categoryLabel}>Explore by category</Text>
+                <Text style={[styles.categoryLabel, isMobile && styles.mobileCategoryLabel]}>Explore by category</Text>
                 <View style={styles.categoryScrollWrap}>
                   <ScrollView
                     horizontal
@@ -623,7 +623,8 @@ const styles = StyleSheet.create({
     color: colors.navy,
     fontWeight: "500",
   },
-  categoryLabel: { color: "#102B50", fontSize: 12, fontWeight: "700", marginTop: 14 },
+  categoryLabel: { color: "#102B50", fontSize: 15, fontWeight: "700", marginTop: 14 },
+  mobileCategoryLabel: { fontSize: 16 },
   // Clipped to the same width as the search bar/headline column (desktopSearchContainer's
   // maxWidth: 620) so the scrollable chip row never extends past that edge towards the
   // product photography; chips beyond it are reached by scrolling within this container only.
