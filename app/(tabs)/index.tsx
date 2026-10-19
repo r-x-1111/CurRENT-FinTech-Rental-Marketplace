@@ -209,7 +209,7 @@ export default function HomeScreen() {
                   // so the label and bell can never overlap at any width — flexbox naturally
                   // keeps a minimum gap instead of two independently absolute-positioned layers.
                   <View style={styles.heroTopRow}>
-                    <View style={styles.eyebrowBadge}>
+                    <View style={[styles.eyebrowBadge, styles.mobileEyebrowBadge]}>
                       <Text style={styles.eyebrowText}>RENTALS ACROSS MALAYSIA</Text>
                     </View>
                     {bell}
@@ -238,7 +238,7 @@ export default function HomeScreen() {
               </Text>
 
               {/* Subtitle */}
-              <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead, isMobile && width >= 375 && styles.mobileHeroSubheadWithProduct]}>
+              <Text style={[styles.heroSubhead, isMobile && styles.mobileHeroSubhead, isMobile && styles.mobileHeroSubheadWithProduct]}>
                 Useful things, nearby. Discover trusted rentals across Malaysia
                 or turn your idle gear into extra income.
               </Text>
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
   desktopHeroWrapper: { paddingTop: 26, paddingBottom: 26, minHeight: 460, justifyContent: "center" },
   // paddingBottom gives the scrollable category chips room to sit fully above the hero's
   // bottom fade/edge instead of being visually clipped by it on small screens.
-  mobileHeroWrapper: { paddingTop: 28, paddingBottom: 14, overflow: "hidden" },
+  mobileHeroWrapper: { paddingTop: 28, paddingBottom: 0, overflow: "hidden" },
   // No horizontal padding lives on heroWrapper any more — it's applied here instead, on the
   // same maxWidth:1180/alignSelf:"center" element, exactly mirroring catalogueSection's own
   // structure (full-width band with no padding > centered maxWidth element with its own
@@ -504,6 +504,10 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginTop: 20,
   },
+  // Mobile renders the label and bell as plain siblings in one flex row (heroTopRow,
+  // align-items: center) so their vertical centres line up automatically — the desktop-only
+  // marginTop above would otherwise throw off that centring here, so it's cancelled.
+  mobileEyebrowBadge: { marginTop: 0 },
   eyebrowText: {
     color: "#2563EB",
     fontSize: 11,
@@ -524,7 +528,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     maxWidth: 520,
   },
-  mobileHeroSubhead: { fontSize: 13, lineHeight: 19 },
+  mobileHeroSubhead: { fontSize: 13, lineHeight: 19, color: "#102B50" },
   mobileHeroSubheadWithProduct: { maxWidth: 210 },
   searchContainer: {
     backgroundColor: "white",
@@ -687,7 +691,7 @@ const styles = StyleSheet.create({
   // On mobile the hero now ends with the in-flow product photo (not an absolute-fill bleed
   // photo), so the -32 pull-up isn't needed — instead add ~36px of normal document-flow space
   // so "All Items" isn't crowded against the category chips.
-  mobileCatalogueBand: { marginTop: 14 },
+  mobileCatalogueBand: { marginTop: 0 },
   catalogueSection: {
     maxWidth: 1180,
     width: "100%",
@@ -697,7 +701,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 16,
   },
-  mobileCatalogueSection: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 20, gap: 12 },
+  mobileCatalogueSection: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 20, gap: 12 },
   catalogueControlsRow: {
     flexDirection: "row",
     alignItems: "center",
