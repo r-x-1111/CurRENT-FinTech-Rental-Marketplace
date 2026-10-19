@@ -554,6 +554,11 @@ The PDF/workbook planning model forecasts ~RM200 average rental, platform-side *
 
 **Fee boundaries:** Refundable deposits are held security, **not platform revenue**. Lender commission is **deducted from rent**, not added to the renter. Renter service fee is **5% of rental fee, minimum RM5**. Remove any unsupported `Demo item protection RM5/day` toggle/charge. Item Protection may be shown as a **future conditional partner concept**, potentially up to RM60,000 for eligible high-value items, but no active policy is implied or guaranteed. The hypothetical insurer referral RM2 and BNPL referral RM5 are platform planning assumptions, **not premiums charged to renters**. Optional **RM10/7-day lender Listing Boost** is separate. No invented delivery charges, courier quotes, late-return fines or unsupported extra fees.
 
+**Delivery pricing references (shown here only, not in the app UI):** The in-app delivery / postage details no longer show a `Pricing basis` row. The demo fee models are based on:
+
+- **GrabExpress:** GrabExpress MY FAQ, May 2023 (`DELIVERY_PRICING_REFERENCE` in `services/delivery.ts`). Where that table publishes no MPV rate (outside Klang Valley), an MPV quote uses a CurRENT simulated regional estimate, not a published Grab fare.
+- **Domestic courier:** CurRENT demo courier rate, informed by typical J&T Malaysia zone structure — not an official J&T quotation (`DOMESTIC_COURIER_PRICING_REFERENCE` in `services/delivery.ts`).
+
 ## 7. Renter booking calendar, delivery address and date-specific cancellation notice
 
 ### 7.1 Full month/year selection, two-click range and scheduled times

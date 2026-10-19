@@ -73,7 +73,6 @@ export default function DeliveryDemoCheckout() {
         <Row label="Delivery Address" value={displayDelivery?.destination || delivery.destination} />
         <Row label="Estimated Distance" value={displayDelivery?.distanceKm != null ? `${displayDelivery.distanceKm} km (estimated)` : "Unavailable"} />
         <Row label="Vehicle type" value={displayDelivery?.vehicle || "Unavailable"} />
-        <Row label="Pricing basis" value={delivery.pricingReference || "Historical demo record"} />
         {displayDelivery?.outboundFee != null && <Row label="Outbound delivery fee" value={money(displayDelivery.outboundFee)} />}
         {displayDelivery?.returnFee != null && <Row label="Return delivery fee" value={money(displayDelivery.returnFee)} />}
         <Row label="Total two-way delivery fee" value={displayDelivery?.fee != null ? money(displayDelivery.fee) : "Unavailable"} strong />

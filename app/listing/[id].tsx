@@ -789,11 +789,11 @@ export default function ListingDetailScreen() {
 
         {/* Right Column: Clean Calendar, Locked Return Time, Booking Summary. Sticky on web
             desktop so the booking panel stays in view while the left column (photos/description)
-            scrolls underneath it. */}
+            scrolls underneath it. Capped to the viewport height and scrollable on its own when taller. */}
         <View
           style={[
             { width: width >= 1024 ? 380 : "100%" },
-            width >= 1024 && Platform.OS === "web" ? ({ position: "sticky", top: 20, alignSelf: "flex-start" } as any) : null,
+            width >= 1024 && Platform.OS === "web" ? ({ position: "sticky", top: 20, alignSelf: "flex-start", maxHeight: "calc(100vh - 40px)", overflowY: "auto" } as any) : null,
           ]}
         >
           <Card>
@@ -1314,8 +1314,10 @@ export default function ListingDetailScreen() {
                         }}
                         onPress={() => selectDemoAddress(index)}
                         style={{
-                          paddingHorizontal: 10,
-                          paddingVertical: 8,
+                          maxWidth: "100%",
+                          flexShrink: 1,
+                          paddingHorizontal: 8,
+                          paddingVertical: 5,
                           borderRadius: 10,
                           borderWidth: 1,
                           borderColor:
@@ -1328,7 +1330,7 @@ export default function ListingDetailScreen() {
                               : colors.white,
                         }}
                       >
-                        <Text style={s.caption}>
+                        <Text style={[s.caption, { flexShrink: 1, fontSize: 12, lineHeight: 16 }]}>
                           {index === user?.defaultDeliveryAddressIndex
                             ? "Default · "
                             : ""}
@@ -1506,6 +1508,7 @@ export default function ListingDetailScreen() {
             >
               <Pressable style={styles.calendarModalOverlay} onPress={() => setShowInsuranceDetails(false)}>
                 <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
+                  <ScrollView contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
                   <Text style={s.h2}>Rental Protection (Demo)</Text>
                   {!!quote && (() => {
                     const replacementValue = listing.estimatedValue || 0;
@@ -1561,6 +1564,7 @@ export default function ListingDetailScreen() {
                     This is a demonstration rental damage-protection model, not an issued insurance policy. The pricing is informed by published rental protection services, while the proposed RM{RENTAL_PROTECTION_LIMIT_CAP.toLocaleString()} limit is based on an industry example. Actual coverage, eligibility, claims and pricing require agreement with a licensed insurance provider or an appropriately established protection programme.
                   </Text>
                   <Button secondary onPress={() => setShowInsuranceDetails(false)}>Close</Button>
+                  </ScrollView>
                 </Pressable>
               </Pressable>
             </Modal>
@@ -1659,15 +1663,19 @@ export default function ListingDetailScreen() {
                       {!deliveryEstimate && !courierEstimate && (
                         <Text style={styles.deliveryIssueText}>{deliveryIssue.message}</Text>
                       )}
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityState={{ expanded: showDeliveryDetails }}
-                        onPress={() => setShowDeliveryDetails((open) => !open)}
-                      >
-                        <Text style={styles.summaryLinkText}>
-                          {showDeliveryDetails ? "Hide Postage Details" : "View Postage Details"}
-                        </Text>
+                      <Pressable accessibilityRole="button" onPress={() => setShowDeliveryDetails(true)}>
+                        <Text style={styles.summaryLinkText}>View Postage Details</Text>
                       </Pressable>
+                      <Modal
+                        visible={showDeliveryDetails}
+                        transparent
+                        animationType="fade"
+                        onRequestClose={() => setShowDeliveryDetails(false)}
+                      >
+                        <Pressable style={styles.calendarModalOverlay} onPress={() => setShowDeliveryDetails(false)}>
+                          <Pressable style={styles.insuranceModalCard} onPress={() => {}}>
+                            <ScrollView contentContainerStyle={{ gap: 6 }} showsVerticalScrollIndicator>
+                            <Text style={s.h2}>{isCourierDelivery ? "Postage Details (Demo)" : "Delivery Details (Demo)"}</Text>
                       {showDeliveryDetails && deliveryEstimate && returnDeliveryEstimate && (
                         <View style={styles.deliveryDetails}>
                           <Row label="Pickup Location" value={listing.privateMeetingVenue || listing.location} />
@@ -1675,7 +1683,6 @@ export default function ListingDetailScreen() {
                           <Row label="Estimated Distance (Demo)" value={`${deliveryEstimate.distanceKm} km (estimated, not a measured route)`} />
                           <Row label="Vehicle" value={deliveryEstimate.vehicle} />
                           <Row label="Payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Paid (Demo)" : "Awaiting Payment"} />
-                          <Row label="Pricing basis" value={deliveryEstimate.reference} />
                           <Row label="Rate" value={deliveryRateDescription(deliveryEstimate.area, deliveryEstimate.vehicle)} />
                           <Row label="Outbound base fare" value={money(deliveryEstimate.baseFare)} />
                           <Row label="Outbound distance charge" value={money(deliveryEstimate.distanceCharge)} />
@@ -1694,13 +1701,17 @@ export default function ListingDetailScreen() {
                           {!!listing.parcelPackages?.length && (
                             <Row label="Packages" value={`${listing.parcelPackages.length} packages, priced independently and combined`} />
                           )}
-                          <Row label="Pricing basis" value={courierEstimate.reference} />
                           <Row label="Payment status" value={checkoutBooking?.deliveryDemo?.status === "paid_demo" && !deliveryDetailsChanged ? "Paid (Demo)" : "Awaiting Payment"} />
                           <Row label="Outbound postage (pickup → you)" value={money(courierEstimate.fee)} />
                           <Row label="Return postage (you → pickup)" value={money(returnCourierEstimate.fee)} />
                           <Row label="Total two-way postage" value={money(twoWayDeliveryFee!)} strong />
                         </View>
                       )}
+                            <Button secondary onPress={() => setShowDeliveryDetails(false)}>Close</Button>
+                            </ScrollView>
+                          </Pressable>
+                        </Pressable>
+                      </Modal>
                     </>
                   ) : (
                     <Pressable
@@ -1757,7 +1768,6 @@ export default function ListingDetailScreen() {
                     router.replace({ pathname: "/listing/[id]", params: { id } });
                   } catch (e) { setError((e as Error).message); }
                 }}>{deliveryDetailsChanged ? "Reset Delivery Checkout" : "Cancel Unfinished Checkout"}</Button>}
-                <Text style={s.caption}>Demo estimate only. Not a live Grab quotation. Delivery fee is separate from the rental total and is not CurRENT revenue.</Text>
               </View>
             )}
 
@@ -2301,9 +2311,10 @@ const styles = StyleSheet.create({
   insuranceModalCard: {
     backgroundColor: colors.white,
     borderRadius: 16,
-    padding: 18,
+    padding: 16,
     width: "100%",
-    maxWidth: 420,
+    maxWidth: 360,
+    maxHeight: "70%",
     alignSelf: "center",
     gap: 6,
   },

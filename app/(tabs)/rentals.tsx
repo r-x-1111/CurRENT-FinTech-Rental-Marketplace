@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Redirect, router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Badge, Button, Chips, Empty, Row, Screen, s } from "../../components/ui";
@@ -331,15 +331,19 @@ export default function RentalsScreen() {
                       <Row label={card.delivery.method === "Domestic Courier (Demo)" ? "Automatically Selected Courier" : "Automatically Selected Vehicle"}
                         value={card.delivery.method === "Domestic Courier (Demo)" ? (card.delivery.courierName || "Unavailable") : (card.delivery.vehicle || "Unavailable")} />
                       <Row label="Payment Status" value={card.delivery.status === "paid_demo" ? "Paid (Demo)" : card.delivery.status === "refunded_demo" ? "Refunded (Demo)" : "Awaiting Payment"} />
-                      <Pressable accessibilityRole="button" onPress={() => setExpandedDeliveryBreakdown((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(b.id)) next.delete(b.id); else next.add(b.id);
-                        return next;
-                      })}>
-                        <Text style={{ color: colors.blue, fontWeight: "700", marginTop: 2 }}>
-                          {showBreakdown ? "Hide Postage Details" : "View Postage Details"}
-                        </Text>
+                      <Pressable accessibilityRole="button" onPress={() => setExpandedDeliveryBreakdown((prev) => new Set(prev).add(b.id))}>
+                        <Text style={{ color: colors.blue, fontWeight: "700", marginTop: 2 }}>View Postage Details</Text>
                       </Pressable>
+                      <Modal
+                        visible={showBreakdown}
+                        transparent
+                        animationType="fade"
+                        onRequestClose={() => setExpandedDeliveryBreakdown((prev) => { const next = new Set(prev); next.delete(b.id); return next; })}
+                      >
+                        <Pressable style={styles.modalOverlay} onPress={() => setExpandedDeliveryBreakdown((prev) => { const next = new Set(prev); next.delete(b.id); return next; })}>
+                          <Pressable style={styles.detailsModalCard} onPress={() => {}}>
+                            <ScrollView contentContainerStyle={{ gap: 8 }}>
+                            <Text style={s.h2}>{card.delivery.method === "Domestic Courier (Demo)" ? "Postage Details (Demo)" : "Delivery Details (Demo)"}</Text>
                       {showBreakdown && card.delivery.method === "Domestic Courier (Demo)" && (
                         <View style={styles.feeBreakdownBox}>
                           <Row label="Pickup Location" value={card.delivery.origin || "Not recorded"} />
@@ -389,6 +393,11 @@ export default function RentalsScreen() {
                           <Row label="Payment status" value={card.delivery.status === "paid_demo" ? "Paid (Demo)" : card.delivery.status === "refunded_demo" ? "Refunded (Demo)" : "Awaiting Payment"} />
                         </View>
                       )}
+                            <Button secondary onPress={() => setExpandedDeliveryBreakdown((prev) => { const next = new Set(prev); next.delete(b.id); return next; })}>Close</Button>
+                            </ScrollView>
+                          </Pressable>
+                        </Pressable>
+                      </Modal>
                       {(card.delivery.status === "paid_demo" || card.delivery.status === "refunded_demo") && card.delivery.receiptReference && (
                         <Button secondary onPress={() => router.push({ pathname: "/delivery-receipt/[id]", params: { id: card.delivery.receiptReference! } })}>
                           View Delivery Receipt
@@ -574,6 +583,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: colors.white,
   },
+  detailsModalCard: { alignSelf: "center", width: "100%", maxWidth: 360, maxHeight: "70%", padding: 16, borderRadius: 16, backgroundColor: colors.white },
   modalDivider: { height: 1, backgroundColor: colors.border, marginVertical: 6 },
   modalSectionTitle: { fontSize: 13, fontWeight: "800", color: colors.navy },
   deliverySectionHeader: { flexDirection: "row", alignItems: "center", gap: 6 },

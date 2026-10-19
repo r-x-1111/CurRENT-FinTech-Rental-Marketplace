@@ -41,16 +41,16 @@ export default function TrustScreen() {
         </View>
 
         {/* Trust Card 2: Rental Risk Score with Gauge Visual */}
-        <View style={[styles.trustCard, styles.trustCardFeatured]}>
-          <View style={styles.trustIconContainerFeatured}>
-            <Ionicons name="speedometer-outline" size={26} color="#38BDF8" />
+        <View style={styles.trustCard}>
+          <View style={styles.trustIconContainer}>
+            <Ionicons name="speedometer-outline" size={26} color={colors.blue} />
           </View>
-          <Text style={styles.trustCardTitleFeatured}>Renter Rental Risk Score</Text>
+          <Text style={styles.trustCardTitle}>Renter Rental Risk Score</Text>
           <RiskGauge
             score={80}
             label="Low Risk"
           />
-          <Text style={styles.trustCardBodyFeatured}>
+          <Text style={styles.trustCardBody}>
             Assessed based on identity verification, rental history and
             transaction behaviour, and is reassessed after every completed rental.
           </Text>
@@ -100,10 +100,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     gap: 12,
   },
-  trustCardFeatured: {
-    backgroundColor: colors.navy,
-    borderColor: colors.navy,
-  },
   trustIconContainer: {
     width: 46,
     height: 46,
@@ -114,33 +110,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  trustIconContainerFeatured: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: colors.navy,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   trustCardTitle: {
     fontSize: 18,
     fontWeight: "800",
     color: colors.navy,
   },
-  trustCardTitleFeatured: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "white",
-  },
   trustCardBody: {
     fontSize: 14,
     lineHeight: 22,
     color: colors.muted,
-  },
-  trustCardBodyFeatured: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: "#C5D2E2",
-    marginTop: 8,
   },
 });

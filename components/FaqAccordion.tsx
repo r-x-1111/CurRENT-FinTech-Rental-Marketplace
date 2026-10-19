@@ -5,9 +5,7 @@ import { colors } from "../constants/theme";
 import type { FaqItem } from "../data/mock";
 
 export function FaqAccordion({ faqs }: { faqs: FaqItem[] }) {
-  const [openIndices, setOpenIndices] = useState<Set<number>>(
-    () => new Set(faqs.map((_, i) => i)),
-  );
+  const [openIndices, setOpenIndices] = useState<Set<number>>(() => new Set());
 
   function toggle(index: number) {
     setOpenIndices((prev) => {
@@ -30,7 +28,6 @@ export function FaqAccordion({ faqs }: { faqs: FaqItem[] }) {
             key={faq.question}
             style={[
               styles.item,
-              isOpen && { borderColor: colors.softBlue },
             ]}
           >
             <Pressable
@@ -68,11 +65,11 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.softBlue,
+    borderColor: colors.navy,
     overflow: "hidden",
   },
   header: {
-    backgroundColor: "#C5DBFA",
+    backgroundColor: colors.paleBlue,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -88,7 +85,7 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 18,
     paddingBottom: 18,
-    paddingTop: 0,
+    paddingTop: 14,
     borderTopColor: colors.border,
   },
   answer: {
