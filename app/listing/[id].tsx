@@ -225,6 +225,17 @@ export default function ListingDetailScreen() {
   const [showCheckout, setShowCheckout] = useState(
     () => checkoutBooking?.deliveryDemo?.status === "paid_demo",
   );
+  // Navigating back here from /delivery-demo/[id] can reuse this already-mounted screen
+  // instance instead of remounting it, so the useState initializer above never re-runs, and a
+  // focus event isn't guaranteed to fire either (the listing screen underneath a pushed/replaced
+  // route may never actually blur). This effect instead reacts directly to the booking's own
+  // payment status value, so it flips showCheckout on the instant that value becomes "paid_demo"
+  // in this component's state, regardless of mount/focus timing.
+  useEffect(() => {
+    if (checkoutId && checkoutBooking?.deliveryDemo?.status === "paid_demo") {
+      setShowCheckout(true);
+    }
+  }, [checkoutId, checkoutBooking?.deliveryDemo?.status]);
   const [showDeliveryDetails, setShowDeliveryDetails] = useState(false);
   const [showEligibilityPopup, setShowEligibilityPopup] = useState(false);
   const [insuranceSelected, setInsuranceSelected] = useState(false);
@@ -236,7 +247,31 @@ export default function ListingDetailScreen() {
   const [authPrompt, setAuthPrompt] = useState(false);
   const [successNotice, setSuccessNotice] = useState("");
   const [addressSectionY, setAddressSectionY] = useState<number | null>(null);
-  const [scrollToAddressRequestId, setScrollToAddressRequestId] = useState(0);
+  const [rentalPaymentSectionY, setRentalPaymentSectionY] = useState<number | null>(null);
+  const rentalPaymentPanelRef = useRef<View>(null);
+  const [pendingScrollY, setPendingScrollY] = useState<number | null>(null);
+  const [scrollRequestId, setScrollRequestId] = useState(0);
+  const requestScrollTo = (y: number | null) => { setPendingScrollY(y); setScrollRequestId((n) => n + 1); };
+  // Auto-scroll to the CurRENT Rental Payment section whenever it opens (including the
+  // automatic open right after a GrabExpress delivery payment completes, above). The panel sits
+  // several nested Views deep inside the booking column, so onLayout's y (relative only to its
+  // immediate parent) under-reports its true offset within the page's single ScrollView — that
+  // previously left the scroll short, stopping around the "Delivery & Return Arrangement"
+  // section above it. On web, react-native-web exposes the real DOM node through the ref, so
+  // scrollIntoView gives the correct position regardless of nesting; native platforms fall back
+  // to the onLayout-measured offset.
+  useEffect(() => {
+    if (!showCheckout) return;
+    if (Platform.OS === "web") {
+      requestAnimationFrame(() => {
+        const node = rentalPaymentPanelRef.current as unknown as { scrollIntoView?: (opts?: unknown) => void } | null;
+        node?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      });
+    } else if (rentalPaymentSectionY != null) {
+      requestScrollTo(rentalPaymentSectionY);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCheckout, rentalPaymentSectionY]);
   const [photo, setPhoto] = useState("");
 
   const savedAddresses = user?.savedDeliveryAddresses || [];
@@ -857,7 +892,7 @@ export default function ListingDetailScreen() {
   }
 
   return (
-    <Screen back scrollToY={addressSectionY} scrollRequestId={scrollToAddressRequestId}>
+    <Screen back scrollToY={pendingScrollY} scrollRequestId={scrollRequestId}>
       <GuestAuthPrompt visible={authPrompt} onClose={() => setAuthPrompt(false)} returnTo={`/listing/${id}`} />
       <View style={[s.split, width < 1024 && { flexDirection: "column" }]}>
         {/* Left Column: Image, Details, Reviews */}
@@ -2133,7 +2168,7 @@ export default function ListingDetailScreen() {
                   ) : (
                     <Pressable
                       accessibilityRole="button"
-                      onPress={() => setScrollToAddressRequestId((n) => n + 1)}
+                      onPress={() => requestScrollTo(addressSectionY)}
                     >
                       <Text style={styles.summaryLinkText}>Enter your postcode to estimate delivery.</Text>
                     </Pressable>
@@ -2198,7 +2233,7 @@ export default function ListingDetailScreen() {
             {showCheckout && quote && (
               <>
                 <Notice text="Demo payment only. No real funds or banking credentials are collected." />
-                <View style={styles.checkoutPanel}>
+                <View ref={rentalPaymentPanelRef} style={styles.checkoutPanel} onLayout={(e) => setRentalPaymentSectionY(e.nativeEvent.layout.y)}>
                   <Text style={sectionHeadingStyle}>CurRENT Rental Payment</Text>
                   <View style={styles.paymentMethodRow}>
                     <Pressable
