@@ -16,7 +16,7 @@ import {
 } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
-import { calculateOwnerPayout, CURRENT_LENDER_COMMISSION_RATE, LEGACY_LENDER_COMMISSION_RATE } from "../../services/deposit";
+import { calculateOwnerPayout, LEGACY_LENDER_COMMISSION_RATE } from "../../services/deposit";
 import { formatMalaysiaDateTime, getEffectiveBookingStatus, money } from "../../services/booking";
 import { CROSS_STATE_ELIGIBILITY_BADGE, crossStateDeliveryEligibility } from "../../services/delivery";
 import { newId } from "../../services/marketplace";
@@ -354,7 +354,7 @@ export default function OwnerDashboard() {
 
       {tab === "Payout" && (
         <>
-          <Notice text={`Demo payouts are recorded after return inspection and deposit release. New rentals use a ${Math.round(CURRENT_LENDER_COMMISSION_RATE * 100)}% commission on the rental fee and a ${Math.round((1 - CURRENT_LENDER_COMMISSION_RATE) * 100)}% lender payout. Earlier bookings retain their original rate. No real funds are transferred.`} />
+          <Notice text="Demo payouts are recorded after return inspection and deposit release. No real funds are transferred." />
           {complete.length ? (
             complete.map((b) => (
               <Card key={b.id}>
