@@ -679,6 +679,7 @@ export default function ListingDetailScreen() {
     setCity(address.city);
     setStateName(address.state);
     setDeliveryNotes(address.instructions);
+    setSetAsDefaultChecked(!!address.isDefault);
     setEditingAddressIndex(null);
     setAddressFormOpen(false);
   }

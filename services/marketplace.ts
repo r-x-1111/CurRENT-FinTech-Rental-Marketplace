@@ -462,7 +462,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         instructions: address.instructions.trim(),
       };
       // Save alongside the account's other addresses rather than replacing them, so a
-      // renter can keep several saved addresses — any number of which can be default.
+      // renter can keep several saved addresses with one account default.
       const addresses = user.savedDeliveryAddresses
         ? [...user.savedDeliveryAddresses]
         : [];
@@ -502,10 +502,15 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           targetIndex = addresses.length - 1;
         }
       }
+      if (addresses[targetIndex].isDefault) {
+        addresses.forEach((saved, index) => {
+          if (index !== targetIndex) addresses[index] = { ...saved, isDefault: false };
+        });
+      }
       user.savedDeliveryAddresses = addresses;
-      // The newly saved/edited address becomes the one selected for the current booking.
-      user.defaultDeliveryAddressIndex = targetIndex;
-      user.savedDeliveryAddress = addresses[targetIndex];
+      const defaultIndex = addresses.findIndex((saved) => saved.isDefault);
+      user.defaultDeliveryAddressIndex = defaultIndex >= 0 ? defaultIndex : undefined;
+      user.savedDeliveryAddress = defaultIndex >= 0 ? addresses[defaultIndex] : undefined;
       break;
     }
 
@@ -517,15 +522,18 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         action.index >= 0 && action.index < addresses.length,
         "Saved address not found.",
       );
-      // Marking (or unmarking) one address default never touches any other address's
-      // default status — any number of saved addresses can be default at once.
-      addresses[action.index] = {
-        ...addresses[action.index],
-        isDefault: action.isDefault ?? true,
-      };
+      // A profile has one default address. Selecting another address for a booking
+      // is handled separately by the listing screen.
+      const makeDefault = action.isDefault ?? true;
+      addresses.forEach((saved, index) => {
+        if (index === action.index || (makeDefault && saved.isDefault)) {
+          addresses[index] = { ...saved, isDefault: index === action.index ? makeDefault : false };
+        }
+      });
       user.savedDeliveryAddresses = addresses;
-      user.defaultDeliveryAddressIndex = action.index;
-      user.savedDeliveryAddress = addresses[action.index];
+      const defaultIndex = addresses.findIndex((saved) => saved.isDefault);
+      user.defaultDeliveryAddressIndex = defaultIndex >= 0 ? defaultIndex : undefined;
+      user.savedDeliveryAddress = defaultIndex >= 0 ? addresses[defaultIndex] : undefined;
       break;
     }
 
@@ -535,7 +543,6 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         action.index >= 0 && action.index < addresses.length,
         "Saved address not found.",
       );
-      const previousDefault = user.defaultDeliveryAddressIndex ?? 0;
       const remaining = addresses.filter((_, i) => i !== action.index);
       user.savedDeliveryAddresses = remaining;
       if (remaining.length === 0) {
@@ -545,15 +552,11 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         // Keep pointing at the same address when one before it was removed; fall back to
         // the first remaining default (or the first remaining address) when the
         // previously selected address itself was the one deleted.
-        const newIndex =
-          previousDefault === action.index
-            ? Math.max(
-                0,
-                remaining.findIndex((saved) => saved.isDefault),
-              )
-            : previousDefault > action.index
-            ? previousDefault - 1
-            : previousDefault;
+        let newIndex = remaining.findIndex((saved) => saved.isDefault);
+        if (newIndex < 0) {
+          newIndex = 0;
+          remaining[0] = { ...remaining[0], isDefault: true };
+        }
         user.defaultDeliveryAddressIndex = newIndex;
         user.savedDeliveryAddress = remaining[newIndex];
       }

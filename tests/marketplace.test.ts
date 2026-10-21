@@ -174,8 +174,8 @@ test("Demo saved addresses survive a fresh session and page reload", () => {
     const restored = startDemoWorkspaceSession(accountId);
     const profile = restored.profiles.find((entry) => entry.id === restored.currentUserId);
     assert.deepEqual(profile?.savedDeliveryAddresses?.at(-1), { ...address, isDefault: false });
-    assert.deepEqual(loadDemoWorkspaceSession(accountId).profiles.find((entry) => entry.id === restored.currentUserId)?.savedDeliveryAddress,
-      { ...address, isDefault: false });
+    const loadedProfile = loadDemoWorkspaceSession(accountId).profiles.find((entry) => entry.id === restored.currentUserId);
+    assert.deepEqual(loadedProfile?.savedDeliveryAddress, loadedProfile?.savedDeliveryAddresses?.[0]);
   } finally {
     closeDemoWorkspaceSession(accountId);
     if (previousStorage === undefined) delete (globalThis as { localStorage?: Storage }).localStorage;
@@ -1968,16 +1968,12 @@ test("renters can save a validated delivery address in their own profile", () =>
     (profile) => profile.id === "demo-renter",
   );
   // A new saved address is added alongside the existing ones, without the "Set as
-  // Default" box ticked, so it is not marked default — but it IS selected for this
-  // booking (the account's most-recently-used address).
+  // Default" box ticked, so it is not marked default and does not replace it.
   assert.deepEqual(
     savedRenter?.savedDeliveryAddresses?.at(-1),
     { ...address, isDefault: false },
   );
-  assert.deepEqual(savedRenter?.savedDeliveryAddress, {
-    ...address,
-    isDefault: false,
-  });
+  assert.deepEqual(savedRenter?.savedDeliveryAddress, initialAddress);
   assert.equal(
     state.profiles.find((profile) => profile.id === "demo-renter")
       ?.savedDeliveryAddress,
@@ -1993,7 +1989,7 @@ test("renters can save a validated delivery address in their own profile", () =>
   );
 });
 
-test("renters can mark any number of saved addresses as default, independently", () => {
+test("setting a default address clears the previous default", () => {
   const state = createSeed("admin_demo");
   state.currentUserId = "demo-renter";
 
@@ -2010,7 +2006,7 @@ test("renters can mark any number of saved addresses as default, independently",
     renter?.savedDeliveryAddresses?.[1],
   );
   // Marking address 1 as default does not remove address 0's existing default status.
-  assert.equal(renter?.savedDeliveryAddresses?.[0]?.isDefault, true);
+  assert.equal(renter?.savedDeliveryAddresses?.[0]?.isDefault, false);
   assert.equal(renter?.savedDeliveryAddresses?.[1]?.isDefault, true);
 
   const unset = transition(updated, {
@@ -2095,8 +2091,8 @@ test("ticking Set as Default when saving an additional address makes it the new 
   const newIndex = (profile?.savedDeliveryAddresses?.length ?? 1) - 1;
   assert.equal(profile?.defaultDeliveryAddressIndex, newIndex);
   assert.deepEqual(profile?.savedDeliveryAddress, { ...address, isDefault: true });
-  // The account's original default address is untouched — multiple defaults coexist.
-  assert.equal(profile?.savedDeliveryAddresses?.[0]?.isDefault, true);
+  // The account's original address remains saved without its Default flag.
+  assert.equal(profile?.savedDeliveryAddresses?.[0]?.isDefault, false);
 });
 
 test("editing a saved address in place updates it without creating a duplicate, preserving its default status", () => {
@@ -2122,7 +2118,7 @@ test("editing a saved address in place updates it without creating a duplicate, 
     isDefault: wasDefault,
   });
   // Editing selects the edited address for the current booking.
-  assert.equal(profile?.defaultDeliveryAddressIndex, 1);
+  assert.equal(profile?.defaultDeliveryAddressIndex, 0);
 
   assert.throws(
     () =>
