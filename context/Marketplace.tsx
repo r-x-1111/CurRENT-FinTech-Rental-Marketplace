@@ -364,8 +364,12 @@ export function MarketplaceProvider({
 
   async function closeAuthenticatedWorkspace() {
     const ownerId = authOwnerId.current;
+    // Wait for any save already in flight (e.g. a just-clicked Save Address) to actually
+    // reach Supabase/the demo session store before this screen navigates away — act()'s
+    // writes already capture the correct ownerId/account in closure regardless, but
+    // waiting here means logout never races ahead of a pending persistence write.
+    await writes.current;
     if (authAccountKind.current === "demo" && ownerId) {
-      await writes.current;
       closeDemoWorkspaceSession(ownerId);
     }
     authOwnerId.current = null;

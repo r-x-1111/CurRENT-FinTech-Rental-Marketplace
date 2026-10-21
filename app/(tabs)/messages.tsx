@@ -9,7 +9,7 @@ import { colors } from "../../constants/theme";
 import { formatMalaysiaDateTime, money, rentalTabForBooking } from "../../services/booking";
 import { newId } from "../../services/marketplace";
 import { supabase } from "../../lib/supabase";
-import { fetchChatInbox, markSharedChatRead, openBookingConversation, openSharedConversation, sendSharedMessage, signedChatImage, uploadChatImage, type SharedConversation, type SharedMessage } from "../../services/chat";
+import { fetchChatInbox, isFictionalOwnerId, markSharedChatRead, openBookingConversation, openSharedConversation, sendSharedMessage, signedChatImage, uploadChatImage, type SharedConversation, type SharedMessage } from "../../services/chat";
 import type { Listing } from "../../types";
 import type { Booking } from "../../types/marketplace";
 import { GuestAuthGate } from "../../components/GuestAuth";
@@ -31,6 +31,13 @@ export default function MessagesScreen() {
   const [largePhoto, setLargePhoto] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Whether this screen was ever entered via a listing's "Chat with Owner" button
+  // (as opposed to the bottom tab bar) during this visit — drives whether "Back to
+  // Booking" shows at all. Its destination, however, always comes from whichever
+  // conversation is actually active (see backToBooking), never from this flag or the
+  // possibly-stale params.listingId, so switching conversations in the sidebar can't
+  // send the renter back to the wrong product.
+  const [cameFromListingBooking, setCameFromListingBooking] = useState(!!params.listingId);
   const opened = useRef("");
   const openedBooking = useRef("");
   const lastRead = useRef("");
@@ -54,22 +61,26 @@ export default function MessagesScreen() {
   useEffect(() => {
     const listingId = params.listingId;
     if (!listingId) { opened.current = ""; return; }
+    setCameFromListingBooking(true);
     if (!user || opened.current === listingId) return;
     const listing = state.listings.find((item) => item.id === listingId);
     if (!listing) { setError("Listing unavailable for messaging."); return; }
     if (listing.ownerId === user.id) { setError("You cannot message yourself."); return; }
     opened.current = listingId;
-    if (state.mode === "admin_demo") { act({ type: "openChat", listingId }); return; }
-    if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(listing.ownerId)) { setError("This sample owner cannot receive live messages. Choose a listing from an authenticated lender."); return; }
+    // Sample/fictional owners (all seeded demo listings) can never receive a real Supabase
+    // message — route those through the local, renter-side-only Demo Chat instead, for
+    // every account type. Only a genuine authenticated lender (a real Supabase Auth UUID
+    // owner id) goes through live two-way messaging.
+    if (isFictionalOwnerId(listing.ownerId)) { act({ type: "openChat", listingId }); return; }
     void openSharedConversation(listingId, listing.ownerId, user.id, user.name)
       .then(async (chat) => { setSelected(chat.id); await refresh(); })
       .catch((failure) => setError((failure as Error).message));
   }, [params.listingId, user?.id, state.listings, state.mode]);
   useEffect(() => {
-    if (state.mode !== "admin_demo" || !params.listingId || !user) return;
+    if (!params.listingId || !user) return;
     const chat = state.chatConversations?.find((item) => item.listingId === params.listingId && item.renterId === user.id);
     if (chat) setSelected(chat.id);
-  }, [state.chatConversations, state.mode, params.listingId, user?.id]);
+  }, [state.chatConversations, params.listingId, user?.id]);
   useEffect(() => {
     if (!params.bookingId) { openedBooking.current = ""; return; }
     // Auto-select this booking's conversation only once per navigation into the screen — without
@@ -81,7 +92,7 @@ export default function MessagesScreen() {
     if (!user) return;
     const booking = state.bookings.find((item) => item.id === params.bookingId && [item.renterId, item.ownerId].includes(user.id));
     if (!booking) return;
-    if (state.mode === "admin_demo") {
+    if (isFictionalOwnerId(booking.ownerId)) {
       const linked = state.chatConversations?.find((chat) => chat.listingId === booking.listingId && chat.renterId === booking.renterId && chat.ownerId === booking.ownerId);
       openedBooking.current = params.bookingId;
       setSelected(linked?.id || `booking:${booking.id}`);
@@ -101,6 +112,13 @@ export default function MessagesScreen() {
   useEffect(() => {
     if (!params.chatId && !params.bookingId && !params.listingId) setSelected(null);
   }, [params.chatId, params.bookingId, params.listingId]);
+  // However the active conversation changed — a sidebar tap, a fresh "Chat with Owner" for
+  // a different product, or a bookingId/chatId param — an unsent draft or attached photo
+  // must never follow the renter into a different product's conversation.
+  useEffect(() => {
+    setDraft("");
+    setPhoto(null);
+  }, [selected]);
   useEffect(() => {
     if (!selected || !user) return;
     const selectedChat = shared.find((item) => item.id === selected);
@@ -110,7 +128,7 @@ export default function MessagesScreen() {
     const readKey = `${selected}:${linkedBooking?.id || demoBooking?.id || ""}`;
     if (lastRead.current === readKey && !remoteMessages.some((message) => message.conversation_id === selected && message.receiver_id === user.id && !message.read_at)) return;
     lastRead.current = readKey;
-    if (state.mode === "admin_demo" && demoChat) {
+    if (demoChat) {
       act({ type: "readChat", conversationId: selected });
       if (demoBooking) act({ type: "readConversation", bookingId: demoBooking.id });
     }
@@ -135,7 +153,12 @@ export default function MessagesScreen() {
       || state.bookings.find((item) => item.id === chat.booking_id && item.listingId === chat.listing_id && item.renterId === chat.renter_id && item.ownerId === chat.owner_id)
       || state.bookings.find((item) => item.listingId === chat.listing_id && item.renterId === chat.renter_id && item.ownerId === chat.owner_id);
     const messages = remoteMessages.filter((message) => message.conversation_id === chat.id);
-    const legacy = state.mode === "admin_demo" ? state.messages.filter((message) => message.bookingId === booking?.id) : [];
+    // A message's bookingId must actually match this row's real booking id — two
+    // undefined ids (no booking message vs. no booking yet) must never count as a match,
+    // or an unrelated product's messages leak into this conversation's preview/unread count.
+    const legacy = state.mode === "admin_demo" && booking?.id
+      ? state.messages.filter((message) => !!message.bookingId && message.bookingId === booking.id)
+      : [];
     const latest = messages.at(-1);
     const lastLegacy = legacy.at(-1);
     const remoteIsLatest = !!latest && (!lastLegacy || latest.created_at >= lastLegacy.createdAt);
@@ -145,13 +168,18 @@ export default function MessagesScreen() {
       preview: remoteIsLatest ? latest.body || "Photo" : lastLegacy?.text || "Start a conversation",
       unread: messages.filter((message) => message.receiver_id === user.id && !message.read_at).length + legacy.filter((message) => message.authorId !== user.id && !message.read).length });
   }
-  for (const chat of state.mode === "admin_demo" ? state.chatConversations || [] : []) {
+  for (const chat of state.chatConversations || []) {
     if (![chat.renterId, chat.ownerId].includes(user.id)) continue;
     const listing = state.listings.find((item) => item.id === chat.listingId);
     if (!listing) continue;
     const booking = state.bookings.find((item) => item.id === params.bookingId && item.listingId === chat.listingId && item.renterId === chat.renterId && item.ownerId === chat.ownerId)
       || state.bookings.find((item) => item.listingId === chat.listingId && item.renterId === chat.renterId && item.ownerId === chat.ownerId);
-    const messages = state.messages.filter((message) => message.conversationId === chat.id || message.bookingId === booking?.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    // Same rule as above: a message only belongs here via an explicit, matching
+    // conversationId, or an explicit, matching bookingId — never via two missing ids.
+    const messages = state.messages.filter((message) =>
+      (!!message.conversationId && message.conversationId === chat.id) ||
+      (!!booking?.id && !!message.bookingId && message.bookingId === booking.id)
+    ).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const latest = messages.at(-1);
     const other = state.profiles.find((profile) => profile.id === (chat.ownerId === user.id ? chat.renterId : chat.ownerId));
     rows.push({ id: chat.id, kind: "demo", listing, booking, other: other?.name || "Participant", latestAt: latest?.createdAt || chat.createdAt,
@@ -179,7 +207,12 @@ export default function MessagesScreen() {
   const messages = [
     ...(active?.kind === "shared" ? remoteMessages.filter((message) => message.conversation_id === active.id)
       .map((message) => ({ id: message.id, sender: message.sender_id, text: message.body, image: message.image_path ? imageUrls[message.image_path] : undefined, at: message.created_at, read: !!message.read_at })) : []),
-    ...state.messages.filter((message) => state.mode === "admin_demo" && (active?.kind === "demo" ? message.conversationId === active.id || message.bookingId === active.booking?.id : message.bookingId === active?.booking?.id))
+    // Never let two undefined ids count as a match — a demo-chat message with no
+    // bookingId must not appear in every other booking-less conversation too.
+    ...state.messages.filter((message) => active?.kind === "demo"
+      ? (!!message.conversationId && message.conversationId === active.id) ||
+        (!!active.booking?.id && !!message.bookingId && message.bookingId === active.booking.id)
+      : state.mode === "admin_demo" && !!active?.booking?.id && !!message.bookingId && message.bookingId === active.booking.id)
       .map((message) => ({ id: message.id, sender: message.authorId, text: message.text, image: message.imageUri, at: message.createdAt, read: !!message.read })),
   ].sort((a, b) => a.at.localeCompare(b.at));
 
@@ -210,6 +243,18 @@ export default function MessagesScreen() {
     finally { setBusy(false); }
   }
 
+
+  // Always navigates to whichever listing the CURRENTLY ACTIVE conversation actually
+  // belongs to — never params.listingId (which only reflects however this screen was
+  // first opened, and goes stale the moment the renter picks a different conversation
+  // from the sidebar) and never router.back() (browser/navigator history can just as
+  // easily lead to some other screen entirely, e.g. whatever the renter viewed right
+  // before opening Messages). An explicit push is also the only option that still works
+  // correctly after a page refresh, when there is no "back" history at all.
+  function backToBooking() {
+    if (!active) return;
+    router.push(`/listing/${active.listing.id}`);
+  }
 
   function viewRentalItem() {
     if (!active?.booking) {
@@ -245,8 +290,19 @@ export default function MessagesScreen() {
       </View>}
       {(!mobile || !!active) && <View style={styles.chat}>
         {active ? <>
+          {cameFromListingBooking && <Pressable accessibilityRole="button" accessibilityLabel="Back to booking" onPress={backToBooking} style={styles.backToBookingRow}>
+            <Ionicons name="arrow-back" size={16} color={colors.blue} /><Text style={styles.backToBookingText}>Back to Booking</Text>
+          </Pressable>}
           <View style={styles.header}>{mobile && <Pressable accessibilityRole="button" accessibilityLabel="Back to conversations" onPress={() => setSelected(null)}><Ionicons name="arrow-back" size={24} color={colors.navy} /></Pressable>}
-            <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View><View><Text style={styles.name}>{active.other}</Text><Text style={s.caption}>{active.booking?.status || "Listing enquiry"}</Text></View></View>
+            <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View>
+            <View>
+              <Text style={styles.name}>{active.kind === "demo" ? `Demo Chat · ${active.other}` : active.other}</Text>
+              <Text style={s.caption}>{active.booking?.status || "Listing enquiry"}</Text>
+            </View>
+          </View>
+          {active.kind === "demo" && <Text style={styles.demoChatNotice}>
+            Messages in this sample conversation are for demonstration only and are not delivered to a real owner.
+          </Text>}
           <Pressable accessibilityRole="button" onPress={viewRentalItem} style={styles.listing}>
             {!!active.listing.imageUrl && <Image source={{ uri: active.listing.imageUrl }} style={styles.listingImage} />}
             <View style={{ flex: 1 }}><Text style={styles.itemName}>{rowTitle(active)}</Text><Text style={s.caption}>{money(active.listing.dailyPrice)} / day · Owner: {active.listing.ownerId === user.id ? user.name : active.other}</Text></View>
@@ -296,6 +352,9 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: "row", alignItems: "center", gap: 7, marginVertical: 3 }, smallImage: { width: 30, height: 30, borderRadius: 6 }, itemName: { color: colors.slate, fontSize: 13, fontWeight: "600", flexShrink: 1 },
   badge: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.blue, alignItems: "center", justifyContent: "center" }, badgeText: { color: "white", fontSize: 11, fontWeight: "700" },
   chat: { flex: 1, minHeight: 0, padding: 14, minWidth: 0 }, header: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  backToBookingRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingBottom: 10 },
+  backToBookingText: { color: colors.blue, fontSize: 13, fontWeight: "700" },
+  demoChatNotice: { color: colors.muted, fontSize: 11, lineHeight: 15, backgroundColor: colors.offWhite, borderRadius: 8, padding: 8, marginTop: 8 },
   listing: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.paleBlue, padding: 10, borderRadius: 12, marginBottom: 10 }, listingImage: { width: 48, height: 48, borderRadius: 8 },
   messages: { flex: 1, minHeight: 0, marginVertical: 10 }, emptyChat: { color: colors.muted, fontSize: 13, textAlign: "center", marginTop: 20 }, bubble: { padding: 12, borderRadius: 14, marginVertical: 5, maxWidth: "80%" }, sent: { alignSelf: "flex-end", backgroundColor: colors.blue }, received: { alignSelf: "flex-start", backgroundColor: colors.paleBlue },
   time: { fontSize: 10, color: colors.muted, marginTop: 5 }, messageImage: { width: 190, height: 160, borderRadius: 8, marginTop: 4 },

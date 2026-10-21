@@ -121,8 +121,16 @@ export default function ListingDetailScreen() {
     return true;
   });
 
-  const [start, setStart] = useState(checkoutBooking ? malaysiaDateKey(checkoutBooking.start) : dateAfter(1));
-  const [end, setEnd] = useState(checkoutBooking ? malaysiaDateKey(checkoutBooking.end) : dateAfter(3));
+  // The Demo Account preselects a fixed presentation date range (2 days) instead of
+  // "tomorrow" — normal accounts keep the existing relative default unchanged.
+  const [start, setStart] = useState(
+    checkoutBooking ? malaysiaDateKey(checkoutBooking.start)
+      : state.mode === "admin_demo" ? "2026-10-26" : dateAfter(1),
+  );
+  const [end, setEnd] = useState(
+    checkoutBooking ? malaysiaDateKey(checkoutBooking.end)
+      : state.mode === "admin_demo" ? "2026-10-28" : dateAfter(3),
+  );
   const slotUnavailable = (slot: string) => {
     if (state.mode !== "admin_demo" || !listing || !isDemoSeededListing(listing.id) || !start) return false;
     const lastDate = end && end > start ? end : new Date(Date.parse(`${start}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
@@ -230,11 +238,30 @@ export default function ListingDetailScreen() {
   const [city, setCity] = useState(user?.savedDeliveryAddress?.city || "");
   const [stateName, setStateName] = useState(user?.savedDeliveryAddress?.state || "");
   const [deliveryNotes, setDeliveryNotes] = useState(user?.savedDeliveryAddress?.instructions || "");
-  const demoSavedAddresses =
-    state.mode === "admin_demo" ? user?.savedDeliveryAddresses || [] : [];
-  const [selectedDemoAddressIndex, setSelectedDemoAddressIndex] = useState(
+  // Saved addresses and default-address selection work the same way for every account —
+  // demo and normal — since both read/write the same Profile fields.
+  const savedAddresses = user?.savedDeliveryAddresses || [];
+  const [selectedSavedAddressIndex, setSelectedSavedAddressIndex] = useState(
     user?.defaultDeliveryAddressIndex ?? 0,
   );
+  // Always collapsed behind "+ Add Delivery Details" to begin with — including for a
+  // brand-new account with zero saved addresses. It only opens when the renter explicitly
+  // clicks Add or Edit, the same for every account type; the empty state ("No saved
+  // delivery details yet.") is shown instead until then, never the form itself.
+  const [addressFormOpen, setAddressFormOpen] = useState(false);
+  const [editingAddressIndex, setEditingAddressIndex] = useState<number | null>(null);
+  const [setAsDefaultChecked, setSetAsDefaultChecked] = useState(savedAddresses.length === 0);
+  const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
+  // Every saved record is visible by default (so, e.g., the Demo Account's 3 sample
+  // addresses are all shown, not hidden behind an extra click) whenever there's more
+  // than one to show. "Hide other addresses" can still collapse down to just the
+  // compact selected-address card, and "Change Address" re-expands it; selecting a
+  // record from the expanded list does not force it back to collapsed.
+  const [addressListExpanded, setAddressListExpanded] = useState(savedAddresses.length > 1);
+  // Tracks the actual Supabase/demo-session persistence write, not just the in-memory
+  // reducer update, so the Save/Edit/Delete/Set-as-Default actions can show a real
+  // loading state and only report success once the write has actually completed.
+  const [addressActionBusy, setAddressActionBusy] = useState(false);
 
   // The user's saved address can still be loading (async session restore), or this
   // screen instance can be reused by the navigator across listings/logins without
@@ -259,7 +286,7 @@ export default function ListingDetailScreen() {
     setCity(saved?.city || "");
     setStateName(saved?.state || "");
     setDeliveryNotes(saved?.instructions || "");
-    setSelectedDemoAddressIndex(user.defaultDeliveryAddressIndex ?? 0);
+    setSelectedSavedAddressIndex(user.defaultDeliveryAddressIndex ?? 0);
   }, [user?.id, user?.savedDeliveryAddress, user?.name, user?.phone, user?.defaultDeliveryAddressIndex]);
 
   function markAddressEdited<T>(setter: (value: T) => void) {
@@ -311,6 +338,10 @@ export default function ListingDetailScreen() {
 
   const owner = state.profiles.find((p) => p.id === listing.ownerId);
   const currentDeliveryAddress = formatDeliveryAddress(getDeliveryAddress());
+  // Falls back to the first saved record if the selected index is ever out of range
+  // (e.g. right after the last-selected address was deleted elsewhere).
+  const compactSelectedAddressIndex = savedAddresses[selectedSavedAddressIndex] ? selectedSavedAddressIndex : 0;
+  const compactSelectedAddress = savedAddresses[compactSelectedAddressIndex];
   // Vehicle and fee come from the lender's parcel details and pickup postcode,
   // plus the renter's delivery postcode (no maps API or renter distance input).
   const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
@@ -593,7 +624,7 @@ export default function ListingDetailScreen() {
     }
     if (!checkoutBooking && !deliveryAddressIsComplete()) {
       setError(
-        "Complete the required Address fields before paying: recipient name, phone, street address, postcode, city, and state.",
+        "Complete the required Delivery Information fields before paying: recipient name, phone, street address, postcode, city, and state.",
       );
       return;
     }
@@ -633,11 +664,13 @@ export default function ListingDetailScreen() {
     };
   }
 
-  function selectDemoAddress(index: number) {
-    const address = demoSavedAddresses[index];
+  // Choosing a saved address only fills the form for THIS booking — it must not change
+  // the account's default address (see setAsDefaultAddress for that).
+  function selectSavedAddress(index: number) {
+    const address = savedAddresses[index];
     if (!address) return;
     addressEditedRef.current = true;
-    setSelectedDemoAddressIndex(index);
+    setSelectedSavedAddressIndex(index);
     setRecipientName(address.recipientName);
     setDeliveryPhone(address.phone);
     setStreetAddress(address.addressLine1);
@@ -646,20 +679,140 @@ export default function ListingDetailScreen() {
     setCity(address.city);
     setStateName(address.state);
     setDeliveryNotes(address.instructions);
-    act({ type: "saveDeliveryAddress", address });
+    setEditingAddressIndex(null);
+    setAddressFormOpen(false);
   }
 
-  function handleSaveDeliveryAddress() {
+  async function setAsDefaultAddress(index: number) {
+    setAddressActionBusy(true);
+    try {
+      await actAndPersist({ type: "setDefaultDeliveryAddress", index });
+      setError("");
+      setSuccessNotice("Default delivery address updated.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setAddressActionBusy(false);
+    }
+  }
+
+  // Opens a blank form for a brand-new saved address (distinct from editing one in place).
+  function openAddAddressForm() {
+    addressEditedRef.current = true;
+    setEditingAddressIndex(null);
+    setRecipientName(user?.name || "");
+    setDeliveryPhone(user?.phone || "");
+    setStreetAddress("");
+    setUnit("");
+    setPostcode("");
+    setCity("");
+    setStateName("");
+    setDeliveryNotes("");
+    setSetAsDefaultChecked(savedAddresses.length === 0);
+    setAddressFormOpen(true);
+    setAddressListExpanded(false);
+  }
+
+  function openEditAddressForm(index: number) {
+    const address = savedAddresses[index];
+    if (!address) return;
+    addressEditedRef.current = true;
+    setEditingAddressIndex(index);
+    setRecipientName(address.recipientName);
+    setDeliveryPhone(address.phone);
+    setStreetAddress(address.addressLine1);
+    setUnit(address.addressLine2);
+    setPostcode(address.postcode);
+    setCity(address.city);
+    setStateName(address.state);
+    setDeliveryNotes(address.instructions);
+    setSetAsDefaultChecked(!!address.isDefault);
+    setAddressFormOpen(true);
+    setAddressListExpanded(false);
+  }
+
+  async function handleSaveDeliveryAddress() {
     if (!user) {
       setAuthPrompt(true);
       return;
     }
+    if (addressActionBusy) return;
+    setAddressActionBusy(true);
+    setError("");
     try {
-      act({ type: "saveDeliveryAddress", address: getDeliveryAddress() });
+      const normalized = getDeliveryAddress();
+      // Mirrors the reducer's own duplicate-matching so the newly saved (or edited)
+      // address can be selected for this booking immediately, without waiting on a
+      // re-render to read back its index from the account's saved-address list.
+      const targetIndex =
+        editingAddressIndex ??
+        (() => {
+          const existing = savedAddresses.findIndex(
+            (saved) =>
+              saved.addressLine1.trim() === normalized.addressLine1.trim() &&
+              saved.addressLine2.trim() === normalized.addressLine2.trim() &&
+              saved.postcode.trim() === normalized.postcode.trim() &&
+              saved.city.trim() === normalized.city.trim() &&
+              saved.state.trim() === normalized.state.trim(),
+          );
+          return existing >= 0 ? existing : savedAddresses.length;
+        })();
+      // Waits for the actual account-workspace write (Supabase for normal accounts, the
+      // demo session store for Demo Accounts) to finish — and rolls the in-memory state
+      // back out — before reporting success, rather than optimistically assuming an
+      // in-memory reducer update alone means the details were actually saved.
+      await actAndPersist({
+        type: "saveDeliveryAddress",
+        address: normalized,
+        index: editingAddressIndex ?? undefined,
+        setDefault: setAsDefaultChecked,
+      });
+      setSelectedSavedAddressIndex(targetIndex);
+      setEditingAddressIndex(null);
+      setAddressFormOpen(false);
+      setSuccessNotice("Delivery details saved to your profile.");
+    } catch (e) {
+      // The form stays open with everything the renter typed intact, so they can fix
+      // whatever's wrong (or just retry a flaky connection) without retyping anything.
+      setError((e as Error).message);
+    } finally {
+      setAddressActionBusy(false);
+    }
+  }
+
+  function requestDeleteAddress(index: number) {
+    setPendingDeleteIndex(index);
+  }
+
+  function cancelDeleteAddress() {
+    setPendingDeleteIndex(null);
+  }
+
+  async function confirmDeleteAddress() {
+    const index = pendingDeleteIndex;
+    if (index === null) return;
+    setAddressActionBusy(true);
+    try {
+      await actAndPersist({ type: "deleteDeliveryAddress", index });
       setError("");
-      setSuccessNotice("Address saved to your profile.");
+      setSuccessNotice("Delivery details removed.");
+      if (editingAddressIndex === index) {
+        setEditingAddressIndex(null);
+        setAddressFormOpen(false);
+      }
+      // The deleted address was selected for this booking — fall back to whatever the
+      // account now considers its most-recently-used address (or a blank form if none).
+      if (selectedSavedAddressIndex === index) {
+        const remaining = savedAddresses.filter((_, i) => i !== index);
+        addressEditedRef.current = false;
+        lastSyncedAddressKey.current = undefined;
+        setSelectedSavedAddressIndex(remaining.length === 0 ? 0 : Math.min(index, remaining.length - 1));
+      }
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setPendingDeleteIndex(null);
+      setAddressActionBusy(false);
     }
   }
 
@@ -1149,6 +1302,16 @@ export default function ListingDetailScreen() {
                     </Text>
                   </View>
                 </View>
+              ) : !deliveryLocalityIsComplete() ? (
+                // Never guess a route before the renter actually has a destination — showing
+                // either the same-state slot picker or a cross-state courier schedule here
+                // would misrepresent a route that hasn't been determined yet.
+                <View style={{ marginTop: 8 }}>
+                  <Text style={subheadingStyle}>Add a Delivery Address to See Scheduling</Text>
+                  <Text style={styles.slotSectionDescription}>
+                    Enter your delivery postcode in Delivery Information below to determine whether this is a same-state or cross-state delivery and calculate the fee.
+                  </Text>
+                </View>
               ) : isCourierDelivery ? (
                 !dispatchDateFeasible ? (
                   <View style={{ marginTop: 8 }}>
@@ -1348,135 +1511,312 @@ export default function ListingDetailScreen() {
             <View style={styles.deliveryAddressSection} onLayout={(e) => setAddressSectionY(e.nativeEvent.layout.y)}>
               <View style={styles.arrangementHeaderRow}>
                 <Ionicons name="location-outline" size={15} color={colors.navy} />
-                <Text style={sectionHeadingStyle}>Address</Text>
+                <Text style={sectionHeadingStyle}>Delivery Information</Text>
               </View>
 
-              {demoSavedAddresses.length > 0 && (
+              {savedAddresses.length > 0 ? (
                 <View style={{ gap: 8, marginTop: 10 }}>
-                  <Text style={styles.inputLabel}>Saved delivery addresses</Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                    {demoSavedAddresses.map((address, index) => (
-                      <Pressable
-                        key={`${address.postcode}-${address.addressLine1}`}
-                        accessibilityRole="button"
-                        accessibilityState={{
-                          selected: selectedDemoAddressIndex === index,
-                        }}
-                        onPress={() => selectDemoAddress(index)}
-                        style={{
-                          maxWidth: "100%",
-                          flexShrink: 1,
-                          paddingHorizontal: 8,
-                          paddingVertical: 5,
-                          borderRadius: 10,
-                          borderWidth: 1,
-                          borderColor:
-                            selectedDemoAddressIndex === index
-                              ? colors.blue
-                              : colors.border,
-                          backgroundColor:
-                            selectedDemoAddressIndex === index
-                              ? colors.paleBlue
-                              : colors.white,
-                        }}
-                      >
-                        <Text style={[s.caption, { flexShrink: 1, fontSize: 12, lineHeight: 16 }]}>
-                          {index === user?.defaultDeliveryAddressIndex
-                            ? "Default · "
-                            : ""}
-                          {address.city}, {address.state}
+                  <Text style={styles.inputLabel}>Saved Delivery Details</Text>
+
+                  {!addressListExpanded && !!compactSelectedAddress ? (
+                    // Compact card: only the currently selected record, one line of
+                    // recipient info + one concise address line, no repeated headings.
+                    <View style={styles.compactAddressCard}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <View style={styles.selectedAddressBadge}>
+                          <Ionicons name="checkmark-circle" size={12} color={colors.blue} />
+                          <Text style={styles.selectedAddressBadgeText}>Selected</Text>
+                        </View>
+                        {!!compactSelectedAddress.isDefault && (
+                          <View style={styles.defaultAddressBadge}>
+                            <Text style={styles.defaultAddressBadgeText}>Default</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[s.caption, { fontSize: 12, lineHeight: 16, fontWeight: "700", color: colors.navy }]}>
+                        {compactSelectedAddress.recipientName} · {compactSelectedAddress.phone}
+                      </Text>
+                      <Text style={[s.caption, { fontSize: 12, lineHeight: 16 }]}>
+                        {[
+                          compactSelectedAddress.addressLine1,
+                          compactSelectedAddress.addressLine2,
+                          `${compactSelectedAddress.postcode} ${compactSelectedAddress.city}`,
+                          compactSelectedAddress.state,
+                        ].filter(Boolean).join(", ")}
+                      </Text>
+                      <View style={{ flexDirection: "row", gap: 14, alignItems: "center", marginTop: 2 }}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit delivery details"
+                          onPress={() => openEditAddressForm(compactSelectedAddressIndex)}
+                          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                        >
+                          <Ionicons name="pencil-outline" size={13} color={colors.blue} />
+                          <Text style={[s.caption, { fontSize: 11, color: colors.blue }]}>Edit</Text>
+                        </Pressable>
+                        {savedAddresses.length > 1 && (
+                          <Pressable accessibilityRole="button" onPress={() => setAddressListExpanded(true)}>
+                            <Text style={[s.caption, { fontSize: 11, color: colors.blue, fontWeight: "700" }]}>
+                              Change Address
+                            </Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  ) : (
+                    // Expanded: every saved record in a compact 2–3-line row, with the
+                    // secondary management actions (Set as Default / Edit / Delete) here
+                    // instead of cluttering the default compact card above.
+                    <View style={{ gap: 6 }}>
+                      {savedAddresses.map((address, index) => {
+                        const isSelected = compactSelectedAddressIndex === index;
+                        const isDefault = !!address.isDefault;
+                        return (
+                          // A plain View, never a Pressable/button: it contains the "Set as
+                          // Default"/"Edit"/"Delete" Pressables below, and react-native-web
+                          // renders accessibilityRole="button" as an actual <button> —
+                          // nesting one button inside another is invalid HTML and breaks
+                          // hydration on web. The "select this address" tap target lives on
+                          // the info block beneath instead, with no interactive descendants.
+                          <View
+                            key={`${address.postcode}-${address.addressLine1}-${index}`}
+                            style={[styles.compactAddressRow, isSelected && styles.compactAddressRowSelected]}
+                          >
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Select this saved address for the current booking"
+                              accessibilityState={{ selected: isSelected }}
+                              onPress={() => selectSavedAddress(index)}
+                              style={{ gap: 2 }}
+                            >
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                                {isSelected && (
+                                  <View style={styles.selectedAddressBadge}>
+                                    <Ionicons name="checkmark-circle" size={12} color={colors.blue} />
+                                    <Text style={styles.selectedAddressBadgeText}>Selected</Text>
+                                  </View>
+                                )}
+                                {isDefault && (
+                                  <View style={styles.defaultAddressBadge}>
+                                    <Text style={styles.defaultAddressBadgeText}>Default</Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={[s.caption, { fontSize: 12, lineHeight: 16, fontWeight: "700", color: colors.navy }]} numberOfLines={1}>
+                                {address.recipientName} · {address.phone}
+                              </Text>
+                              <Text style={[s.caption, { fontSize: 12, lineHeight: 16 }]} numberOfLines={2}>
+                                {[
+                                  address.addressLine1,
+                                  address.addressLine2,
+                                  `${address.postcode} ${address.city}`,
+                                  address.state,
+                                ].filter(Boolean).join(", ")}
+                              </Text>
+                            </Pressable>
+                            <View style={{ flexDirection: "row", gap: 14, alignItems: "center", marginTop: 2 }}>
+                              {!isDefault && (
+                                <Pressable
+                                  accessibilityRole="button"
+                                  onPress={() => setAsDefaultAddress(index)}
+                                >
+                                  <Text style={[s.caption, { fontSize: 11, color: colors.blue }]}>
+                                    Set as Default
+                                  </Text>
+                                </Pressable>
+                              )}
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Edit delivery details"
+                                onPress={() => openEditAddressForm(index)}
+                                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                              >
+                                <Ionicons name="pencil-outline" size={13} color={colors.blue} />
+                                <Text style={[s.caption, { fontSize: 11, color: colors.blue }]}>
+                                  Edit
+                                </Text>
+                              </Pressable>
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Delete delivery details"
+                                onPress={() => requestDeleteAddress(index)}
+                                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                              >
+                                <Ionicons name="trash-outline" size={13} color={colors.danger} />
+                                <Text style={[s.caption, { fontSize: 11, color: colors.danger }]}>
+                                  Delete
+                                </Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        );
+                      })}
+                      <Pressable accessibilityRole="button" onPress={() => setAddressListExpanded(false)}>
+                        <Text style={[s.caption, { fontSize: 11, color: colors.blue, fontWeight: "700" }]}>
+                          Hide other addresses
                         </Text>
                       </Pressable>
-                    ))}
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <Text style={[styles.fieldSubtext, { marginTop: 10 }]}>
+                  No saved delivery details yet.
+                </Text>
+              )}
+
+              {user && !addressFormOpen && (
+                <Button secondary onPress={openAddAddressForm}>
+                  + Add Delivery Details
+                </Button>
+              )}
+
+              {pendingDeleteIndex !== null && savedAddresses[pendingDeleteIndex] && (
+                <View style={styles.deleteConfirmBox}>
+                  <Text style={styles.deleteConfirmText}>
+                    Delete the saved delivery details at {savedAddresses[pendingDeleteIndex].addressLine1}, {savedAddresses[pendingDeleteIndex].city}? This cannot be undone.
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <Button secondary onPress={cancelDeleteAddress} disabled={addressActionBusy}>
+                        Cancel
+                      </Button>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Button onPress={confirmDeleteAddress} loading={addressActionBusy}>
+                        {addressActionBusy ? "Deleting…" : "Delete"}
+                      </Button>
+                    </View>
                   </View>
                 </View>
               )}
 
-              <View style={{ gap: 8, marginTop: 8 }}>
-                <View style={styles.addressFieldRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>Recipient Name</Text>
-                    <TextInput
-                      style={styles.addressInput}
-                      value={recipientName}
-                      onChangeText={onRecipientNameChange}
-                      placeholder="Full Name"
+              {addressFormOpen && (
+                <>
+                  <Text style={[styles.inputLabel, { marginTop: 10 }]}>
+                    {editingAddressIndex !== null ? "Edit Delivery Details" : "Add Delivery Details"}
+                  </Text>
+                  <View style={{ gap: 8, marginTop: 8 }}>
+                    <View style={styles.addressFieldRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.inputLabel}>Recipient Name</Text>
+                        <TextInput
+                          style={styles.addressInput}
+                          value={recipientName}
+                          onChangeText={onRecipientNameChange}
+                          placeholder="Full Name"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.inputLabel}>Mobile (+60)</Text>
+                        <TextInput
+                          style={styles.addressInput}
+                          value={deliveryPhone}
+                          onChangeText={onDeliveryPhoneChange}
+                          placeholder="+60 12 345 6789"
+                        />
+                      </View>
+                    </View>
+
+                    <View>
+                      <Text style={styles.inputLabel}>Street Address</Text>
+                      <TextInput
+                        style={styles.addressInput}
+                        value={streetAddress}
+                        onChangeText={onStreetAddressChange}
+                        placeholder="Street name & number"
+                      />
+                    </View>
+
+                    <View>
+                      <Text style={styles.inputLabel}>Building / Apartment / Unit (Optional)</Text>
+                      <TextInput
+                        style={styles.addressInput}
+                        value={unit}
+                        onChangeText={onUnitChange}
+                        placeholder="Unit, floor or building"
+                      />
+                    </View>
+
+                    <View style={styles.addressFieldRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.inputLabel}>Postcode</Text>
+                        <TextInput
+                          style={styles.addressInput}
+                          value={postcode}
+                          onChangeText={onPostcodeChange}
+                          placeholder="47500"
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.inputLabel}>City</Text>
+                        <TextInput
+                          style={styles.addressInput}
+                          value={city}
+                          onChangeText={onCityChange}
+                          placeholder="City or district"
+                        />
+                      </View>
+                    </View>
+
+                    <MalaysiaStateSelector
+                      value={stateName}
+                      onChange={onStateNameChange}
+                      labelStyle={styles.inputLabel}
+                      inputStyle={styles.addressInput}
+                      valueStyle={{ fontSize: 12 }}
                     />
+
+                    <View>
+                      <Text style={styles.inputLabel}>Delivery Instructions (Optional)</Text>
+                      <TextInput
+                        style={styles.addressInput}
+                        value={deliveryNotes}
+                        onChangeText={onDeliveryNotesChange}
+                        placeholder="Optional delivery instructions"
+                      />
+                    </View>
+
+                    {savedAddresses.length > 0 && (
+                      <Pressable
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: setAsDefaultChecked }}
+                        accessibilityLabel="Set as Default Address"
+                        onPress={() => setSetAsDefaultChecked((value) => !value)}
+                        style={styles.insuranceRow}
+                      >
+                        <View style={[styles.checkbox, setAsDefaultChecked && styles.checkboxChecked]}>
+                          {setAsDefaultChecked && <Ionicons name="checkmark" size={14} color={colors.white} />}
+                        </View>
+                        <Text style={styles.insuranceCheckboxLabel}>Set as Default Address</Text>
+                      </Pressable>
+                    )}
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>Mobile (+60)</Text>
-                    <TextInput
-                      style={styles.addressInput}
-                      value={deliveryPhone}
-                      onChangeText={onDeliveryPhoneChange}
-                      placeholder="+60 12 345 6789"
-                    />
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      {user && (
+                        <Button secondary onPress={handleSaveDeliveryAddress} loading={addressActionBusy}>
+                          {addressActionBusy
+                            ? "Saving…"
+                            : editingAddressIndex !== null
+                            ? "Save Changes"
+                            : "Save Address"}
+                        </Button>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Button
+                        secondary
+                        onPress={() => {
+                          setEditingAddressIndex(null);
+                          setAddressFormOpen(false);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </View>
                   </View>
-                </View>
-
-                <View>
-                  <Text style={styles.inputLabel}>Street Address</Text>
-                  <TextInput
-                    style={styles.addressInput}
-                    value={streetAddress}
-                    onChangeText={onStreetAddressChange}
-                    placeholder="Street name & number"
-                  />
-                </View>
-
-                <View>
-                  <Text style={styles.inputLabel}>Building / Apartment / Unit (Optional)</Text>
-                  <TextInput
-                    style={styles.addressInput}
-                    value={unit}
-                    onChangeText={onUnitChange}
-                    placeholder="Unit, floor or building"
-                  />
-                </View>
-
-                <View style={styles.addressFieldRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>Postcode</Text>
-                    <TextInput
-                      style={styles.addressInput}
-                      value={postcode}
-                      onChangeText={onPostcodeChange}
-                      placeholder="47500"
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.inputLabel}>City</Text>
-                    <TextInput
-                      style={styles.addressInput}
-                      value={city}
-                      onChangeText={onCityChange}
-                      placeholder="City or district"
-                    />
-                  </View>
-                </View>
-
-                <MalaysiaStateSelector
-                  value={stateName}
-                  onChange={onStateNameChange}
-                  labelStyle={styles.inputLabel}
-                  inputStyle={styles.addressInput}
-                  valueStyle={{ fontSize: 12 }}
-                />
-
-                <View>
-                  <Text style={styles.inputLabel}>Delivery Instructions (Optional)</Text>
-                  <TextInput
-                    style={styles.addressInput}
-                    value={deliveryNotes}
-                    onChangeText={onDeliveryNotesChange}
-                    placeholder="Optional delivery instructions"
-                  />
-                </View>
-              </View>
-              {user && (
-                <Button secondary onPress={handleSaveDeliveryAddress}>
-                  Save Address
-                </Button>
+                </>
               )}
             </View>
 
@@ -1851,7 +2191,7 @@ export default function ListingDetailScreen() {
                   <View style={styles.paymentMethodRow}>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Select FPX payment method"
+                      accessibilityLabel="Select Online Payment method"
                       accessibilityState={{ selected: selectedPaymentMethod === "Demo FPX" }}
                       onPress={() => setSelectedPaymentMethod("Demo FPX")}
                       style={[
@@ -1860,7 +2200,7 @@ export default function ListingDetailScreen() {
                       ]}
                     >
                       <Ionicons name="card-outline" size={16} color="#0369A1" />
-                      <Text style={styles.fpxBadgeText}>FPX</Text>
+                      <Text style={styles.fpxBadgeText}>Online Payment</Text>
                       {selectedPaymentMethod === "Demo FPX" && (
                         <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
                       )}
@@ -1884,8 +2224,8 @@ export default function ListingDetailScreen() {
                   </View>
                   <Text style={s.caption}>
                     {selectedPaymentMethod === "BNPL (Demo)"
-                      ? "Demo simulation only — pays the same checkout amount as FPX immediately, with no real instalments or credit check."
-                      : "Pay the full checkout amount instantly via demo FPX online banking."}
+                      ? "Demo simulation only — pays the same checkout amount as Online Payment immediately, with no real instalments or credit check."
+                      : "Complete your payment securely through an authorised payment provider."}
                   </Text>
                   <View>
                     <Button
@@ -1894,7 +2234,7 @@ export default function ListingDetailScreen() {
                       success={paySuccess}
                       onPress={handleConfirmInstantBook}
                     >
-                      Pay
+                      Proceed to Secure Payment
                     </Button>
                     <SuccessBurst trigger={paySuccess} />
                   </View>
@@ -1963,7 +2303,7 @@ export default function ListingDetailScreen() {
                   renterRisk?.level !== "very_high" &&
                   !deliveryAddressIsComplete() && (
                     <Text style={[s.caption, { marginTop: 2 }]}>
-                      Complete the required Address fields before selecting Pay.
+                      Complete the required Delivery Information fields before selecting Pay.
                     </Text>
                   )}
               </View>
@@ -2249,8 +2589,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     paddingBottom: 6,
   },
-  // arrangementTitle unused directly — "Delivery & Return Arrangement" / "Address" now render
-  // with the shared sectionHeadingStyle.
+  // arrangementTitle unused directly — "Delivery & Return Arrangement" / "Delivery Information"
+  // now render with the shared sectionHeadingStyle.
   fieldLabelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -2354,6 +2694,54 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checkboxChecked: { backgroundColor: colors.blue, borderColor: colors.blue },
+  defaultAddressBadge: {
+    backgroundColor: colors.paleBlue,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  defaultAddressBadgeText: { fontSize: 10, fontWeight: "700", color: colors.blue },
+  selectedAddressBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.blue,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  selectedAddressBadgeText: { fontSize: 10, fontWeight: "700", color: colors.blue },
+  compactAddressCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.blue,
+    backgroundColor: colors.paleBlue,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  compactAddressRow: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  compactAddressRowSelected: { borderColor: colors.blue, backgroundColor: colors.paleBlue },
+  deleteConfirmBox: {
+    backgroundColor: colors.offWhite,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 10,
+    gap: 8,
+    marginTop: 8,
+  },
+  deleteConfirmText: { fontSize: 12, lineHeight: 17, color: colors.text },
   insuranceCheckboxLabel: { flex: 1, ...bookingTypography.fieldLabel },
   insurancePremium: { ...bookingTypography.pricingValue },
   insuranceLink: { fontSize: 13, fontWeight: "700", color: bookingTypography.action.color, marginTop: 2 },

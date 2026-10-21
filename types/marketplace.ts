@@ -47,8 +47,12 @@ export interface Profile {
   isBanned?: boolean;
   hasOverdueObligation?: boolean;
   riskHistory?: RiskIncidentRecord[];
+  // Mirrors savedDeliveryAddresses[defaultDeliveryAddressIndex] — the most recently
+  // used/selected saved address, used to prefill a new booking's address fields.
   savedDeliveryAddress?: SavedDeliveryAddress;
   savedDeliveryAddresses?: SavedDeliveryAddress[];
+  // Index of the most recently used/selected saved address (not "the one true default" —
+  // any number of addresses can have isDefault: true at once).
   defaultDeliveryAddressIndex?: number;
 }
 
@@ -61,6 +65,8 @@ export interface SavedDeliveryAddress {
   city: string;
   state: string;
   instructions: string;
+  // Multiple saved addresses may be marked default at once (see Profile.defaultDeliveryAddressIndex).
+  isDefault?: boolean;
 }
 
 export interface Quote {

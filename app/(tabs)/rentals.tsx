@@ -15,6 +15,7 @@ import {
   getEffectiveBookingStatus,
   money,
   parseMalaysiaTimestamp,
+  paymentMethodLabel,
 } from "../../services/booking";
 import { DELIVERY_REFUND_STATUS_LABEL, deriveDeliveryRefundStatus, deriveDisplayDelivery, type DisplayDelivery } from "../../services/delivery";
 import { colors } from "../../constants/theme";
@@ -287,7 +288,7 @@ export default function RentalsScreen() {
                     <Text style={styles.txType}>{b.title}</Text>
                     <Badge text={card.statusChip.text} tone={card.statusChip.tone} />
                   </View>
-                  <Text style={styles.txDate}>Booked {formatShortDate(b.createdAt)} · via {b.paymentMethod || "FPX"}</Text>
+                  <Text style={styles.txDate}>Booked {formatShortDate(b.createdAt)} · via {paymentMethodLabel(b.paymentMethod)}</Text>
                   <View style={s.row}>
                     <Text style={styles.txItemTitle}>{card.deliveryPaid ? "Original total for this rental" : "CurRENT subtotal · delivery estimated separately"}</Text>
                     <Text style={styles.txAmount}>{money(card.grandTotal)}</Text>

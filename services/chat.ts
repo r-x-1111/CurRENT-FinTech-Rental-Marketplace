@@ -30,6 +30,14 @@ export interface SharedMessage {
   created_at: string;
 }
 
+// Seeded sample listings use plain fictional owner ids (e.g. "owner-aiman"); a real
+// authenticated lender's owner id is always a Supabase Auth UUID. Messages to a
+// fictional owner can never reach a real person, so those listings route through the
+// local Demo Chat (services/marketplace.ts "openChat"/"sendChat") instead of Supabase.
+export function isFictionalOwnerId(ownerId: string): boolean {
+  return !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(ownerId);
+}
+
 function client() {
   if (!supabase) throw new Error("Messaging requires a configured Supabase connection.");
   return supabase;

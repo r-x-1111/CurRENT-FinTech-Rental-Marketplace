@@ -32,7 +32,9 @@ export type Action =
   | { type: "login"; userId: string | null }
   | { type: "signup"; profile: Profile }
   | { type: "profile"; name: string; avatar?: string }
-  | { type: "saveDeliveryAddress"; address: SavedDeliveryAddress }
+  | { type: "saveDeliveryAddress"; address: SavedDeliveryAddress; index?: number; setDefault?: boolean }
+  | { type: "setDefaultDeliveryAddress"; index: number; isDefault?: boolean }
+  | { type: "deleteDeliveryAddress"; index: number }
   | { type: "verify"; status: VerificationStatus }
   | { type: "favourite"; listingId: string }
   | { type: "openChat"; listingId: string }
@@ -234,7 +236,7 @@ export function resolveAutomatedSupportQuery(query: string): {
     return {
       answered: true,
       response:
-        "To rent an item on CurRENT:\n\n1. Browse the listings on Home and select the item you want to rent.\n2. Choose your rental dates on the calendar.\n3. Select an available Scheduled Delivery Time slot (10:00 AM–5:00 PM).\n4. Enter your delivery address.\n5. Make your FPX payment if your Risk Score is 30–100, or submit a request to CurRENT for review if your score is 0–29.\n6. Your item will arrive at your selected Scheduled Delivery Time.",
+        "To rent an item on CurRENT:\n\n1. Browse the listings on Home and select the item you want to rent.\n2. Choose your rental dates on the calendar.\n3. Select an available Scheduled Delivery Time slot (10:00 AM–5:00 PM).\n4. Enter your delivery address.\n5. Complete your Online Payment if your Risk Score is 30–100, or submit a request to CurRENT for review if your score is 0–29.\n6. Your item will arrive at your selected Scheduled Delivery Time.",
     };
   }
 
@@ -282,7 +284,7 @@ export function resolveAutomatedSupportQuery(query: string): {
       answered: true,
       responses: [
         "Fees\n\nHere are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 13% of the rental fee for new bookings, deducted when a rental is completed.\n- Lender payout: The lender receives the remaining 87% of the rental fee. Historical bookings keep their original rate.",
-        "Security deposits\n\nYour refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through FPX.",
+        "Security deposits\n\nYour refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through Online Payment via an authorised payment provider.",
       ],
     };
   }
@@ -301,7 +303,7 @@ export function resolveAutomatedSupportQuery(query: string): {
     return {
       answered: true,
       response:
-        "Your refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through FPX.",
+        "Your refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through Online Payment via an authorised payment provider.",
     };
   }
 
@@ -449,7 +451,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         ].every((value) => value.trim().length > 0),
         "Complete the required delivery address fields before saving.",
       );
-      user.savedDeliveryAddress = {
+      const normalized: SavedDeliveryAddress = {
         recipientName: address.recipientName.trim(),
         phone: address.phone.trim(),
         addressLine1: address.addressLine1.trim(),
@@ -459,6 +461,99 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         state: address.state.trim(),
         instructions: address.instructions.trim(),
       };
+      // Save alongside the account's other addresses rather than replacing them, so a
+      // renter can keep several saved addresses — any number of which can be default.
+      const addresses = user.savedDeliveryAddresses
+        ? [...user.savedDeliveryAddresses]
+        : [];
+      let targetIndex: number;
+      if (action.index !== undefined) {
+        // Editing a specific saved address in place — never duplicates or reorders it.
+        // Its default status is preserved unless the renter explicitly ticked the checkbox.
+        requireThat(
+          action.index >= 0 && action.index < addresses.length,
+          "Saved address not found.",
+        );
+        addresses[action.index] = {
+          ...normalized,
+          isDefault: action.setDefault ?? addresses[action.index].isDefault,
+        };
+        targetIndex = action.index;
+      } else {
+        const existingIndex = addresses.findIndex(
+          (saved) =>
+            saved.addressLine1 === normalized.addressLine1 &&
+            saved.addressLine2 === normalized.addressLine2 &&
+            saved.postcode === normalized.postcode &&
+            saved.city === normalized.city &&
+            saved.state === normalized.state,
+        );
+        // The very first saved address automatically becomes default; later additions
+        // only become default when the renter explicitly ticks "Set as Default".
+        const isDefault = addresses.length === 0 || !!action.setDefault;
+        if (existingIndex >= 0) {
+          addresses[existingIndex] = { ...normalized, isDefault };
+          targetIndex = existingIndex;
+        } else {
+          addresses.push({ ...normalized, isDefault });
+          targetIndex = addresses.length - 1;
+        }
+      }
+      user.savedDeliveryAddresses = addresses;
+      // The newly saved/edited address becomes the one selected for the current booking.
+      user.defaultDeliveryAddressIndex = targetIndex;
+      user.savedDeliveryAddress = addresses[targetIndex];
+      break;
+    }
+
+    case "setDefaultDeliveryAddress": {
+      const addresses = user.savedDeliveryAddresses
+        ? [...user.savedDeliveryAddresses]
+        : [];
+      requireThat(
+        action.index >= 0 && action.index < addresses.length,
+        "Saved address not found.",
+      );
+      // Marking (or unmarking) one address default never touches any other address's
+      // default status — any number of saved addresses can be default at once.
+      addresses[action.index] = {
+        ...addresses[action.index],
+        isDefault: action.isDefault ?? true,
+      };
+      user.savedDeliveryAddresses = addresses;
+      user.defaultDeliveryAddressIndex = action.index;
+      user.savedDeliveryAddress = addresses[action.index];
+      break;
+    }
+
+    case "deleteDeliveryAddress": {
+      const addresses = user.savedDeliveryAddresses || [];
+      requireThat(
+        action.index >= 0 && action.index < addresses.length,
+        "Saved address not found.",
+      );
+      const previousDefault = user.defaultDeliveryAddressIndex ?? 0;
+      const remaining = addresses.filter((_, i) => i !== action.index);
+      user.savedDeliveryAddresses = remaining;
+      if (remaining.length === 0) {
+        user.defaultDeliveryAddressIndex = undefined;
+        user.savedDeliveryAddress = undefined;
+      } else {
+        // Keep pointing at the same address when one before it was removed; fall back to
+        // the first remaining default (or the first remaining address) when the
+        // previously selected address itself was the one deleted.
+        const newIndex =
+          previousDefault === action.index
+            ? Math.max(
+                0,
+                remaining.findIndex((saved) => saved.isDefault),
+              )
+            : previousDefault > action.index
+            ? previousDefault - 1
+            : previousDefault;
+        user.defaultDeliveryAddressIndex = newIndex;
+        user.savedDeliveryAddress = remaining[newIndex];
+      }
       break;
     }
 

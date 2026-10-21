@@ -9,6 +9,18 @@ import { calculateRiskScore, tierForScore } from "./riskScore";
 
 export const money = (value: number) => `RM${value.toFixed(2)}`;
 
+/** Provider-neutral display label for a booking's stored payment method. The underlying
+ * stored value ("Demo FPX"/"FPX") is left unchanged — it's load-bearing across existing
+ * seed data and tests — only how it's shown to the renter/lender is updated, so the UI
+ * never surfaces FPX branding or bank names. BNPL is kept as its own distinct option. */
+export function paymentMethodLabel(paymentMethod: string | undefined): string {
+  if (!paymentMethod) return "Online Payment";
+  if (paymentMethod === "BNPL (Demo)") return "BNPL (Demo)";
+  if (paymentMethod === "Demo FPX") return "Online Payment (Demo)";
+  if (paymentMethod === "FPX") return "Online Payment";
+  return paymentMethod;
+}
+
 /** Formats a "YYYY-MM-DD" (or any ISO) date string as "8 Oct 2026" for ledger/history display. */
 export function formatShortDate(dateKey: string): string {
   const [year, month, day] = dateKey.slice(0, 10).split("-").map(Number);

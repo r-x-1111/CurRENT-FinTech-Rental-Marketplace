@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-na
 import { Ionicons } from "@expo/vector-icons";
 import type { Booking } from "../types/marketplace";
 import type { Listing } from "../types";
-import { effectiveDepositStatus, formatMalaysiaDateTime, formatShortDate, getBookingTotals, money } from "../services/booking";
+import { effectiveDepositStatus, formatMalaysiaDateTime, formatShortDate, getBookingTotals, money, paymentMethodLabel } from "../services/booking";
 import { DELIVERY_REFUND_STATUS_LABEL, deriveDeliveryRefundStatus, deriveDisplayDelivery } from "../services/delivery";
 import { calculateOwnerPayout, DEPOSIT_TIERS, LEGACY_LENDER_COMMISSION_RATE } from "../services/deposit";
 import { tierForScore } from "../services/riskScore";
@@ -96,7 +96,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
 
       <Text style={[bookingTypography.smallLabel, styles.section]}>{cancelled ? "Rental Payment and Refund (Demo)" : "Paid to CurRENT"}</Text>
       {!!booking.paymentMethod && (
-        <Row label="Payment method" value={booking.paymentMethod === "BNPL (Demo)" ? "BNPL (Demo)" : booking.paymentMethod} />
+        <Row label="Payment method" value={paymentMethodLabel(booking.paymentMethod)} />
       )}
       <Row label="Rental fee" value={money(booking.quote.rentalFee)} />
       <Row label="CurRENT service fee (5%, min RM5)" value={money(booking.quote.serviceFee)} />

@@ -10,6 +10,7 @@ export const DEMO_SAVED_DELIVERY_ADDRESSES: SavedDeliveryAddress[] = [
     city: "Petaling Jaya",
     state: "Selangor",
     instructions: "Fictional classroom demonstration address.",
+    isDefault: true,
   },
   {
     recipientName: "Alex Tan",

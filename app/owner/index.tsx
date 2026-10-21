@@ -397,7 +397,7 @@ export default function OwnerDashboard() {
               <Text style={s.h2}>{record.listingName}</Text>
               <Row label="Transaction type" value="Listing Boost" />
               <Row label="Amount paid" value="RM10.00" />
-              <Row label="Payment method" value="FPX (Demo)" />
+              <Row label="Payment method" value="Online Payment (Demo)" />
               <Row label="Payment status" value="Successful" />
               <Row label="Payment date/time" value={formatMalaysiaDateTime(record.paidAt)} />
               <Row label="Transaction reference" value={record.id} />
@@ -414,7 +414,7 @@ export default function OwnerDashboard() {
           <Row label="Listing name" value={boostListing.title} />
           <Row label="Product" value="Listing Boost — 7 Days" />
           <Row label="Boost fee" value="RM10.00" />
-          <Row label="Payment method" value="FPX" />
+          <Row label="Payment method" value="Online Payment" />
           <Notice text="Simulated payment. No real money will be charged." />
           {!!error && <Notice text={error} error />}
           <Button disabled={paying} onPress={async () => {
@@ -437,7 +437,7 @@ export default function OwnerDashboard() {
           <Text style={s.h2}>Payment Successful</Text>
           <Row label="Listing name" value={receipt.listingName} />
           <Row label="Listing Boost" value="RM10.00" />
-          <Row label="Payment method" value="FPX (Demo)" />
+          <Row label="Payment method" value="Online Payment (Demo)" />
           <Row label="Total paid" value="RM10.00" />
           <Row label="Payment date/time" value={formatMalaysiaDateTime(receipt.paidAt)} />
           <Row label="Transaction reference" value={receipt.id} />

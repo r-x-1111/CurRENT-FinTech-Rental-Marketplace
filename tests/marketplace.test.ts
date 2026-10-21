@@ -34,6 +34,7 @@ import {
   getEffectiveBookingStatus,
   isCancellationEligible,
   parseMalaysiaTimestamp,
+  paymentMethodLabel,
   quoteFor,
   rentalTabForBooking,
   rentalDays,
@@ -54,7 +55,7 @@ import {
 } from "../services/auth";
 import { provisionDemoAccount } from "../services/demoAccountProvisioning";
 import { createNormalAccountWorkspace } from "../services/marketplacePersistence";
-import { withoutRemovedSeedListings } from "../services/catalogue";
+import { withoutRemovedSeedListings, withRefreshedCatalogueShippingData } from "../services/catalogue";
 import {
   DEMO_LISTING_TEMPLATE,
   DEMO_SAVED_DELIVERY_ADDRESSES,
@@ -65,6 +66,13 @@ import {
   saveDemoWorkspaceSession,
   startDemoWorkspaceSession,
 } from "../services/demoWorkspaceSessions";
+
+test("paymentMethodLabel shows provider-neutral wording without changing the stored payment method value", () => {
+  assert.equal(paymentMethodLabel("Demo FPX"), "Online Payment (Demo)");
+  assert.equal(paymentMethodLabel("FPX"), "Online Payment");
+  assert.equal(paymentMethodLabel("BNPL (Demo)"), "BNPL (Demo)");
+  assert.equal(paymentMethodLabel(undefined), "Online Payment");
+});
 
 test("message rental links select the tab for each booking condition", () => {
   const booking = createSeed("admin_demo").bookings[0];
@@ -90,6 +98,36 @@ test("removed seed listings stay out of saved catalogues without hiding user lis
   assert.equal(cleaned.listings.length, 21);
   assert.ok(cleaned.listings.includes(userListing));
   assert.equal(cleaned.bookings, state.bookings);
+});
+
+test("a normal account's stale persisted catalogue listing is refreshed to the canonical shipping data on load", () => {
+  // Regression: a normal account's workspace is persisted indefinitely, so its copy of a
+  // built-in listing like Sony A7 III can be frozen at an older data/mock.ts snapshot —
+  // missing parcel weight/dimensions that were added later — while a Demo Account always
+  // gets a freshly reseeded copy. That mismatch made the exact same listing show
+  // "Delivery Details Required" to a normal account and "Cross-State Delivery Available"
+  // to the Demo Account. withRefreshedCatalogueShippingData must eliminate that drift.
+  const state = createSeed("normal");
+  const index = state.listings.findIndex((l) => l.id === "sony-a7iii");
+  assert.ok(index >= 0);
+  const stale = {
+    ...state,
+    listings: state.listings.map((listing, i) =>
+      i === index
+        ? { ...listing, parcelWeightKg: undefined, parcelDimensionsCm: undefined, pickupPostcode: "00000" }
+        : listing,
+    ),
+  };
+  const refreshed = withRefreshedCatalogueShippingData(stale);
+  const fixedListing = refreshed.listings.find((l) => l.id === "sony-a7iii")!;
+  assert.equal(fixedListing.parcelWeightKg, state.listings[index].parcelWeightKg);
+  assert.deepEqual(fixedListing.parcelDimensionsCm, state.listings[index].parcelDimensionsCm);
+  assert.equal(fixedListing.pickupPostcode, state.listings[index].pickupPostcode);
+
+  // A renter's own listing, even one that happens to collide on id/owner with a catalogue
+  // entry's owner alone, must never be touched — only an exact id+ownerId catalogue match is.
+  const untouched = withRefreshedCatalogueShippingData(state);
+  assert.deepEqual(untouched.listings, state.listings);
 });
 
 test("Demo workspace starts fresh, persists in-session, and clears on sign out", () => {
@@ -128,6 +166,80 @@ test("Demo listing chat reopens one thread and records unread messages for its o
   state = transition(state, { type: "readChat", conversationId: chat.id });
   assert.equal(state.messages.find((item) => item.id === "chat-test-message")?.read, true);
   assert.equal(state.notifications.find((item) => item.conversationId === chat.id)?.read, true);
+});
+
+test("Chat with Owner for a sample listing works the same way for Normal Account workspaces, not just admin_demo", () => {
+  // The reducer itself never gated chat on account mode — the old bug lived entirely in
+  // the Messages screen's UI branching. This locks in that openChat/sendChat/readChat work
+  // identically against a "normal"-mode workspace (sample listings, fictional owner ids).
+  let state = createSeed("normal");
+  const renterId = state.currentUserId;
+  const listing = state.listings.find((item) => item.status === "published" && item.ownerId !== renterId);
+  assert.ok(listing);
+  assert.equal(state.mode, "normal");
+
+  state = transition(state, { type: "openChat", listingId: listing.id });
+  const chat = state.chatConversations?.find((item) => item.listingId === listing.id && item.renterId === renterId);
+  assert.ok(chat);
+
+  state = transition(state, { type: "sendChat", conversationId: chat.id, id: "normal-chat-message", text: "Still available?" });
+  assert.equal(state.messages.find((item) => item.id === "normal-chat-message")?.text, "Still available?");
+
+  // A second listing gets a distinct conversation, never merged with the first.
+  const otherListing = state.listings.find((item) => item.status === "published" && item.ownerId !== renterId && item.id !== listing.id);
+  assert.ok(otherListing);
+  state = transition(state, { type: "openChat", listingId: otherListing.id });
+  const otherChat = state.chatConversations?.find((item) => item.listingId === otherListing.id && item.renterId === renterId);
+  assert.ok(otherChat);
+  assert.notEqual(otherChat.id, chat.id);
+  assert.equal(state.chatConversations?.length, 2);
+});
+
+test("two booking-less demo conversations never leak each other's messages (undefined bookingId must not match undefined bookingId)", () => {
+  // Regression test for app/(tabs)/messages.tsx's per-conversation message filter. Before
+  // the fix it read `message.conversationId === chat.id || message.bookingId === booking?.id`.
+  // sendChat messages never carry a bookingId, and a conversation opened purely via "Chat
+  // with Owner" (no booking yet) also has no booking — so `undefined === undefined` was
+  // `true`, and Product A's message showed up inside Product B's conversation too.
+  let state = createSeed("normal");
+  const renterId = state.currentUserId;
+  const [listingA, listingB] = state.listings.filter(
+    (item) => item.status === "published" && item.ownerId !== renterId,
+  );
+  assert.ok(listingA && listingB && listingA.id !== listingB.id);
+
+  state = transition(state, { type: "openChat", listingId: listingA.id });
+  const chatA = state.chatConversations!.find((item) => item.listingId === listingA.id)!;
+  state = transition(state, { type: "sendChat", conversationId: chatA.id, id: "msg-a", text: "Hello, is this camera available?" });
+
+  state = transition(state, { type: "openChat", listingId: listingB.id });
+  const chatB = state.chatConversations!.find((item) => item.listingId === listingB.id)!;
+
+  // Neither chat has a linked booking yet — exactly the undefined/undefined case.
+  const bookingA = state.bookings.find((item) => item.listingId === listingA.id && item.renterId === renterId);
+  const bookingB = state.bookings.find((item) => item.listingId === listingB.id && item.renterId === renterId);
+  assert.equal(bookingA === undefined, true);
+  assert.equal(bookingB === undefined, true);
+
+  function messagesForChat(chatId: string, bookingId: string | undefined) {
+    return state.messages.filter((message) =>
+      (!!message.conversationId && message.conversationId === chatId) ||
+      (!!bookingId && !!message.bookingId && message.bookingId === bookingId));
+  }
+
+  assert.equal(messagesForChat(chatA.id, bookingA?.id).length, 1);
+  assert.equal(messagesForChat(chatB.id, bookingB?.id).length, 0);
+});
+
+test("isFictionalOwnerId distinguishes seeded sample owners from real Supabase Auth UUIDs", () => {
+  // services/chat.ts pulls in the Supabase client (and transitively react-native), which
+  // this plain Node test runner can't transform — so this mirrors its exact regex rather
+  // than importing the module, matching how messages.tsx used the check before it was
+  // extracted into the named `isFictionalOwnerId` helper.
+  const isFictionalOwnerId = (ownerId: string) => !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(ownerId);
+  assert.equal(isFictionalOwnerId("owner-aiman"), true);
+  assert.equal(isFictionalOwnerId("demo-renter"), true);
+  assert.equal(isFictionalOwnerId("3fa85f64-5717-4562-b3fc-2c963f66afa6"), false);
 });
 
 test("new Supabase Normal workspaces start empty and are bound to their auth account", () => {
@@ -1817,11 +1929,20 @@ test("renters can save a validated delivery address in their own profile", () =>
     type: "saveDeliveryAddress",
     address,
   });
-  assert.deepEqual(
-    saved.profiles.find((profile) => profile.id === "demo-renter")
-      ?.savedDeliveryAddress,
-    address,
+  const savedRenter = saved.profiles.find(
+    (profile) => profile.id === "demo-renter",
   );
+  // A new saved address is added alongside the existing ones, without the "Set as
+  // Default" box ticked, so it is not marked default — but it IS selected for this
+  // booking (the account's most-recently-used address).
+  assert.deepEqual(
+    savedRenter?.savedDeliveryAddresses?.at(-1),
+    { ...address, isDefault: false },
+  );
+  assert.deepEqual(savedRenter?.savedDeliveryAddress, {
+    ...address,
+    isDefault: false,
+  });
   assert.equal(
     state.profiles.find((profile) => profile.id === "demo-renter")
       ?.savedDeliveryAddress,
@@ -1836,6 +1957,168 @@ test("renters can save a validated delivery address in their own profile", () =>
     /Complete the required delivery address fields/,
   );
 });
+
+test("renters can mark any number of saved addresses as default, independently", () => {
+  const state = createSeed("admin_demo");
+  state.currentUserId = "demo-renter";
+
+  const updated = transition(state, {
+    type: "setDefaultDeliveryAddress",
+    index: 1,
+  });
+  const renter = updated.profiles.find(
+    (profile) => profile.id === "demo-renter",
+  );
+  assert.equal(renter?.defaultDeliveryAddressIndex, 1);
+  assert.deepEqual(
+    renter?.savedDeliveryAddress,
+    renter?.savedDeliveryAddresses?.[1],
+  );
+  // Marking address 1 as default does not remove address 0's existing default status.
+  assert.equal(renter?.savedDeliveryAddresses?.[0]?.isDefault, true);
+  assert.equal(renter?.savedDeliveryAddresses?.[1]?.isDefault, true);
+
+  const unset = transition(updated, {
+    type: "setDefaultDeliveryAddress",
+    index: 0,
+    isDefault: false,
+  });
+  const renterAfterUnset = unset.profiles.find(
+    (profile) => profile.id === "demo-renter",
+  );
+  assert.equal(renterAfterUnset?.savedDeliveryAddresses?.[0]?.isDefault, false);
+  assert.equal(renterAfterUnset?.savedDeliveryAddresses?.[1]?.isDefault, true);
+
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "setDefaultDeliveryAddress",
+        index: 99,
+      }),
+    /Saved address not found/,
+  );
+});
+
+test("a new user's first saved address automatically becomes their default", () => {
+  const state = createSeed("admin_demo");
+  state.currentUserId = "owner-aiman";
+  const existing = state.profiles.find((profile) => profile.id === "owner-aiman");
+  assert.equal(existing?.savedDeliveryAddresses?.length ?? 0, 0);
+
+  const address = {
+    recipientName: "Aiman",
+    phone: "+60123456780",
+    addressLine1: "1 Jalan Example",
+    addressLine2: "",
+    postcode: "40000",
+    city: "Shah Alam",
+    state: "Selangor",
+    instructions: "",
+  };
+  const saved = transition(state, { type: "saveDeliveryAddress", address });
+  const profile = saved.profiles.find((p) => p.id === "owner-aiman");
+  assert.equal(profile?.defaultDeliveryAddressIndex, 0);
+  assert.deepEqual(profile?.savedDeliveryAddress, { ...address, isDefault: true });
+  assert.deepEqual(profile?.savedDeliveryAddresses, [{ ...address, isDefault: true }]);
+});
+
+test("ticking Set as Default when saving an additional address makes it the new default", () => {
+  const state = createSeed("admin_demo");
+  state.currentUserId = "demo-renter";
+  const address = {
+    recipientName: "Demo Renter",
+    phone: "+60123456789",
+    addressLine1: "99 Jalan Baru",
+    addressLine2: "",
+    postcode: "68000",
+    city: "Ampang",
+    state: "Selangor",
+    instructions: "",
+  };
+
+  const saved = transition(state, {
+    type: "saveDeliveryAddress",
+    address,
+    setDefault: true,
+  });
+  const profile = saved.profiles.find((p) => p.id === "demo-renter");
+  const newIndex = (profile?.savedDeliveryAddresses?.length ?? 1) - 1;
+  assert.equal(profile?.defaultDeliveryAddressIndex, newIndex);
+  assert.deepEqual(profile?.savedDeliveryAddress, { ...address, isDefault: true });
+  // The account's original default address is untouched — multiple defaults coexist.
+  assert.equal(profile?.savedDeliveryAddresses?.[0]?.isDefault, true);
+});
+
+test("editing a saved address in place updates it without creating a duplicate, preserving its default status", () => {
+  const state = createSeed("admin_demo");
+  state.currentUserId = "demo-renter";
+  const before = state.profiles.find((p) => p.id === "demo-renter");
+  const addressCountBefore = before?.savedDeliveryAddresses?.length ?? 0;
+  const wasDefault = before!.savedDeliveryAddresses![1].isDefault;
+
+  const edited = {
+    ...before!.savedDeliveryAddresses![1],
+    instructions: "Leave with the guard house.",
+  };
+  const saved = transition(state, {
+    type: "saveDeliveryAddress",
+    address: edited,
+    index: 1,
+  });
+  const profile = saved.profiles.find((p) => p.id === "demo-renter");
+  assert.equal(profile?.savedDeliveryAddresses?.length, addressCountBefore);
+  assert.deepEqual(profile?.savedDeliveryAddresses?.[1], {
+    ...edited,
+    isDefault: wasDefault,
+  });
+  // Editing selects the edited address for the current booking.
+  assert.equal(profile?.defaultDeliveryAddressIndex, 1);
+
+  assert.throws(
+    () =>
+      transition(state, {
+        type: "saveDeliveryAddress",
+        address: edited,
+        index: 99,
+      }),
+    /Saved address not found/,
+  );
+});
+
+test("deleting a saved address reassigns the default when the default itself is removed", () => {
+  const state = createSeed("admin_demo");
+  state.currentUserId = "demo-renter";
+
+  const afterDeletingNonDefault = transition(state, {
+    type: "deleteDeliveryAddress",
+    index: 1,
+  });
+  const profileAfterNonDefault = afterDeletingNonDefault.profiles.find(
+    (p) => p.id === "demo-renter",
+  );
+  assert.equal(profileAfterNonDefault?.savedDeliveryAddresses?.length, 2);
+  assert.equal(profileAfterNonDefault?.defaultDeliveryAddressIndex, 0);
+
+  const afterDeletingDefault = transition(state, {
+    type: "deleteDeliveryAddress",
+    index: 0,
+  });
+  const profileAfterDefault = afterDeletingDefault.profiles.find(
+    (p) => p.id === "demo-renter",
+  );
+  assert.equal(profileAfterDefault?.savedDeliveryAddresses?.length, 2);
+  assert.equal(profileAfterDefault?.defaultDeliveryAddressIndex, 0);
+  assert.deepEqual(
+    profileAfterDefault?.savedDeliveryAddress,
+    profileAfterDefault?.savedDeliveryAddresses?.[0],
+  );
+
+  assert.throws(
+    () => transition(state, { type: "deleteDeliveryAddress", index: 99 }),
+    /Saved address not found/,
+  );
+});
+
 test("accounts, private messages and notifications stay separated", () => {
   const j = journey();
   j.book();
