@@ -3646,8 +3646,8 @@ test("V3.36 Demo Account has 2 completed rentals and a history-derived score of 
   );
   assert.equal(lenderPayouts[0].id, "demo-lender-completed-1");
   assert.equal(
-    calculateOwnerPayout(lenderPayouts[0].quote.rentalFee, lenderPayouts[0].commissionRate ?? 0.12).payout,
-    39.6,
+    calculateOwnerPayout(lenderPayouts[0].quote.rentalFee, lenderPayouts[0].commissionRate ?? 0.13).payout,
+    39.15,
   );
   assert.equal(
     seed.messages.filter((message) =>

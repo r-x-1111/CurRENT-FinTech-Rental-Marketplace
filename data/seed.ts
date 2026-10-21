@@ -11,6 +11,7 @@ import type {
 } from "../types/marketplace";
 import { DEMO_LISTING_TEMPLATE, DEMO_SAVED_DELIVERY_ADDRESSES, getDemoListingAvailability } from "../services/demoWorkspaceDefaults";
 import { cancelledDepositReleaseDeadline } from "../services/booking";
+import { CURRENT_LENDER_COMMISSION_RATE } from "../services/deposit";
 import { demoDeliverySamples } from "./demoDeliveryHistory";
 import { demoDestinationPostcode } from "../services/demoDeliveryLocations";
 import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
@@ -187,6 +188,7 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-upcoming-1",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "sony-a7iii",
       title: "Sony A7 III Mirrorless Camera",
       image: "/products/sony-a7iii.jpg",
@@ -220,6 +222,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-upcoming-2",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "gopro-camera",
       title: "GoPro-style Action Camera",
       image: "/products/gopro-camera.jpg",
@@ -251,6 +254,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-upcoming-3",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "luxury-watch",
       title: "Luxury Watch",
       image: "/products/luxury-watch.jpg",
@@ -286,6 +290,7 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-active-1",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "ps5-console",
       title: "PlayStation 5 + Gamepad",
       image: "/products/ps5-console.jpg",
@@ -322,6 +327,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-active-2",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "led-lighting-kit",
       title: "LED Studio Lighting Kit",
       image: "/products/led-lighting-kit.jpg",
@@ -356,6 +362,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-active-3",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "tabletop-oven",
       title: "Tabletop Convection Oven",
       image: "/products/tabletop-oven.jpg",
@@ -394,6 +401,7 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-return-due-1",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       // Fishing Rod Set's 130cm length exceeds every local vehicle AND the courier's standard
       // parcel limit (demonstrates the "no quote available" edge case, not a working delivery),
       // so this uses Pressure Washer instead — still cross-state and courier-eligible.
@@ -446,6 +454,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-return-due-2",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "luxury-handbag",
       title: "Luxury Handbag",
       image: "/products/luxury-handbag.jpg",
@@ -482,6 +491,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-return-due-3",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "power-station",
       title: "Portable Power Station",
       image: "/products/power-station.jpg",
@@ -522,6 +532,7 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-cancelled-1",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       // Portable Party Speaker is demo-renter's own listing (can't rent your own item), so this
       // uses Luxury Watch instead — same Mont Kiara, Kuala Lumpur pickup the task's table specifies.
       listingId: "luxury-watch",
@@ -570,6 +581,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-cancelled-2",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "fishing-rod-set",
       title: "Fishing Rod & Reel Set",
       image: "/products/fishing-rod-set.jpg",
@@ -601,6 +613,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-cancelled-3",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "wedding-arch",
       title: "Wedding Arch & Drapes",
       image: "/products/wedding-arch.jpg",
@@ -636,6 +649,7 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-disputed-1",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "monitor-27",
       title: '27" Computer Monitor',
       image: "/products/monitor-27.jpg",
@@ -672,6 +686,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-disputed-2",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "luxury-necklace",
       title: "Luxury Gold Necklace",
       image: "/products/luxury-necklace.jpg",
@@ -705,6 +720,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-disputed-3",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "standing-air-cooler",
       title: "Standing Air Cooler",
       image: "/products/standing-air-cooler.jpg",
@@ -743,6 +759,7 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-completed-1",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "sony-a7iii",
       title: "Sony A7 III Mirrorless Camera",
       image: "/products/sony-a7iii.jpg",
@@ -788,6 +805,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-completed-2",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "camping-tent",
       title: "Camping Tent",
       image: "/products/camping-tent.jpg",
@@ -842,6 +860,7 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-booking-protection-upcoming",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "drone",
       title: "DJI Mini 4 Pro Drone",
       image: "/products/drone.jpg",
@@ -883,6 +902,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-protection-active",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "sony-a7iii",
       title: "Sony ZV-E10 Camera",
       image: "/products/sony-a7iii.jpg",
@@ -918,6 +938,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-protection-return-due",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "portable-projector",
       title: "Epson Portable Projector",
       image: "/products/portable-projector.jpg",
@@ -954,6 +975,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-protection-cancelled",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "gopro-camera",
       title: "GoPro HERO12 Black",
       image: "/products/gopro-camera.jpg",
@@ -988,6 +1010,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-booking-protection-disputed",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "sony-a7iii",
       title: "Canon RF Camera Lens",
       image: "/products/sony-thumb-2.jpg",
@@ -1028,6 +1051,7 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-lender-upcoming-1",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "office-chair",
       title: "Ergonomic Office Chair",
       image: "/products/office-chair.jpg",
@@ -1059,6 +1083,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-lender-upcoming-2",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "party-speaker",
       title: "Portable Party Speaker",
       image: "/products/party-speaker.jpg",
@@ -1089,6 +1114,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-lender-active-1",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "office-chair",
       title: "Ergonomic Office Chair",
       image: "/products/office-chair.jpg",
@@ -1127,6 +1153,7 @@ export function createAdminDemoSeed(): Marketplace {
     // ------------------------------------------------------------------------
     {
       id: "demo-lender-completed-1",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "office-chair",
       title: "Ergonomic Office Chair",
       image: "/products/office-chair.jpg",
@@ -1164,6 +1191,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-lender-completed-2",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "party-speaker",
       title: "Portable Party Speaker",
       image: "/products/party-speaker.jpg",
@@ -1200,6 +1228,7 @@ export function createAdminDemoSeed(): Marketplace {
     },
     {
       id: "demo-lender-completed-3",
+      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
       listingId: "camping-tent",
       title: "Camping Tent",
       image: "/products/camping-tent.jpg",
