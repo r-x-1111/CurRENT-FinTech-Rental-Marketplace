@@ -148,6 +148,41 @@ test("Demo workspace starts fresh, persists in-session, and clears on sign out",
   );
 });
 
+test("Demo saved addresses survive a fresh session and page reload", () => {
+  const accountId = "demo-address-persistence";
+  const previousStorage = globalThis.localStorage;
+  const entries = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => { entries.set(key, value); },
+    },
+  });
+  try {
+    const original = startDemoWorkspaceSession(accountId);
+    const address = {
+      recipientName: "Test Renter", phone: "0123456789",
+      addressLine1: "99 Jalan Test", addressLine2: "Unit 3",
+      postcode: "50000", city: "Kuala Lumpur", state: "Kuala Lumpur",
+      instructions: "Leave at reception",
+    };
+    const saved = transition(original, { type: "saveDeliveryAddress", address });
+    saveDemoWorkspaceSession(accountId, saved);
+    closeDemoWorkspaceSession(accountId);
+
+    const restored = startDemoWorkspaceSession(accountId);
+    const profile = restored.profiles.find((entry) => entry.id === restored.currentUserId);
+    assert.deepEqual(profile?.savedDeliveryAddresses?.at(-1), { ...address, isDefault: false });
+    assert.deepEqual(loadDemoWorkspaceSession(accountId).profiles.find((entry) => entry.id === restored.currentUserId)?.savedDeliveryAddress,
+      { ...address, isDefault: false });
+  } finally {
+    closeDemoWorkspaceSession(accountId);
+    if (previousStorage === undefined) delete (globalThis as { localStorage?: Storage }).localStorage;
+    else Object.defineProperty(globalThis, "localStorage", { configurable: true, value: previousStorage });
+  }
+});
+
 test("Demo listing chat reopens one thread and records unread messages for its owner", () => {
   let state = createSeed("admin_demo");
   const renterId = state.currentUserId;

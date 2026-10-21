@@ -5,6 +5,7 @@ import { repairDemoDeliveryPayments } from "./repairDemoDeliveryPayments";
 
 const STORAGE_PREFIX = "current:demo-session:";
 const DELIVERY_PREFIX = "current:demo-delivery-history:";
+const ADDRESS_PREFIX = "current:demo-saved-addresses:";
 const memorySessions = new Map<string, Marketplace>();
 
 function isMarketplaceSnapshot(value: unknown): value is Marketplace {
@@ -56,28 +57,55 @@ function withPersistentDeliveryHistory(accountId: string, state: Marketplace): M
     .sort((a, b) => b.paidAt.localeCompare(a.paidAt)) });
 }
 
+function withPersistentAddresses(accountId: string, state: Marketplace): Marketplace {
+  try {
+    const raw = globalThis.localStorage?.getItem(`${ADDRESS_PREFIX}${accountId}`);
+    if (raw === null || raw === undefined) return state;
+    const saved: unknown = JSON.parse(raw);
+    if (!saved || typeof saved !== "object") return state;
+    const record = saved as { addresses?: unknown; selectedIndex?: unknown };
+    if (!Array.isArray(record.addresses) || !record.addresses.every((address) =>
+      address && typeof address === "object" &&
+      ["recipientName", "phone", "addressLine1", "addressLine2", "postcode", "city", "state", "instructions"]
+        .every((field) => typeof address[field] === "string"))) return state;
+    const profile = state.profiles.find((entry) => entry.id === state.currentUserId);
+    if (!profile) return state;
+    const selectedIndex = typeof record.selectedIndex === "number" &&
+      Number.isInteger(record.selectedIndex) && record.selectedIndex >= 0 &&
+      record.selectedIndex < record.addresses.length ? record.selectedIndex : 0;
+    profile.savedDeliveryAddresses = record.addresses;
+    profile.defaultDeliveryAddressIndex = record.addresses.length ? selectedIndex : undefined;
+    profile.savedDeliveryAddress = record.addresses[selectedIndex];
+  } catch { /* Keep the workspace usable if browser storage is unavailable. */ }
+  return state;
+}
+
+function restoreDemoHistory(accountId: string, state: Marketplace): Marketplace {
+  return withPersistentAddresses(accountId, withPersistentDeliveryHistory(accountId, state));
+}
+
 export function loadDemoWorkspaceSession(accountId: string): Marketplace {
   const storage = browserSessionStorage();
   const serialized = storage?.getItem(key(accountId));
   if (serialized) {
     try {
       const state: unknown = JSON.parse(serialized);
-      if (isMarketplaceSnapshot(state)) return withPersistentDeliveryHistory(accountId, withRefreshedCatalogueShippingData(withoutRemovedSeedListings(state)));
+      if (isMarketplaceSnapshot(state)) return restoreDemoHistory(accountId, withRefreshedCatalogueShippingData(withoutRemovedSeedListings(state)));
     } catch {
       storage?.removeItem(key(accountId));
     }
   }
 
   const memoryState = memorySessions.get(accountId);
-  if (memoryState && isMarketplaceSnapshot(memoryState)) return withPersistentDeliveryHistory(accountId, withRefreshedCatalogueShippingData(withoutRemovedSeedListings(memoryState)));
+  if (memoryState && isMarketplaceSnapshot(memoryState)) return restoreDemoHistory(accountId, withRefreshedCatalogueShippingData(withoutRemovedSeedListings(memoryState)));
 
-  const fresh = withPersistentDeliveryHistory(accountId, createSeed("admin_demo"));
+  const fresh = restoreDemoHistory(accountId, createSeed("admin_demo"));
   saveDemoWorkspaceSession(accountId, fresh);
   return fresh;
 }
 
 export function startDemoWorkspaceSession(accountId: string): Marketplace {
-  const fresh = withPersistentDeliveryHistory(accountId, createSeed("admin_demo"));
+  const fresh = restoreDemoHistory(accountId, createSeed("admin_demo"));
   saveDemoWorkspaceSession(accountId, fresh);
   return fresh;
 }
@@ -93,6 +121,15 @@ export function saveDemoWorkspaceSession(
   memorySessions.set(accountId, copy);
   browserSessionStorage()?.setItem(key(accountId), JSON.stringify(copy));
   try { globalThis.localStorage?.setItem(`${DELIVERY_PREFIX}${accountId}`, JSON.stringify(copy.deliveryHistory || [])); } catch { /* Session remains usable without durable browser storage. */ }
+  const profile = copy.profiles.find((entry) => entry.id === copy.currentUserId);
+  if (profile) {
+    try {
+      globalThis.localStorage?.setItem(`${ADDRESS_PREFIX}${accountId}`, JSON.stringify({
+        addresses: profile.savedDeliveryAddresses || [],
+        selectedIndex: profile.defaultDeliveryAddressIndex,
+      }));
+    } catch { /* Session storage still preserves addresses for this tab. */ }
+  }
 }
 
 export function closeDemoWorkspaceSession(accountId: string): void {
