@@ -37,12 +37,14 @@ import {
   isLenderDisputeEligible,
   type Action,
 } from "../../services/marketplace";
+import type { Booking } from "../../types/marketplace";
 
 export default function RentalDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { state, user, actAndPersist } = useMarketplace();
   const [error, setError] = useState("");
   const [successNotice, setSuccessNotice] = useState("");
+  const [cancelSummaryVisible, setCancelSummaryVisible] = useState(false);
   const [cancelConfirmationVisible, setCancelConfirmationVisible] =
     useState(false);
   const [cancelError, setCancelError] = useState("");
@@ -216,9 +218,11 @@ export default function RentalDetail() {
     try {
       await actAndPersist({ type: "booking", id, operation: "cancel" });
       setCancelConfirmationVisible(false);
-      setSuccessNotice(
-        "Booking cancelled. The simulated ledger now shows the rental and service fees as refunded; the refundable deposit is scheduled to release within 5 Malaysia working days of this cancellation. No real payment or refund occurred.",
-      );
+      // The structured "Booking Cancelled" card below reads the actual post-cancellation
+      // booking fields (quote.deposit, depositReleasedAt) rather than this fixed string, so it
+      // always shows the real refundable amount and deadline. This flag only decides whether
+      // that card is shown, not what it says.
+      setCancelSummaryVisible(true);
     } catch (e) {
       setCancelError((e as Error).message);
     } finally {
@@ -323,6 +327,17 @@ export default function RentalDetail() {
     cancelled: "Cancelled",
     rejected: "Rejected",
     disputed: "Disputed",
+  };
+
+  // Mirrors BookingSummary's lender-facing deposit status wording, for the post-cancellation
+  // summary card below — always read from the booking's actual current state, never fixed text.
+  const depositStatusLabel: Record<Booking["deposit"], string> = {
+    required: "Not Charged",
+    secured: "Held in Escrow",
+    held: "Held in Escrow",
+    release_pending: "Release Pending",
+    released: "Released",
+    disputed: "Held — Dispute Under Review",
   };
 
   function renderRenterActionButtons() {
@@ -580,6 +595,34 @@ export default function RentalDetail() {
 
       {!!error && <Notice text={error} error />}
       {!!successNotice && <Notice text={successNotice} />}
+
+      {/* Post-cancellation summary — reads b's actual current fields (never fixed text), so the
+          amount and deadline shown here always match Payment & Transaction History. */}
+      {cancelSummaryVisible && b.status === "cancelled" && (
+        <Card>
+          <Text style={s.h2}>Booking Cancelled</Text>
+          <Text style={s.body}>Your booking has been successfully cancelled.</Text>
+          <View style={[s.divider, { marginVertical: 8 }]} />
+          <Text style={[s.bold, { marginBottom: 4 }]}>Security Deposit Refund</Text>
+          {b.quote.deposit > 0 ? (
+            <>
+              <Row label="Refundable deposit" value={money(b.quote.deposit)} />
+              <Row label="Refund status" value={depositStatusLabel[effectiveDepositStatus(b)]} />
+              <Row label="Refund processing" value="Within 5 Malaysia working days" />
+              <Row
+                label="Expected refund deadline"
+                value={b.depositReleasedAt ? formatMalaysiaDateTime(b.depositReleasedAt) : "Not recorded"}
+              />
+              <Text style={[s.caption, { marginTop: 6 }]}>
+                Your security deposit refund is being processed. You can track its status under
+                Payment & Transaction History → Release pending.
+              </Text>
+            </>
+          ) : (
+            <Text style={s.body}>No deposit refund required.</Text>
+          )}
+        </Card>
+      )}
 
       {/* UPCOMING / DELIVERY FULFILMENT */}
       {effectiveStatus === "upcoming" && (
