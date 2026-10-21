@@ -234,13 +234,6 @@ export default function RentalsScreen() {
 
     return (
       <View style={{ gap: 12, marginTop: 12 }}>
-        <View style={styles.historyNoticeBox}>
-          <Ionicons name="information-circle-outline" size={18} color={colors.navy} />
-          <Text style={styles.historyNoticeText}>
-            Simulated classroom ledger. Transparently tracks rental fees, 5% platform service fees, refundable security deposits and separate GrabExpress delivery fees.
-          </Text>
-        </View>
-
         <View style={styles.summaryTilesRow}>
           <Pressable
             accessibilityRole="button"
