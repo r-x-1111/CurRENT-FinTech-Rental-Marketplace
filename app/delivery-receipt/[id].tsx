@@ -38,7 +38,7 @@ export default function DeliveryReceipt() {
       {booking?.deliveryDemo?.returnFee != null && <Row label="Return delivery fee" value={money(booking.deliveryDemo.returnFee)} />}
       <Row label="Delivery amount paid" value={money(record.fee)} />
       {booking?.deliveryDemo?.status === "refunded_demo" && <Row label="Delivery refund" value={money(record.fee)} />}
-      <Row label="Pricing reference" value={record.pricingReference} />
+      <Row label="Pricing reference" value={record.pricingReference === "GrabExpress MY FAQ, May 2023" ? "GrabExpress" : record.pricingReference} />
       <Row label="Demo payment date" value={formatMalaysiaDateTime(record.paidAt)} />
       <Row label="Status" value={booking?.deliveryDemo?.status === "refunded_demo" ? "Refunded (Demo)" : "Demo Payment Completed"} />
       {cancelled && outboundRefundStatus && returnRefundStatus && (
