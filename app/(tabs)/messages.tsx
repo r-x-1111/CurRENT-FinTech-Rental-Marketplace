@@ -261,14 +261,22 @@ export default function MessagesScreen() {
   // correctly after a page refresh, when there is no "back" history at all.
   function backToBooking() {
     if (!active) return;
-    // Prefer the exact rental details page over the general listing page whenever this
-    // conversation actually belongs to a booking — that's the specific item the renter or
-    // lender was viewing before opening Messages, not just its underlying listing. A plain
-    // "Chat with Owner" conversation (no booking yet) still falls back to the listing.
-    // router.replace (not push) so repeatedly bouncing between a rental and its
-    // conversation never piles up duplicate Messages entries in the navigation history.
-    if (active.booking) router.replace(`/rental/${active.booking.id}`);
-    else router.replace(`/listing/${active.listing.id}`);
+    // The destination must match how the renter/lender actually got here, not just whatever
+    // the active conversation happens to have attached to it — a "Chat with Owner" conversation
+    // (opened via listingId, pre-booking) must always return to that listing, even if a booking
+    // for it now exists; only a conversation opened from an existing rental's "Message" button
+    // (bookingId entry) returns to that rental's details page. router.replace (not push) so
+    // repeatedly bouncing between a rental/listing and its conversation never piles up
+    // duplicate Messages entries in the navigation history.
+    if (active.booking && cameFromRentalDetail && !cameFromListingBooking) router.replace(`/rental/${active.booking.id}`);
+    else router.replace({
+      pathname: "/listing/[id]",
+      // fromMessages tells the listing page its own Back must go straight Home — replacing
+      // the Messages entry with this one (above) already collapses what would otherwise be a
+      // duplicate listing/[id] history entry sitting right underneath the original one, so a
+      // plain router.back() from there would just land back on that duplicate, not Home.
+      params: { id: active.listing.id, fromMessages: "1" },
+    });
   }
 
   function viewRentalItem() {
@@ -306,7 +314,7 @@ export default function MessagesScreen() {
       {(!mobile || !!active) && <View style={styles.chat}>
         {active ? <>
           {(cameFromListingBooking || cameFromRentalDetail) && <Pressable accessibilityRole="button" accessibilityLabel="Back to booking" onPress={backToBooking} style={styles.backToBookingRow}>
-            <Ionicons name="arrow-back" size={16} color={colors.blue} /><Text style={styles.backToBookingText}>{active.booking ? "Back to Rental" : "Back to Booking"}</Text>
+            <Ionicons name="arrow-back" size={16} color={colors.blue} /><Text style={styles.backToBookingText}>{active.booking && cameFromRentalDetail && !cameFromListingBooking ? "Back to Rental" : "Back to Booking"}</Text>
           </Pressable>}
           <View style={styles.header}>{mobile && <Pressable accessibilityRole="button" accessibilityLabel="Back to conversations" onPress={() => setSelected(null)}><Ionicons name="arrow-back" size={24} color={colors.navy} /></Pressable>}
             <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View>

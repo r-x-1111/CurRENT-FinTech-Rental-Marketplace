@@ -116,7 +116,12 @@ function formatDeliveryAddress(address: SavedDeliveryAddress) {
 }
 
 export default function ListingDetailScreen() {
-  const { id, checkoutId } = useLocalSearchParams<{ id: string; checkoutId?: string }>();
+  const { id, checkoutId, fromMessages } = useLocalSearchParams<{ id: string; checkoutId?: string; fromMessages?: string }>();
+  // Set only by Messages' "Back to Booking" link (a replace, not a push) — it collapses what
+  // would otherwise be a duplicate listing/[id] history entry sitting right underneath the
+  // original one, so this screen's own Back must go straight Home instead of router.back(),
+  // which would otherwise just land back on that duplicate rather than actually going anywhere.
+  const backHome = fromMessages ? () => router.replace("/(tabs)") : undefined;
   const { state, user, act, actAndPersist } = useMarketplace();
   const listing = state.listings.find((l) => l.id === id);
   const futureDemoDates = !!listing && allowsFutureDemoAvailability(state, listing);
@@ -373,7 +378,7 @@ export default function ListingDetailScreen() {
     (listing.status !== "published" && listing.ownerId !== user?.id)
   ) {
     return (
-      <Screen back>
+      <Screen back onBack={backHome}>
         <Empty
           title="Item unavailable"
           text="This listing may have been removed or paused."
@@ -914,7 +919,7 @@ export default function ListingDetailScreen() {
   }
 
   return (
-    <Screen back scrollToY={pendingScrollY} scrollRequestId={scrollRequestId}>
+    <Screen back onBack={backHome} scrollToY={pendingScrollY} scrollRequestId={scrollRequestId}>
       <GuestAuthPrompt visible={authPrompt} onClose={() => setAuthPrompt(false)} returnTo={`/listing/${id}`} />
       <View style={[s.split, width < 1024 && { flexDirection: "column" }]}>
         {/* Left Column: Image, Details, Reviews */}
