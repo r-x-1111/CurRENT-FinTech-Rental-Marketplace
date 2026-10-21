@@ -43,6 +43,7 @@ export default function DeliveryDemoCheckout() {
     try {
       await actAndPersist({ type: "payDeliveryDemo", bookingId: booking.id,
         receiptReference: `DEMO-GE-${newId().slice(0, 8).toUpperCase()}` });
+      router.replace({ pathname: "/listing/[id]", params: { id: booking.listingId, checkoutId: booking.id } });
     } catch (e) {
       setError((e as Error).message);
     } finally {
