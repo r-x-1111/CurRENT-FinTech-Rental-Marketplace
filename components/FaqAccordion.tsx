@@ -151,11 +151,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 2,
   },
+  // Matches the Lender Dashboard's Net Earnings / Live Listings / Active Rentals cards
+  // (app/owner/index.tsx kpiCard/kpiCardClickable) — same border colour, thickness, radius,
+  // for both collapsed and expanded questions (the border itself never changes on open/close).
   item: {
     backgroundColor: "white",
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.navy,
+    borderColor: colors.blue,
     overflow: "hidden",
   },
   header: {

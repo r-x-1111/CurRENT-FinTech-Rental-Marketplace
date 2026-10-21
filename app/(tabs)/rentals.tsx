@@ -294,38 +294,42 @@ export default function RentalsScreen() {
           const showBreakdown = expandedDeliveryBreakdown.has(b.id);
           const paymentStatusLabel = b.payment === "paid" ? "Paid" : b.payment === "refunded" ? "Refunded" : b.payment === "processing" ? "Processing" : b.payment === "failed" ? "Failed" : "Payment required";
           return (
-            <Pressable
-              key={b.id}
-              accessibilityRole="button"
-              accessibilityState={{ expanded }}
-              accessibilityLabel={`${expanded ? "Collapse" : "Expand"} transaction details for ${b.title}`}
-              onPress={() => setExpandedLedgerCards((prev) => {
-                const next = new Set(prev);
-                if (next.has(b.id)) next.delete(b.id); else next.add(b.id);
-                return next;
-              })}
-              style={styles.ledgerCard}
-            >
-              {/* Collapsed summary */}
-              <View style={s.row}>
-                <Image source={{ uri: card.listing?.imageUrl || b.image }} style={styles.ledgerThumb} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <View style={s.row}>
-                    <Text style={styles.txType}>{b.title}</Text>
-                    <Badge text={card.statusChip.text} tone={card.statusChip.tone} />
+            // A plain View, not a Pressable: the expanded content below contains its own
+            // interactive buttons (BookingSummary's "View Delivery Details", "View transaction
+            // ledger", etc.), and a <button> can never contain a nested <button> in the DOM —
+            // react-native-web renders accessibilityRole="button" as exactly that element, so
+            // only the collapsed summary row (never the whole card) is the clickable toggle.
+            <View key={b.id} style={styles.ledgerCard}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded }}
+                accessibilityLabel={`${expanded ? "Collapse" : "Expand"} transaction details for ${b.title}`}
+                onPress={() => setExpandedLedgerCards((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(b.id)) next.delete(b.id); else next.add(b.id);
+                  return next;
+                })}
+              >
+                <View style={s.row}>
+                  <Image source={{ uri: card.listing?.imageUrl || b.image }} style={styles.ledgerThumb} />
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={s.row}>
+                      <Text style={styles.txType}>{b.title}</Text>
+                      <Badge text={card.statusChip.text} tone={card.statusChip.tone} />
+                    </View>
+                    <Text style={styles.txDate}>Booked {formatShortDate(b.createdAt)} · via {paymentMethodLabel(b.paymentMethod)}</Text>
+                    <View style={s.row}>
+                      <Text style={styles.txItemTitle}>{card.deliveryPaid ? "Original total for this rental" : "CurRENT subtotal · delivery estimated separately"}</Text>
+                      <Text style={styles.txAmount}>{money(card.grandTotal)}</Text>
+                    </View>
+                    <View style={s.row}>
+                      <Text style={styles.txItemTitle}>Deposit {depositStatusLabel(b).toLowerCase()}</Text>
+                      <Text style={styles.txItemTitle}>{money(b.quote.deposit)}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.txDate}>Booked {formatShortDate(b.createdAt)} · via {paymentMethodLabel(b.paymentMethod)}</Text>
-                  <View style={s.row}>
-                    <Text style={styles.txItemTitle}>{card.deliveryPaid ? "Original total for this rental" : "CurRENT subtotal · delivery estimated separately"}</Text>
-                    <Text style={styles.txAmount}>{money(card.grandTotal)}</Text>
-                  </View>
-                  <View style={s.row}>
-                    <Text style={styles.txItemTitle}>Deposit {depositStatusLabel(b).toLowerCase()}</Text>
-                    <Text style={styles.txItemTitle}>{money(b.quote.deposit)}</Text>
-                  </View>
+                  <MorphIcon name={expanded ? "chevron-up" : "chevron-down"} size={18} color={colors.muted} toggleKey={expanded} />
                 </View>
-                <MorphIcon name={expanded ? "chevron-up" : "chevron-down"} size={18} color={colors.muted} toggleKey={expanded} />
-              </View>
+              </Pressable>
 
               {expanded && (
                 <View style={{ gap: 6, marginTop: 10 }}>
@@ -498,7 +502,7 @@ export default function RentalsScreen() {
                   </View>}
                 </View>
               )}
-            </Pressable>
+            </View>
           );
         })}
       </View>
@@ -765,19 +769,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
+  // Matches the Lender Dashboard's Net Earnings / Live Listings / Active Rentals cards
+  // (app/owner/index.tsx kpiCard/kpiCardClickable) — same border colour, thickness, radius.
   summaryTile: {
     flex: 1,
     backgroundColor: colors.paleBlue,
     borderWidth: 1,
-    borderColor: colors.softBlue,
-    borderRadius: 12,
-    padding: 10,
-    gap: 4,
+    borderColor: colors.blue,
+    borderRadius: 16,
+    padding: 16,
+    gap: 6,
     cursor: "pointer",
   },
   summaryTilePressed: {
     backgroundColor: colors.softBlue,
-    borderColor: colors.blue,
+    opacity: 0.85,
   },
   summaryTileLabel: {
     fontSize: 11,

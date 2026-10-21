@@ -58,6 +58,7 @@ import { bookingTypography } from "../../constants/bookingTypography";
 import type { CollectionMethod } from "../../types";
 import { newId } from "../../services/marketplace";
 import { GuestAuthPrompt } from "../../components/GuestAuth";
+import { BookingSummary } from "../../components/BookingSummary";
 import { SuccessBurst } from "../../components/SuccessBurst";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 import { estimatePostcodeDistance, resolvePostcodeCoordinate } from "../../services/geo";
@@ -377,6 +378,27 @@ export default function ListingDetailScreen() {
           title="Item unavailable"
           text="This listing may have been removed or paused."
         />
+      </Screen>
+    );
+  }
+
+  // Rental payment already completed for this checkout: checkoutBooking itself only ever
+  // matches a still-"payment_required" booking (see its definition above), so once payment
+  // succeeds this page would otherwise just fall through to the ordinary booking form. Showing
+  // that instead of the completed payment is exactly the stale "Back" destination this
+  // screen's Back button must never produce — so render the completed CurRENT Rental Payment
+  // view directly, and send its own Back straight Home, never to an earlier, now-stale step of
+  // the same checkout (delivery payment, or this same page's pre-payment form).
+  const completedCheckout = state.bookings.find((item) =>
+    item.id === checkoutId && item.renterId === user?.id && item.listingId === id && item.payment === "paid");
+  if (completedCheckout) {
+    return (
+      <Screen back title="CurRENT Rental Payment" onBack={() => router.replace("/(tabs)")}>
+        <Notice text="This rental payment was already completed. No further payment is required." />
+        <BookingSummary booking={completedCheckout} listing={listing} />
+        <Button onPress={() => router.push(`/rental/${completedCheckout.id}`)}>
+          View Rental Details
+        </Button>
       </Screen>
     );
   }

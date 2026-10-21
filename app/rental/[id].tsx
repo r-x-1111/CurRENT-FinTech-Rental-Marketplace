@@ -138,6 +138,15 @@ export default function RentalDetail() {
     demoBooking: b.contextMode === "admin_demo" && b.id.startsWith("demo-"),
     listingId: b.listingId,
   });
+  const isCrossStateDelivery = displayDelivery.method === "Domestic Courier (Demo)";
+  // Mirrors BookingSummary's lender-facing delivery status wording, collapsed to the
+  // arrangement/payment states a lender needs to know to prepare and hand off the item.
+  const deliveryArrangementStatus = displayDelivery.status === "paid_demo" ? "Arranged (Demo)"
+    : displayDelivery.status === "refunded_demo" ? "Cancelled — Refunded (Demo)"
+    : displayDelivery.status === "required" ? "Awaiting Renter Payment"
+    : displayDelivery.status === "self_pickup" ? "Self-Pickup"
+    : displayDelivery.estimatedTwoWayFee != null ? "Estimate — Not Yet Arranged"
+    : "Not Recorded";
   const startMs = parseMalaysiaTimestamp(b.start);
   const endMs = parseMalaysiaTimestamp(b.end);
   const isStartReached = now >= startMs;
@@ -591,15 +600,17 @@ export default function RentalDetail() {
               label="Scheduled Return"
               value={formatScheduledReturnPickup(b) || b.end}
             />
-            <Row
-              label="Delivery Receipt"
-              value={
-                b.renterReceivedAt
-                  ? `✓ Delivery Received (${new Date(b.renterReceivedAt).toLocaleTimeString()})`
-                  : "Awaiting Delivery Receipt"
-              }
-              strong={!!b.renterReceivedAt}
-            />
+            {!owner && (
+              <Row
+                label="Delivery Receipt"
+                value={
+                  b.renterReceivedAt
+                    ? `✓ Delivery Received (${new Date(b.renterReceivedAt).toLocaleTimeString()})`
+                    : "Awaiting Delivery Receipt"
+                }
+                strong={!!b.renterReceivedAt}
+              />
+            )}
           </View>
 
           {/* Renter Action Buttons (Two-Button Time-Gated Design) */}
@@ -629,6 +640,49 @@ export default function RentalDetail() {
                 <Notice text="Cancellation window closed. Free cancellation is only available at least 24 hours before scheduled start." />
               ))}
           </View>
+        </Card>
+      )}
+
+      {/* DELIVERY & RETURN DETAILS — lender-facing only, shown inline inside Upcoming so the
+          lender never has to leave this screen to prepare and hand off the item. Addresses and
+          schedule come from the confirmed booking/displayDelivery, never the renter's current
+          default address, so they stay correct even if the renter later edits their profile. */}
+      {owner && effectiveStatus === "upcoming" && (
+        <Card>
+          <Text style={s.h2}>Delivery & Return Details</Text>
+          {displayDelivery.status === "unavailable" || (!displayDelivery.origin && !displayDelivery.destination) ? (
+            <Notice text="Delivery address information is missing for this booking." />
+          ) : (
+            <View style={{ marginTop: 8, gap: 8 }}>
+              <Row label="Delivery provider" value={displayDelivery.method} />
+              <Row label="Lender pickup address" value={displayDelivery.origin || "Not recorded"} />
+              <Row label="Renter delivery address" value={displayDelivery.destination || "Not recorded"} />
+              {isCrossStateDelivery ? (
+                <>
+                  <Row label="Scheduled dispatch date" value={displayDelivery.dispatchDate || "To Be Confirmed"} />
+                  <Row label="Planned return date" value={displayDelivery.returnDispatchDeadline || "To Be Confirmed"} />
+                </>
+              ) : (
+                <>
+                  <Row
+                    label="Scheduled delivery arrival"
+                    value={displayDelivery.estimatedDeliveryRangeStart && displayDelivery.estimatedDeliveryRangeEnd
+                      ? `${displayDelivery.estimatedDeliveryRangeStart} – ${displayDelivery.estimatedDeliveryRangeEnd}` : "To Be Confirmed"}
+                  />
+                  <Row
+                    label="Scheduled return pickup"
+                    value={displayDelivery.estimatedReturnRangeStart && displayDelivery.estimatedReturnRangeEnd
+                      ? `${displayDelivery.estimatedReturnRangeStart} – ${displayDelivery.estimatedReturnRangeEnd}` : "To Be Confirmed"}
+                  />
+                  <Row label="Automatically selected vehicle" value={displayDelivery.vehicle || "Unavailable"} />
+                </>
+              )}
+              <View style={[s.divider, { marginVertical: 4 }]} />
+              <Row label="Return collection address" value={displayDelivery.destination || "Not recorded"} />
+              <Row label="Return destination" value={displayDelivery.origin || "Not recorded"} />
+              <Row label="Delivery arrangement status" value={deliveryArrangementStatus} />
+            </View>
+          )}
         </Card>
       )}
 
@@ -1211,7 +1265,10 @@ export default function RentalDetail() {
           )}
         </Card>
       )}
-      {(displayDelivery.status === "paid_demo" || displayDelivery.status === "refunded_demo") && displayDelivery.receiptReference && (
+      {/* The delivery payment is simulated as going to the external courier, not CurRENT, so only
+          the renter who actually made that payment can see its receipt — the lender gets the
+          operational details instead (see the Delivery & Return Details card above). */}
+      {!owner && (displayDelivery.status === "paid_demo" || displayDelivery.status === "refunded_demo") && displayDelivery.receiptReference && (
         <Button secondary onPress={() => router.push({ pathname: "/delivery-receipt/[id]", params: { id: displayDelivery.receiptReference! } })}>
           View Delivery Receipt
         </Button>

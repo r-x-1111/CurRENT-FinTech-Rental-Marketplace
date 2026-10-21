@@ -61,6 +61,37 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
   const payout = calculateOwnerPayout(booking.quote.rentalFee, rate);
   const cancelled = booking.status === "cancelled" || booking.status === "rejected";
 
+  // Lender-facing deposit status label: collapses the renter-facing enum into the small,
+  // operational set a lender actually needs ("is it safe to release yet"), without the
+  // renter's risk score or deposit-tier math that drove how the amount was set.
+  const depositStatusLabel: Record<Booking["deposit"], string> = {
+    required: "Not Charged",
+    secured: "Held in Escrow",
+    held: "Held in Escrow",
+    release_pending: "Release Pending",
+    released: "Released",
+    disputed: "Held — Dispute Under Review",
+  };
+
+  if (lender) {
+    return (
+      <View style={[s.card, styles.card]}>
+        <Text style={[sectionHeadingStyle, { marginBottom: 2 }]}>Rental Summary</Text>
+        <Text style={styles.item}>{booking.title} · {booking.quote.days} {booking.quote.days === 1 ? "day" : "days"}</Text>
+
+        <Text style={[subheadingStyle, styles.section]}>Rental earnings</Text>
+        <Row label="Gross rental fee" value={money(booking.quote.rentalFee)} />
+        <Row label={`Platform commission (${Math.round(rate * 100)}%)`} value={money(payout.commission)} />
+        <Row label="Net lender payout" value={money(payout.payout)} strong grand />
+        <Row label="Payout status" value="No payout transaction recorded" />
+
+        <View style={styles.divider} />
+        <Text style={[subheadingStyle, styles.section]}>Security deposit</Text>
+        <Row label="Deposit status" value={depositStatusLabel[effectiveDepositStatus(booking)]} />
+      </View>
+    );
+  }
+
   // Compact GrabExpress Delivery (Demo) summary: one status badge + one total figure,
   // with the outbound/return split tucked behind "View Delivery Breakdown".
   const isPaidDelivery = booking.deliveryDemo?.status === "paid_demo";
@@ -214,16 +245,6 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
       {booking.deliveryDemo?.status === "refunded_demo" && <Row label="Delivery refund" value={money(recordedDeliveryFee || 0)} />}
       {booking.conflictOffer?.refundAmount != null && <Row label="Recorded adjustment refund" value={money(booking.conflictOffer.refundAmount)} />}
       {booking.status === "disputed" && <Text style={styles.note}>Deposit held for dispute review; no release is assumed.</Text>}
-      {lender && (
-        <>
-          <View style={styles.divider} />
-          <Text style={[subheadingStyle, styles.section]}>Lender payout</Text>
-          <Row label="Gross rental fee" value={money(booking.quote.rentalFee)} />
-          <Row label={`Platform commission (${Math.round(rate * 100)}%)`} value={money(payout.commission)} />
-          <Row label="Net lender payout" value={money(payout.payout)} strong grand />
-          <Row label="Payout status" value="No payout transaction recorded" />
-        </>
-      )}
     </View>
   );
 }

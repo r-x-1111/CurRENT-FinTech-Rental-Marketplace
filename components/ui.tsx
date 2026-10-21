@@ -69,6 +69,7 @@ export function Screen({
   contentStyle,
   bounded,
   headerGradient,
+  onBack,
 }: {
   children: React.ReactNode;
   title?: string;
@@ -81,6 +82,10 @@ export function Screen({
   bounded?: boolean;
   /** Opt-in soft light-blue gradient wash behind the header, also on desktop widths (not just mobile). */
   headerGradient?: boolean;
+  /** Overrides the default router.back()/replace-home logic for this screen's Back button —
+   * e.g. a completed checkout view that must return straight to Home, never to an earlier,
+   * now-stale step of the same checkout. */
+  onBack?: () => void;
 }) {
   const { storageError } = useMarketplace();
   const mobile = useWindowDimensions().width < 768;
@@ -96,9 +101,9 @@ export function Screen({
         {back && (
           <Pressable
             accessibilityRole="button"
-            onPress={() =>
+            onPress={onBack || (() =>
               router.canGoBack() ? router.back() : router.replace("/(tabs)")
-            }
+            )}
             style={s.back}
           >
             <Ionicons name="arrow-back" size={19} color={colors.blue} />

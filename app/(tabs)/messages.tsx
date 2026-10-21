@@ -38,6 +38,11 @@ export default function MessagesScreen() {
   // possibly-stale params.listingId, so switching conversations in the sidebar can't
   // send the renter back to the wrong product.
   const [cameFromListingBooking, setCameFromListingBooking] = useState(!!params.listingId);
+  // Mirrors cameFromListingBooking, but for the "Message {name}" button on an existing
+  // rental's details page (app/rental/[id].tsx) — used identically by both the renter and
+  // the lender. Its destination (backToBooking) always resolves from the currently active
+  // conversation's own booking, never from this flag or the possibly-stale params.bookingId.
+  const [cameFromRentalDetail, setCameFromRentalDetail] = useState(!!params.bookingId);
   const opened = useRef("");
   const openedBooking = useRef("");
   const lastRead = useRef("");
@@ -81,6 +86,9 @@ export default function MessagesScreen() {
     const chat = state.chatConversations?.find((item) => item.listingId === params.listingId && item.renterId === user.id);
     if (chat) setSelected(chat.id);
   }, [state.chatConversations, params.listingId, user?.id]);
+  useEffect(() => {
+    if (params.bookingId) setCameFromRentalDetail(true);
+  }, [params.bookingId]);
   useEffect(() => {
     if (!params.bookingId) { openedBooking.current = ""; return; }
     // Auto-select this booking's conversation only once per navigation into the screen — without
@@ -253,7 +261,14 @@ export default function MessagesScreen() {
   // correctly after a page refresh, when there is no "back" history at all.
   function backToBooking() {
     if (!active) return;
-    router.push(`/listing/${active.listing.id}`);
+    // Prefer the exact rental details page over the general listing page whenever this
+    // conversation actually belongs to a booking — that's the specific item the renter or
+    // lender was viewing before opening Messages, not just its underlying listing. A plain
+    // "Chat with Owner" conversation (no booking yet) still falls back to the listing.
+    // router.replace (not push) so repeatedly bouncing between a rental and its
+    // conversation never piles up duplicate Messages entries in the navigation history.
+    if (active.booking) router.replace(`/rental/${active.booking.id}`);
+    else router.replace(`/listing/${active.listing.id}`);
   }
 
   function viewRentalItem() {
@@ -290,8 +305,8 @@ export default function MessagesScreen() {
       </View>}
       {(!mobile || !!active) && <View style={styles.chat}>
         {active ? <>
-          {cameFromListingBooking && <Pressable accessibilityRole="button" accessibilityLabel="Back to booking" onPress={backToBooking} style={styles.backToBookingRow}>
-            <Ionicons name="arrow-back" size={16} color={colors.blue} /><Text style={styles.backToBookingText}>Back to Booking</Text>
+          {(cameFromListingBooking || cameFromRentalDetail) && <Pressable accessibilityRole="button" accessibilityLabel="Back to booking" onPress={backToBooking} style={styles.backToBookingRow}>
+            <Ionicons name="arrow-back" size={16} color={colors.blue} /><Text style={styles.backToBookingText}>{active.booking ? "Back to Rental" : "Back to Booking"}</Text>
           </Pressable>}
           <View style={styles.header}>{mobile && <Pressable accessibilityRole="button" accessibilityLabel="Back to conversations" onPress={() => setSelected(null)}><Ionicons name="arrow-back" size={24} color={colors.navy} /></Pressable>}
             <View style={styles.avatar}><Ionicons name="person-outline" size={21} color={colors.blue} /></View>
