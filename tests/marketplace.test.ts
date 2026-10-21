@@ -2186,7 +2186,10 @@ test("editing a saved address in place updates it without creating a duplicate, 
   );
 });
 
-test("deleting a saved address reassigns the default when the default itself is removed", () => {
+test("deleting the default address leaves the account with no default, rather than silently picking another one", () => {
+  // Matches "If no default address exists, use a clearly defined fallback. Prefer
+  // prompting the user to select an existing address or add a new one rather than
+  // silently selecting an incorrect address." — deletion must never auto-reassign.
   const state = createSeed("admin_demo");
   state.currentUserId = "demo-renter";
 
@@ -2208,11 +2211,9 @@ test("deleting a saved address reassigns the default when the default itself is 
     (p) => p.id === "demo-renter",
   );
   assert.equal(profileAfterDefault?.savedDeliveryAddresses?.length, 2);
-  assert.equal(profileAfterDefault?.defaultDeliveryAddressIndex, 0);
-  assert.deepEqual(
-    profileAfterDefault?.savedDeliveryAddress,
-    profileAfterDefault?.savedDeliveryAddresses?.[0],
-  );
+  assert.equal(profileAfterDefault?.defaultDeliveryAddressIndex, undefined);
+  assert.equal(profileAfterDefault?.savedDeliveryAddress, undefined);
+  assert.ok(profileAfterDefault?.savedDeliveryAddresses?.every((address) => !address.isDefault));
 
   assert.throws(
     () => transition(state, { type: "deleteDeliveryAddress", index: 99 }),

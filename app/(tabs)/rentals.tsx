@@ -33,6 +33,13 @@ export default function RentalsScreen() {
   const [expandedDeliveryBreakdown, setExpandedDeliveryBreakdown] = useState<Set<string>>(new Set());
   const [historyFilter, setHistoryFilter] = useState("All");
   const [historySearch, setHistorySearch] = useState("");
+  const [historyFiltersY, setHistoryFiltersY] = useState<number | null>(null);
+  const [scrollToHistoryFiltersRequestId, setScrollToHistoryFiltersRequestId] = useState(0);
+
+  function selectHistoryFilter(filter: string) {
+    setHistoryFilter(filter);
+    setScrollToHistoryFiltersRequestId((n) => n + 1);
+  }
 
   useEffect(() => {
     if (typeof tab === "string" && ["Upcoming", "Active", "Return Due", "Completed", "Cancelled", "Disputed", "Payment & Transaction History"].includes(tab)) setActiveTab(tab);
@@ -235,21 +242,47 @@ export default function RentalsScreen() {
         </View>
 
         <View style={styles.summaryTilesRow}>
-          <View style={styles.summaryTile}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Filter transaction history by Paid"
+            onPress={() => selectHistoryFilter("Paid")}
+            style={({ pressed, hovered }) => [
+              styles.summaryTile,
+              (pressed || hovered) && styles.summaryTilePressed,
+            ]}
+          >
             <Text style={styles.summaryTileLabel}>Total paid</Text>
             <Text style={styles.summaryTileValue}>{money(totalPaid)}</Text>
-          </View>
-          <View style={styles.summaryTile}>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Filter transaction history by Refunded"
+            onPress={() => selectHistoryFilter("Refunded")}
+            style={({ pressed, hovered }) => [
+              styles.summaryTile,
+              (pressed || hovered) && styles.summaryTilePressed,
+            ]}
+          >
             <Text style={styles.summaryTileLabel}>Refunded</Text>
             <Text style={styles.summaryTileValue}>{money(totalRefunded)}</Text>
-          </View>
-          <View style={styles.summaryTile}>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Filter transaction history by Deposit held"
+            onPress={() => selectHistoryFilter("Deposit held")}
+            style={({ pressed, hovered }) => [
+              styles.summaryTile,
+              (pressed || hovered) && styles.summaryTilePressed,
+            ]}
+          >
             <Text style={styles.summaryTileLabel}>Deposits held in escrow</Text>
             <Text style={styles.summaryTileValue}>{money(depositsInEscrow)}</Text>
-          </View>
+          </Pressable>
         </View>
 
-        <Chips options={filters} selected={historyFilter} onSelect={setHistoryFilter} />
+        <View onLayout={(e) => setHistoryFiltersY(e.nativeEvent.layout.y)}>
+          <Chips options={filters} selected={historyFilter} onSelect={setHistoryFilter} />
+        </View>
 
         <TextInput
           accessibilityLabel="Search transaction history by item name"
@@ -572,6 +605,8 @@ export default function RentalsScreen() {
       subtitle="From your first request to your next adventure."
       contentStyle={mobile && styles.mobileContent}
       headerGradient
+      scrollToY={historyFiltersY}
+      scrollRequestId={scrollToHistoryFiltersRequestId}
     >
       {protectionBanner}
 
@@ -745,6 +780,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 10,
     gap: 4,
+    cursor: "pointer",
+  },
+  summaryTilePressed: {
+    backgroundColor: colors.softBlue,
+    borderColor: colors.blue,
   },
   summaryTileLabel: {
     fontSize: 11,
