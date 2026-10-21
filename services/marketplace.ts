@@ -236,7 +236,7 @@ export function resolveAutomatedSupportQuery(query: string): {
     return {
       answered: true,
       response:
-        "To rent an item on CurRENT:\n\n1. Browse the listings on Home and select the item you want to rent.\n2. Choose your rental dates on the calendar.\n3. Select an available Scheduled Delivery Time slot (10:00 AM–5:00 PM).\n4. Enter your delivery address.\n5. Complete your Online Payment if your Risk Score is 30–100, or submit a request to CurRENT for review if your score is 0–29.\n6. Your item will arrive at your selected Scheduled Delivery Time.",
+        "To rent an item on CurRENT:\n\n1. Browse the listings on Home and select the item you want to rent.\n2. Choose your rental dates on the calendar.\n3. Select an available Scheduled Delivery Time slot (10:00 AM–5:00 PM).\n4. Enter your delivery address.\n5. Complete your FPX payment if your Risk Score is 30–100, or submit a request to CurRENT for review if your score is 0–29.\n6. Your item will arrive at your selected Scheduled Delivery Time.",
     };
   }
 
@@ -284,7 +284,7 @@ export function resolveAutomatedSupportQuery(query: string): {
       answered: true,
       responses: [
         "Fees\n\nHere are CurRENT's rental fees:\n\n- Renter service fee: 5% of the rental fee, with a minimum of RM5.\n- Lender commission: 13% of the rental fee for new bookings, deducted when a rental is completed.\n- Lender payout: The lender receives the remaining 87% of the rental fee. Historical bookings keep their original rate.",
-        "Security deposits\n\nYour refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through Online Payment via an authorised payment provider.",
+        "Security deposits\n\nYour refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through FPX (Demo) via an authorised payment provider.",
       ],
     };
   }
@@ -303,7 +303,7 @@ export function resolveAutomatedSupportQuery(query: string): {
     return {
       answered: true,
       response:
-        "Your refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through Online Payment via an authorised payment provider.",
+        "Your refundable security deposit is based on your Rental Risk Score and the item's estimated replacement value:\n\n- Low Risk (80–100): 5% of the item value, capped at RM500.\n- Medium Risk (40–79): 10% of the item value, capped at RM1,000.\n- High Risk (30–39): 15% of the item value, capped at RM1,500.\n- Very High Risk (0–29): You must submit a request to CurRENT for review instead of booking directly.\n\nAll rental payments and applicable security deposits are made through FPX (Demo) via an authorised payment provider.",
     };
   }
 

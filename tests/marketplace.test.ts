@@ -67,11 +67,11 @@ import {
   startDemoWorkspaceSession,
 } from "../services/demoWorkspaceSessions";
 
-test("paymentMethodLabel shows provider-neutral wording without changing the stored payment method value", () => {
-  assert.equal(paymentMethodLabel("Demo FPX"), "Online Payment (Demo)");
-  assert.equal(paymentMethodLabel("FPX"), "Online Payment");
+test("paymentMethodLabel shows FPX wording without changing the stored payment method value", () => {
+  assert.equal(paymentMethodLabel("Demo FPX"), "FPX (Demo)");
+  assert.equal(paymentMethodLabel("FPX"), "FPX");
   assert.equal(paymentMethodLabel("BNPL (Demo)"), "BNPL (Demo)");
-  assert.equal(paymentMethodLabel(undefined), "Online Payment");
+  assert.equal(paymentMethodLabel(undefined), "FPX");
 });
 
 test("message rental links select the tab for each booking condition", () => {

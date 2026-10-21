@@ -265,9 +265,9 @@ export const sampleFaqs: FaqItem[] = [
   },
   {
     category: "Payments, Fees and Disputes",
-    question: "Can I pay using Online Payment or Buy Now Pay Later (BNPL)?",
+    question: "Can I pay using FPX or Buy Now Pay Later (BNPL)?",
     answer:
-      "CurRENT facilitates rental payments through an authorised third-party payment provider. The current checkout offers simulated Online Payment and BNPL selections. Both record the same full checkout amount immediately; the BNPL option does not create instalments or run a credit check. No real bank transaction, financing agreement or external provider approval occurs in the demo.\n\nDelivery fees are calculated and charged separately from the rental payment itself, and refundable security deposits are held until the relevant release conditions are met.\n\nThe selected payment method is reflected in the relevant rental and transaction history records. Actual payment processing, BNPL eligibility, financing conditions and payment terms would depend on a future live integration with an authorised payment provider.",
+      "CurRENT facilitates rental payments through an authorised third-party payment provider. The current checkout offers simulated FPX (Demo) and BNPL (Demo) selections. Both record the same full checkout amount immediately; the BNPL option does not create instalments or run a credit check. FPX (Demo) is a simulated payment option and is not connected to a live banking payment gateway — no real bank transaction, financing agreement or external provider approval occurs in the demo.\n\nDelivery fees are calculated and charged separately from the rental payment itself, and refundable security deposits are held until the relevant release conditions are met.\n\nThe selected payment method is reflected in the relevant rental and transaction history records. Actual payment processing, BNPL eligibility, financing conditions and payment terms would depend on a future live integration with an authorised payment provider.",
   },
   {
     category: "Payments, Fees and Disputes",

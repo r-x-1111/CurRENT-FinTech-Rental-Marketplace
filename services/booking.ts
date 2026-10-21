@@ -9,15 +9,15 @@ import { calculateRiskScore, tierForScore } from "./riskScore";
 
 export const money = (value: number) => `RM${value.toFixed(2)}`;
 
-/** Provider-neutral display label for a booking's stored payment method. The underlying
- * stored value ("Demo FPX"/"FPX") is left unchanged — it's load-bearing across existing
- * seed data and tests — only how it's shown to the renter/lender is updated, so the UI
- * never surfaces FPX branding or bank names. BNPL is kept as its own distinct option. */
+/** Display label for a booking's stored payment method. The underlying stored value
+ * ("Demo FPX"/"FPX") is left unchanged — it's load-bearing across existing seed data
+ * and tests — only how it's shown to the renter/lender is updated. BNPL is kept as its
+ * own distinct option. */
 export function paymentMethodLabel(paymentMethod: string | undefined): string {
-  if (!paymentMethod) return "Online Payment";
+  if (!paymentMethod) return "FPX";
   if (paymentMethod === "BNPL (Demo)") return "BNPL (Demo)";
-  if (paymentMethod === "Demo FPX") return "Online Payment (Demo)";
-  if (paymentMethod === "FPX") return "Online Payment";
+  if (paymentMethod === "Demo FPX") return "FPX (Demo)";
+  if (paymentMethod === "FPX") return "FPX";
   return paymentMethod;
 }
 

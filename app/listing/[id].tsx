@@ -2203,7 +2203,7 @@ export default function ListingDetailScreen() {
                   <View style={styles.paymentMethodRow}>
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Select Online Payment method"
+                      accessibilityLabel="Select FPX payment method"
                       accessibilityState={{ selected: selectedPaymentMethod === "Demo FPX" }}
                       onPress={() => setSelectedPaymentMethod("Demo FPX")}
                       style={[
@@ -2212,7 +2212,7 @@ export default function ListingDetailScreen() {
                       ]}
                     >
                       <Ionicons name="card-outline" size={16} color="#0369A1" />
-                      <Text style={styles.fpxBadgeText}>Online Payment</Text>
+                      <Text style={styles.fpxBadgeText}>FPX</Text>
                       {selectedPaymentMethod === "Demo FPX" && (
                         <Ionicons name="checkmark-circle" size={17} color={colors.blue} />
                       )}
@@ -2236,7 +2236,7 @@ export default function ListingDetailScreen() {
                   </View>
                   <Text style={s.caption}>
                     {selectedPaymentMethod === "BNPL (Demo)"
-                      ? "Demo simulation only — pays the same checkout amount as Online Payment immediately, with no real instalments or credit check."
+                      ? "Demo simulation only — pays the same checkout amount as FPX immediately, with no real instalments or credit check."
                       : "Complete your payment securely through an authorised payment provider."}
                   </Text>
                   <View>
