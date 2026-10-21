@@ -2034,6 +2034,21 @@ test("renters can mark any number of saved addresses as default, independently",
   );
 });
 
+test("saving an existing default address again keeps its default status", () => {
+  const state = createSeed("admin_demo");
+  state.currentUserId = "demo-renter";
+  const marked = transition(state, { type: "setDefaultDeliveryAddress", index: 1 });
+  const address = marked.profiles.find((profile) => profile.id === "demo-renter")!.savedDeliveryAddresses![1];
+  const savedAgain = transition(marked, {
+    type: "saveDeliveryAddress",
+    address,
+    setDefault: false,
+  });
+  const profile = savedAgain.profiles.find((entry) => entry.id === "demo-renter");
+  assert.equal(profile?.savedDeliveryAddresses?.[1]?.isDefault, true);
+  assert.equal(profile?.savedDeliveryAddresses?.length, marked.profiles.find((entry) => entry.id === "demo-renter")?.savedDeliveryAddresses?.length);
+});
+
 test("a new user's first saved address automatically becomes their default", () => {
   const state = createSeed("admin_demo");
   state.currentUserId = "owner-aiman";

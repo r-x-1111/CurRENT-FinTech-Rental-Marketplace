@@ -492,7 +492,10 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         // only become default when the renter explicitly ticks "Set as Default".
         const isDefault = addresses.length === 0 || !!action.setDefault;
         if (existingIndex >= 0) {
-          addresses[existingIndex] = { ...normalized, isDefault };
+          addresses[existingIndex] = {
+            ...normalized,
+            isDefault: isDefault || !!addresses[existingIndex].isDefault,
+          };
           targetIndex = existingIndex;
         } else {
           addresses.push({ ...normalized, isDefault });

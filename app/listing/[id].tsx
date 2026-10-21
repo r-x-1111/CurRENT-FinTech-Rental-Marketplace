@@ -687,6 +687,8 @@ export default function ListingDetailScreen() {
     setAddressActionBusy(true);
     try {
       await actAndPersist({ type: "setDefaultDeliveryAddress", index });
+      selectSavedAddress(index);
+      setSetAsDefaultChecked(true);
       setError("");
       setSuccessNotice("Default delivery address updated.");
     } catch (e) {
