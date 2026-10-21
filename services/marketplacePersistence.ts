@@ -3,6 +3,7 @@ import { createSeed } from "../data/seed";
 import type { Marketplace } from "../types/marketplace";
 import type { MarketplaceAccountKind } from "./auth";
 import { withoutRemovedSeedListings, withRefreshedCatalogueShippingData } from "./catalogue";
+import { normalizeDefaultDeliveryAddress } from "./deliveryAddresses";
 
 const WORKSPACE_TABLE = "marketplace_workspaces";
 
@@ -84,7 +85,9 @@ export async function loadMarketplaceWorkspace(
       "The saved account workspace is invalid or does not match this account.",
     );
   }
-  return withRefreshedCatalogueShippingData(withoutRemovedSeedListings(data.state));
+  const workspace = withRefreshedCatalogueShippingData(withoutRemovedSeedListings(data.state));
+  return { ...workspace, profiles: workspace.profiles.map((profile) =>
+    profile.id === ownerId ? normalizeDefaultDeliveryAddress(profile) : profile) };
 }
 
 export async function saveMarketplaceWorkspace(

@@ -89,6 +89,11 @@ export function selectDeliveryVehicle(weightKg: number | undefined, dimensions: 
   return eligible[0] || null;
 }
 
+export function recommendsFragileHandling(title: string, description = ""): boolean {
+  return /\b(camera|dslr|mirrorless|lens|drone|projector)\b|\b(?:delicate photography|camera equipment)\b/i
+    .test(`${title} ${description}`);
+}
+
 /** Use saved parcel facts first; infer a conservative vehicle only when they are absent.
  * Returns null when real weight/dimensions are known but no vehicle qualifies for them — the
  * caller must treat that as "no local vehicle fits" (Special Delivery Quotation Required),
@@ -101,9 +106,11 @@ export function selectListingDeliveryVehicle(params: {
   const hasMeasurements = params.weightKg != null && !!params.dimensionsCm;
   if (hasMeasurements) return selectDeliveryVehicle(params.weightKg, params.dimensionsCm, params.requirement);
   const item = `${params.title || ""} ${params.category || ""} ${params.description || ""}`.toLowerCase();
-  if (params.requirement === "bulky" || /chair|furniture|sofa|table|desk|monitor|appliance|refrigerator|washing machine|large speaker|projector|bulky/.test(item)) return "Car";
+  if (params.requirement === "bulky") return "MPV";
   if (params.requirement === "fragile") return "Car";
-  if (/camera|lens|drone|tablet|small electronic|portable speaker|small speaker|small tool|accessor|gaming device|game console|controller/.test(item)) return "Motorcycle";
+  if (/chair|furniture|sofa|table|desk|monitor|appliance|refrigerator|washing machine|large speaker|bulky/.test(item)) return "Car";
+  if (recommendsFragileHandling(params.title || "", params.description)) return "Car";
+  if (/tablet|small electronic|portable speaker|small speaker|small tool|accessor|gaming device|game console|controller/.test(item)) return "Motorcycle";
   return "Car";
 }
 

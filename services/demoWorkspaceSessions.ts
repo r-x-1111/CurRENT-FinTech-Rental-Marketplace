@@ -2,6 +2,7 @@ import { createSeed } from "../data/seed";
 import type { Marketplace } from "../types/marketplace";
 import { withoutRemovedSeedListings, withRefreshedCatalogueShippingData } from "./catalogue";
 import { repairDemoDeliveryPayments } from "./repairDemoDeliveryPayments";
+import { normalizeDefaultDeliveryAddress } from "./deliveryAddresses";
 
 const STORAGE_PREFIX = "current:demo-session:";
 const DELIVERY_PREFIX = "current:demo-delivery-history:";
@@ -81,7 +82,9 @@ function withPersistentAddresses(accountId: string, state: Marketplace): Marketp
 }
 
 function restoreDemoHistory(accountId: string, state: Marketplace): Marketplace {
-  return withPersistentAddresses(accountId, withPersistentDeliveryHistory(accountId, state));
+  const restored = withPersistentAddresses(accountId, withPersistentDeliveryHistory(accountId, state));
+  return { ...restored, profiles: restored.profiles.map((profile) =>
+    profile.id === restored.currentUserId ? normalizeDefaultDeliveryAddress(profile) : profile) };
 }
 
 export function loadDemoWorkspaceSession(accountId: string): Marketplace {

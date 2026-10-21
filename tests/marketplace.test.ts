@@ -42,7 +42,7 @@ import {
   toMalaysiaUtcTimestamp,
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
-import { calculateChargeableWeightKg, calculateVolumetricWeightKg, deriveDeliveryRefundStatus, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, eligibleDeliveryVehicles, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, quoteDemoDelivery, recommendDispatchDate, selectListingDeliveryVehicle } from "../services/delivery";
+import { calculateChargeableWeightKg, calculateVolumetricWeightKg, crossStateDeliveryEligibility, deriveDeliveryRefundStatus, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, eligibleDeliveryVehicles, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, quoteDemoDelivery, recommendDispatchDate, recommendsFragileHandling, selectDeliveryVehicle, selectListingDeliveryVehicle } from "../services/delivery";
 import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../services/geo";
 import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
 import { evaluateRentalOutcome } from "../services/riskScore";
@@ -114,7 +114,7 @@ test("a normal account's stale persisted catalogue listing is refreshed to the c
     ...state,
     listings: state.listings.map((listing, i) =>
       i === index
-        ? { ...listing, parcelWeightKg: undefined, parcelDimensionsCm: undefined, pickupPostcode: "00000" }
+        ? { ...listing, parcelWeightKg: undefined, parcelDimensionsCm: undefined, deliveryRequirement: "standard" as const, pickupPostcode: "00000" }
         : listing,
     ),
   };
@@ -122,6 +122,7 @@ test("a normal account's stale persisted catalogue listing is refreshed to the c
   const fixedListing = refreshed.listings.find((l) => l.id === "sony-a7iii")!;
   assert.equal(fixedListing.parcelWeightKg, state.listings[index].parcelWeightKg);
   assert.deepEqual(fixedListing.parcelDimensionsCm, state.listings[index].parcelDimensionsCm);
+  assert.equal(fixedListing.deliveryRequirement, "fragile");
   assert.equal(fixedListing.pickupPostcode, state.listings[index].pickupPostcode);
 
   // A renter's own listing, even one that happens to collide on id/owner with a catalogue
@@ -483,7 +484,7 @@ test("historical regional delivery brackets and parcel limits drive demo quotes"
   assert.equal(local?.vehicle, "Motorcycle");
   assert.equal(local?.fee, quoteDemoDelivery("Klang Valley", "Motorcycle", local!.distanceKm)?.fee);
   assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: "46200", deliveryPostcode: "50480",
-    title: "Sony camera" })?.vehicle, "Motorcycle");
+    title: "Sony camera" })?.vehicle, "Car");
   assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: "46200", deliveryPostcode: "50480",
     title: "Ergonomic Office Chair" })?.vehicle, "Car");
   assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: "46200", deliveryPostcode: "50480",
@@ -514,6 +515,45 @@ test("historical regional delivery brackets and parcel limits drive demo quotes"
   }
   const penangSamples = (seed.deliveryHistory || []).filter((entry) => entry.sample && entry.area === "Penang");
   assert.ok(penangSamples.length >= 2, "Expected at least 2 fictional Penang demo delivery samples");
+});
+
+test("fragile camera handling selects the right local vehicle without changing courier or paid fees", () => {
+  const state = createSeed("admin_demo");
+  const sony = state.listings.find((listing) => listing.id === "sony-a7iii")!;
+  assert.equal(sony.deliveryRequirement, "fragile");
+  for (const id of ["gopro-camera", "drone", "portable-projector"]) {
+    assert.equal(state.listings.find((listing) => listing.id === id)?.deliveryRequirement, "fragile");
+  }
+  assert.notEqual(state.listings.find((listing) => listing.id === "ps5-console")?.deliveryRequirement, "fragile");
+  assert.equal(selectDeliveryVehicle(sony.parcelWeightKg, sony.parcelDimensionsCm, sony.deliveryRequirement), "Car");
+  assert.equal(selectDeliveryVehicle(2, { length: 35, width: 25, height: 20 }, "standard"), "Motorcycle");
+  assert.equal(selectDeliveryVehicle(20, { length: 70, width: 60, height: 40 }, "fragile"), "MPV");
+  assert.equal(selectDeliveryVehicle(5, { length: 30, width: 20, height: 15 }, "bulky"), "MPV");
+  assert.equal(selectDeliveryVehicle(120, { length: 120, width: 90, height: 90 }, "fragile"), null);
+  assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: "46200", deliveryPostcode: "50480",
+    weightKg: 120, dimensionsCm: { length: 120, width: 90, height: 90 }, requirement: "fragile" }), null);
+  assert.equal(recommendsFragileHandling("Canon RF Camera Lens"), true);
+  assert.equal(recommendsFragileHandling("Wireless Game Controller"), false);
+  assert.equal(recommendsFragileHandling("Portable Power Station", "Electronics"), false);
+
+  const outbound = quoteAutomaticVehicleDelivery({ pickupPostcode: sony.pickupPostcode, deliveryPostcode: "50480",
+    weightKg: sony.parcelWeightKg, dimensionsCm: sony.parcelDimensionsCm, requirement: sony.deliveryRequirement });
+  const inbound = quoteAutomaticVehicleDelivery({ pickupPostcode: "50480", deliveryPostcode: sony.pickupPostcode,
+    weightKg: sony.parcelWeightKg, dimensionsCm: sony.parcelDimensionsCm, requirement: sony.deliveryRequirement });
+  assert.equal(outbound?.vehicle, "Car");
+  assert.equal(outbound?.fee, quoteDemoDelivery(outbound!.area, "Car", outbound!.distanceKm)?.fee);
+  assert.ok(inbound);
+  assert.equal(inbound.vehicle, "Car");
+  assert.equal(inbound.fee, quoteDemoDelivery(inbound.area, "Car", inbound.distanceKm)?.fee);
+
+  assert.equal(crossStateDeliveryEligibility(sony), "available");
+  assert.equal(quoteAutomaticVehicleDelivery({ pickupPostcode: sony.pickupPostcode, deliveryPostcode: "10000",
+    weightKg: sony.parcelWeightKg, dimensionsCm: sony.parcelDimensionsCm, requirement: sony.deliveryRequirement }), null);
+  assert.ok(quoteAutomaticDomesticCourier({ pickupPostcode: sony.pickupPostcode, deliveryPostcode: "10000",
+    weightKg: sony.parcelWeightKg, dimensionsCm: sony.parcelDimensionsCm }));
+  const paidSony = state.bookings.find((booking) => booking.id === "demo-booking-completed-1");
+  assert.equal(paidSony?.deliveryDemo?.fee, 24.8);
+  assert.equal(state.deliveryHistory?.find((receipt) => receipt.bookingId === paidSony?.id)?.fee, paidSony?.deliveryDemo?.fee);
 });
 
 test("crossStateDeliveryEligibility classifies a listing from its own recorded parcel data, never a hardcoded status", async () => {
@@ -942,7 +982,8 @@ test("an unpaid booking address can be corrected without changing a paid deliver
     deliveryAddress: "Bangsar, Kuala Lumpur", deliveryPostcode: "59100" });
   const changed = requoted.bookings.find((booking) => booking.id === pending.id)!;
   const pendingListing = seed.listings.find((listing) => listing.id === pending.listingId)!;
-  const parcel = { weightKg: pendingListing.parcelWeightKg, dimensionsCm: pendingListing.parcelDimensionsCm };
+  const parcel = { weightKg: pendingListing.parcelWeightKg, dimensionsCm: pendingListing.parcelDimensionsCm,
+    requirement: pendingListing.deliveryRequirement };
   const outbound = quoteAutomaticVehicleDelivery({ pickupPostcode: pendingListing.pickupPostcode, deliveryPostcode: "59100", ...parcel })!;
   const inbound = quoteAutomaticVehicleDelivery({ pickupPostcode: "59100", deliveryPostcode: pendingListing.pickupPostcode, ...parcel })!;
   assert.equal(changed.deliveryDemo?.fee, Math.round((outbound.fee + inbound.fee) * 100) / 100);
@@ -969,13 +1010,15 @@ test("stale RM8 unpaid demo quote uses one route and current two-way fee before 
     deliveryAddress: booking.deliveryAddress,
     pickupPostcode: listing.pickupPostcode, deliveryPostcode: booking.deliveryPostcode,
     parcelWeightKg: listing.parcelWeightKg, parcelDimensionsCm: listing.parcelDimensionsCm,
+    deliveryRequirement: listing.deliveryRequirement,
     demoBooking: true, listingId: listing.id,
   });
   assert.equal(booking.deliveryDemo?.fee, 8, "synthetic legacy unpaid quote remains identifiable");
   assert.equal(display.origin, listing.privateMeetingVenue);
   assert.equal(display.destination, booking.deliveryAddress);
   assert.equal(display.distanceKm, display.returnDistanceKm);
-  const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm };
+  const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm,
+    requirement: listing.deliveryRequirement };
   assert.equal(display.outboundFee, quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: booking.deliveryPostcode, ...parcel })!.fee);
   assert.equal(display.returnFee, quoteAutomaticVehicleDelivery({ pickupPostcode: booking.deliveryPostcode, deliveryPostcode: listing.pickupPostcode, ...parcel })!.fee);
   assert.equal(display.fee, display.estimatedTwoWayFee);
@@ -1433,7 +1476,8 @@ test("delivery demo receipt is stored separately before rental payment", () => {
   const start = `${dateAfter(2)}T11:00:00+08:00`;
   const end = `${dateAfter(4)}T11:00:00+08:00`;
   const listing = createSeed().listings.find((l) => l.id === "sony-a7iii")!;
-  const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm };
+  const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm,
+    requirement: listing.deliveryRequirement };
   const expectedOutbound = quoteAutomaticVehicleDelivery({ pickupPostcode: listing.pickupPostcode, deliveryPostcode: "50480", ...parcel })!;
   const expectedReturn = quoteAutomaticVehicleDelivery({ pickupPostcode: "50480", deliveryPostcode: listing.pickupPostcode, ...parcel })!;
   j.act({ type: "startDeliveryCheckout", id: "delivery-booking", listingId: "sony-a7iii",
@@ -2045,7 +2089,9 @@ test("saving an existing default address again keeps its default status", () => 
   assert.equal(profile?.savedDeliveryAddresses?.length, marked.profiles.find((entry) => entry.id === "demo-renter")?.savedDeliveryAddresses?.length);
 });
 
-test("a new user's first saved address automatically becomes their default", () => {
+test("a new user's first saved address is never silently made default — only an explicit Set as Default does that", () => {
+  // Matches the "no silent default assignment" requirement: creating an address never
+  // implies a default, even when it's the account's only saved address.
   const state = createSeed("admin_demo");
   state.currentUserId = "owner-aiman";
   const existing = state.profiles.find((profile) => profile.id === "owner-aiman");
@@ -2063,9 +2109,18 @@ test("a new user's first saved address automatically becomes their default", () 
   };
   const saved = transition(state, { type: "saveDeliveryAddress", address });
   const profile = saved.profiles.find((p) => p.id === "owner-aiman");
-  assert.equal(profile?.defaultDeliveryAddressIndex, 0);
-  assert.deepEqual(profile?.savedDeliveryAddress, { ...address, isDefault: true });
-  assert.deepEqual(profile?.savedDeliveryAddresses, [{ ...address, isDefault: true }]);
+  assert.equal(profile?.defaultDeliveryAddressIndex, undefined);
+  assert.equal(profile?.savedDeliveryAddress, undefined);
+  assert.deepEqual(profile?.savedDeliveryAddresses, [{ ...address, isDefault: false }]);
+
+  const savedAsDefault = transition(state, {
+    type: "saveDeliveryAddress",
+    address,
+    setDefault: true,
+  });
+  const defaultedProfile = savedAsDefault.profiles.find((p) => p.id === "owner-aiman");
+  assert.equal(defaultedProfile?.defaultDeliveryAddressIndex, 0);
+  assert.deepEqual(defaultedProfile?.savedDeliveryAddress, { ...address, isDefault: true });
 });
 
 test("ticking Set as Default when saving an additional address makes it the new default", () => {

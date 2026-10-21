@@ -47,12 +47,10 @@ export interface Profile {
   isBanned?: boolean;
   hasOverdueObligation?: boolean;
   riskHistory?: RiskIncidentRecord[];
-  // Mirrors savedDeliveryAddresses[defaultDeliveryAddressIndex] — the most recently
-  // used/selected saved address, used to prefill a new booking's address fields.
+  // Mirrors the saved address explicitly marked as the account default.
   savedDeliveryAddress?: SavedDeliveryAddress;
   savedDeliveryAddresses?: SavedDeliveryAddress[];
-  // Index of the most recently used/selected saved address (not "the one true default" —
-  // any number of addresses can have isDefault: true at once).
+  // Index of the account's saved default address; temporary booking choices stay on screen.
   defaultDeliveryAddressIndex?: number;
 }
 
@@ -65,7 +63,7 @@ export interface SavedDeliveryAddress {
   city: string;
   state: string;
   instructions: string;
-  // Multiple saved addresses may be marked default at once (see Profile.defaultDeliveryAddressIndex).
+  // True only for the account's chosen default address.
   isDefault?: boolean;
 }
 
@@ -179,6 +177,8 @@ export interface Booking {
   paymentMethod?: string;
   agreement?: string;
   deliveryAddress?: string;
+  /** Address fields captured for this checkout; independent of the account default. */
+  deliveryAddressDetails?: SavedDeliveryAddress;
   /** Renter's delivery postcode, stored alongside deliveryAddress so the fee can always be
    * recomputed from the same automatic postcode-distance formula used at checkout. */
   deliveryPostcode?: string;

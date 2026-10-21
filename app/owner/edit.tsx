@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -26,7 +26,7 @@ import { categories } from "../../constants/categories";
 import { newId } from "../../services/marketplace";
 import { calculateOwnerPayout, CURRENT_LENDER_COMMISSION_RATE } from "../../services/deposit";
 import { colors, fonts } from "../../constants/theme";
-import { CROSS_STATE_ELIGIBILITY_BADGE, CROSS_STATE_ELIGIBILITY_EXPLANATION, crossStateDeliveryEligibility, selectDeliveryVehicle } from "../../services/delivery";
+import { CROSS_STATE_ELIGIBILITY_BADGE, CROSS_STATE_ELIGIBILITY_EXPLANATION, crossStateDeliveryEligibility, recommendsFragileHandling, selectDeliveryVehicle } from "../../services/delivery";
 import { MalaysiaStateSelector } from "../../components/MalaysiaStateSelector";
 import type { AvailabilityPeriod, Listing } from "../../types";
 import {
@@ -131,7 +131,14 @@ export default function EditListing() {
   const [parcelLength, setParcelLength] = useState(existing?.parcelDimensionsCm?.length?.toString() || (demoProjector ? String(DEMO_LISTING_TEMPLATE.parcelDimensionsCm.length) : ""));
   const [parcelWidth, setParcelWidth] = useState(existing?.parcelDimensionsCm?.width?.toString() || (demoProjector ? String(DEMO_LISTING_TEMPLATE.parcelDimensionsCm.width) : ""));
   const [parcelHeight, setParcelHeight] = useState(existing?.parcelDimensionsCm?.height?.toString() || (demoProjector ? String(DEMO_LISTING_TEMPLATE.parcelDimensionsCm.height) : ""));
-  const [deliveryRequirement, setDeliveryRequirement] = useState<"standard" | "fragile" | "bulky">(existing?.deliveryRequirement || (demoProjector ? DEMO_LISTING_TEMPLATE.deliveryRequirement : "standard"));
+  const [deliveryRequirement, setDeliveryRequirement] = useState<"standard" | "fragile" | "bulky">(
+    existing?.deliveryRequirement || (demoProjector ? DEMO_LISTING_TEMPLATE.deliveryRequirement : recommendsFragileHandling(existing?.title || title, existing?.description || description) ? "fragile" : "standard"),
+  );
+  const [handlingAdjusted, setHandlingAdjusted] = useState(false);
+  useEffect(() => {
+    if (handlingAdjusted || existing?.deliveryRequirement || demoProjector) return;
+    setDeliveryRequirement(recommendsFragileHandling(title, description) ? "fragile" : "standard");
+  }, [title, description, handlingAdjusted, existing?.deliveryRequirement, demoProjector]);
   // Cross-state shipping eligibility: additional packages (package 1 is the fields above), each
   // added/removed directly by the lender via Add Package / Remove Package — never a manually
   // typed count — plus the two independent restricted-content flags. A listing may have at most
@@ -619,11 +626,12 @@ export default function EditListing() {
           <View style={styles.optionGrid}>
             {(["standard", "fragile", "bulky"] as const).map((option) => (
               <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected: deliveryRequirement === option }}
-                onPress={() => setDeliveryRequirement(option)} style={[styles.optionButton, deliveryRequirement === option && styles.optionButtonSelected]}>
+                onPress={() => { setHandlingAdjusted(true); setDeliveryRequirement(option); }} style={[styles.optionButton, deliveryRequirement === option && styles.optionButtonSelected]}>
                 <Text style={[styles.optionText, deliveryRequirement === option && styles.optionTextSelected]}>{option}</Text>
               </Pressable>
             ))}
           </View>
+          <Text style={s.caption}>Fragile items require additional care during transportation and may be assigned a Car or MPV instead of a Motorcycle.</Text>
           <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: lithiumBattery }}
             onPress={() => setLithiumBattery((v) => !v)} style={styles.shippingCheckboxRow}>
             <View style={[styles.shippingCheckbox, lithiumBattery && styles.shippingCheckboxChecked]}>

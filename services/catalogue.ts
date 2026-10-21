@@ -21,6 +21,7 @@ const canonicalCatalogueListingsById = new Map(
 const SHIPPING_FIELDS = [
   "parcelWeightKg",
   "parcelDimensionsCm",
+  "deliveryRequirement",
   "parcelPackages",
   "shippingCharacteristics",
   "crossStateRestricted",

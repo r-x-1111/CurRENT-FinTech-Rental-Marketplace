@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Image,
   Modal,
@@ -11,7 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Badge,
@@ -26,6 +26,8 @@ import {
   s,
 } from "../../components/ui";
 import { useMarketplace } from "../../context/Marketplace";
+import { getDefaultDeliveryAddress } from "../../services/deliveryAddresses";
+import type { SavedDeliveryAddress } from "../../types/marketplace";
 import {
   availability,
   availabilityCalendar,
@@ -98,6 +100,18 @@ function formatDate(dateStr: string) {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   }
   return dateStr;
+}
+
+function formatDeliveryAddress(address: SavedDeliveryAddress) {
+  return [
+    address.recipientName.trim(),
+    address.phone.trim(),
+    address.addressLine1.trim(),
+    address.addressLine2.trim(),
+    `${address.postcode.trim()} ${address.city.trim()}`,
+    address.state.trim(),
+    address.instructions.trim(),
+  ].filter(Boolean).join(", ");
 }
 
 export default function ListingDetailScreen() {
@@ -225,24 +239,34 @@ export default function ListingDetailScreen() {
   const [scrollToAddressRequestId, setScrollToAddressRequestId] = useState(0);
   const [photo, setPhoto] = useState("");
 
+  const savedAddresses = user?.savedDeliveryAddresses || [];
+  const accountDefault = getDefaultDeliveryAddress(user);
+  const checkoutAddress = checkoutBooking?.deliveryAddressDetails ||
+    savedAddresses.find((address) => formatDeliveryAddress(address) === checkoutBooking?.deliveryAddress);
+  const checkoutSavedIndex = checkoutAddress
+    ? savedAddresses.findIndex((address) => formatDeliveryAddress(address) === formatDeliveryAddress(checkoutAddress))
+    : -1;
+  const initialAddress = checkoutBooking ? checkoutAddress : accountDefault?.address;
+  const defaultKey = JSON.stringify(accountDefault);
+  const checkoutAddressKey = JSON.stringify(checkoutAddress);
+
   // Delivery Address state per README V3.23 Section 7.2
-  const [recipientName, setRecipientName] = useState(user?.savedDeliveryAddress?.recipientName || user?.name || "");
-  const [deliveryPhone, setDeliveryPhone] = useState(user?.savedDeliveryAddress?.phone || user?.phone || "");
-  const [streetAddress, setStreetAddress] = useState(user?.savedDeliveryAddress?.addressLine1 || "");
-  const [unit, setUnit] = useState(user?.savedDeliveryAddress?.addressLine2 || "");
+  const [recipientName, setRecipientName] = useState(initialAddress?.recipientName || user?.name || "");
+  const [deliveryPhone, setDeliveryPhone] = useState(initialAddress?.phone || user?.phone || "");
+  const [streetAddress, setStreetAddress] = useState(initialAddress?.addressLine1 || "");
+  const [unit, setUnit] = useState(initialAddress?.addressLine2 || "");
   // When resuming an existing checkout, the postcode must start as whatever the paid delivery
   // fee was actually calculated against — not whatever happens to be in the account's general
   // saved address — otherwise this field silently disagrees with the paid booking and the
   // "delivery details changed" guard permanently blocks the rental Pay button.
-  const [postcode, setPostcode] = useState(checkoutBooking?.deliveryPostcode || user?.savedDeliveryAddress?.postcode || "");
-  const [city, setCity] = useState(user?.savedDeliveryAddress?.city || "");
-  const [stateName, setStateName] = useState(user?.savedDeliveryAddress?.state || "");
-  const [deliveryNotes, setDeliveryNotes] = useState(user?.savedDeliveryAddress?.instructions || "");
+  const [postcode, setPostcode] = useState(checkoutBooking?.deliveryPostcode || initialAddress?.postcode || "");
+  const [city, setCity] = useState(initialAddress?.city || "");
+  const [stateName, setStateName] = useState(initialAddress?.state || "");
+  const [deliveryNotes, setDeliveryNotes] = useState(initialAddress?.instructions || "");
   // Saved addresses and default-address selection work the same way for every account —
   // demo and normal — since both read/write the same Profile fields.
-  const savedAddresses = user?.savedDeliveryAddresses || [];
-  const [selectedSavedAddressIndex, setSelectedSavedAddressIndex] = useState(
-    user?.defaultDeliveryAddressIndex ?? 0,
+  const [selectedSavedAddressIndex, setSelectedSavedAddressIndex] = useState<number | null>(
+    checkoutBooking ? (checkoutSavedIndex >= 0 ? checkoutSavedIndex : null) : accountDefault?.index ?? null,
   );
   // Always collapsed behind "+ Add Delivery Details" to begin with — including for a
   // brand-new account with zero saved addresses. It only opens when the renter explicitly
@@ -250,7 +274,7 @@ export default function ListingDetailScreen() {
   // delivery details yet.") is shown instead until then, never the form itself.
   const [addressFormOpen, setAddressFormOpen] = useState(false);
   const [editingAddressIndex, setEditingAddressIndex] = useState<number | null>(null);
-  const [setAsDefaultChecked, setSetAsDefaultChecked] = useState(savedAddresses.length === 0);
+  const [setAsDefaultChecked, setSetAsDefaultChecked] = useState(false);
   const [pendingDeleteIndex, setPendingDeleteIndex] = useState<number | null>(null);
   // Every saved record is visible by default (so, e.g., the Demo Account's 3 sample
   // addresses are all shown, not hidden behind an extra click) whenever there's more
@@ -263,44 +287,30 @@ export default function ListingDetailScreen() {
   // loading state and only report success once the write has actually completed.
   const [addressActionBusy, setAddressActionBusy] = useState(false);
 
-  // The user's saved address can still be loading (async session restore), or this
-  // screen instance can be reused by the navigator across listings/logins without
-  // remounting, so the useState initializers above can lock in stale or empty values.
-  // Re-sync from the account's saved address whenever it actually changes, but stop
-  // once the renter has started editing the form themselves.
-  const addressEditedRef = useRef(false);
-  const lastSyncedAddressKey = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    // Resuming an already-paid delivery checkout: the form must keep showing the address that
-    // was actually charged, never silently drift back to the account's general saved address.
-    if (!user?.id || addressEditedRef.current || checkoutBooking) return;
-    const saved = user.savedDeliveryAddress;
-    const savedKey = saved ? JSON.stringify(saved) : "";
-    if (lastSyncedAddressKey.current === savedKey) return;
-    lastSyncedAddressKey.current = savedKey;
-    setRecipientName(saved?.recipientName || user.name || "");
-    setDeliveryPhone(saved?.phone || user.phone || "");
-    setStreetAddress(saved?.addressLine1 || "");
-    setUnit(saved?.addressLine2 || "");
-    setPostcode(saved?.postcode || "");
-    setCity(saved?.city || "");
-    setStateName(saved?.state || "");
-    setDeliveryNotes(saved?.instructions || "");
-    setSelectedSavedAddressIndex(user.defaultDeliveryAddressIndex ?? 0);
-  }, [user?.id, user?.savedDeliveryAddress, user?.name, user?.phone, user?.defaultDeliveryAddressIndex]);
+  // A fresh listing visit starts from the account default. A manual choice stays on this
+  // screen only; returning to it or opening another listing resets that temporary choice.
+  // An unfinished checkout instead restores the address captured for that booking.
+  useFocusEffect(useCallback(() => {
+    const address = checkoutId ? checkoutAddress : accountDefault?.address;
+    setRecipientName(address?.recipientName || user?.name || "");
+    setDeliveryPhone(address?.phone || user?.phone || "");
+    setStreetAddress(address?.addressLine1 || "");
+    setUnit(address?.addressLine2 || "");
+    setPostcode(checkoutId ? checkoutBooking?.deliveryPostcode || address?.postcode || "" : address?.postcode || "");
+    setCity(address?.city || "");
+    setStateName(address?.state || "");
+    setDeliveryNotes(address?.instructions || "");
+    setSelectedSavedAddressIndex(checkoutId ? checkoutSavedIndex >= 0 ? checkoutSavedIndex : null : accountDefault?.index ?? null);
+    setAddressFormOpen(false);
+    setEditingAddressIndex(null);
+  }, [id, checkoutId, user?.id, user?.name, user?.phone, defaultKey,
+    checkoutBooking?.id, checkoutBooking?.deliveryPostcode, checkoutAddressKey, checkoutSavedIndex]));
 
-  function markAddressEdited<T>(setter: (value: T) => void) {
-    return (value: T) => {
-      addressEditedRef.current = true;
-      setter(value);
-    };
-  }
-  const onRecipientNameChange = markAddressEdited(setRecipientName);
-  const onDeliveryPhoneChange = markAddressEdited(setDeliveryPhone);
-  const onStreetAddressChange = markAddressEdited(setStreetAddress);
-  const onUnitChange = markAddressEdited(setUnit);
+  const onRecipientNameChange = setRecipientName;
+  const onDeliveryPhoneChange = setDeliveryPhone;
+  const onStreetAddressChange = setStreetAddress;
+  const onUnitChange = setUnit;
   function onPostcodeChange(value: string) {
-    addressEditedRef.current = true;
     setPostcode(value);
     // Auto-populate city/state from the postcode reference dataset — the renter should never
     // have to type the full address just to see a delivery estimate (Stage 1: postcode only).
@@ -310,9 +320,9 @@ export default function ListingDetailScreen() {
       setStateName(resolved.state);
     }
   }
-  const onCityChange = markAddressEdited(setCity);
-  const onStateNameChange = markAddressEdited(setStateName);
-  const onDeliveryNotesChange = markAddressEdited(setDeliveryNotes);
+  const onCityChange = setCity;
+  const onStateNameChange = setStateName;
+  const onDeliveryNotesChange = setDeliveryNotes;
 
   const { width } = useWindowDimensions();
   // Shared booking-interface typography scale (see constants/bookingTypography.ts): main section
@@ -338,10 +348,10 @@ export default function ListingDetailScreen() {
 
   const owner = state.profiles.find((p) => p.id === listing.ownerId);
   const currentDeliveryAddress = formatDeliveryAddress(getDeliveryAddress());
-  // Falls back to the first saved record if the selected index is ever out of range
-  // (e.g. right after the last-selected address was deleted elsewhere).
-  const compactSelectedAddressIndex = savedAddresses[selectedSavedAddressIndex] ? selectedSavedAddressIndex : 0;
-  const compactSelectedAddress = savedAddresses[compactSelectedAddressIndex];
+  const compactSelectedAddressIndex = selectedSavedAddressIndex !== null && savedAddresses[selectedSavedAddressIndex]
+    ? selectedSavedAddressIndex : null;
+  const compactSelectedAddress = compactSelectedAddressIndex !== null
+    ? savedAddresses[compactSelectedAddressIndex] : undefined;
   // Vehicle and fee come from the lender's parcel details and pickup postcode,
   // plus the renter's delivery postcode (no maps API or renter distance input).
   const parcel = { weightKg: listing.parcelWeightKg, dimensionsCm: listing.parcelDimensionsCm, requirement: listing.deliveryRequirement,
@@ -604,7 +614,7 @@ export default function ListingDetailScreen() {
       const bookingId = newId();
       await actAndPersist({ type: "startDeliveryCheckout", id: bookingId, listingId: id,
         start: startTimestamp, end: endTimestamp, deliveryAddress: formatDeliveryAddress(address),
-        deliveryPostcode: postcode,
+        deliveryPostcode: postcode, deliveryAddressDetails: address,
         ...(isCourierDelivery ? {} : { returnPickupTime: effectiveReturnPickupTime }) });
       act({ type: "saveDeliveryAddress", address });
       router.push(`/delivery-demo/${bookingId}` as never);
@@ -669,7 +679,6 @@ export default function ListingDetailScreen() {
   function selectSavedAddress(index: number) {
     const address = savedAddresses[index];
     if (!address) return;
-    addressEditedRef.current = true;
     setSelectedSavedAddressIndex(index);
     setRecipientName(address.recipientName);
     setDeliveryPhone(address.phone);
@@ -701,7 +710,6 @@ export default function ListingDetailScreen() {
 
   // Opens a blank form for a brand-new saved address (distinct from editing one in place).
   function openAddAddressForm() {
-    addressEditedRef.current = true;
     setEditingAddressIndex(null);
     setRecipientName(user?.name || "");
     setDeliveryPhone(user?.phone || "");
@@ -711,7 +719,7 @@ export default function ListingDetailScreen() {
     setCity("");
     setStateName("");
     setDeliveryNotes("");
-    setSetAsDefaultChecked(savedAddresses.length === 0);
+    setSetAsDefaultChecked(false);
     setAddressFormOpen(true);
     setAddressListExpanded(false);
   }
@@ -719,7 +727,6 @@ export default function ListingDetailScreen() {
   function openEditAddressForm(index: number) {
     const address = savedAddresses[index];
     if (!address) return;
-    addressEditedRef.current = true;
     setEditingAddressIndex(index);
     setRecipientName(address.recipientName);
     setDeliveryPhone(address.phone);
@@ -807,13 +814,21 @@ export default function ListingDetailScreen() {
         setEditingAddressIndex(null);
         setAddressFormOpen(false);
       }
-      // The deleted address was selected for this booking — fall back to whatever the
-      // account now considers its most-recently-used address (or a blank form if none).
+      const remaining = savedAddresses.filter((_, i) => i !== index);
       if (selectedSavedAddressIndex === index) {
-        const remaining = savedAddresses.filter((_, i) => i !== index);
-        addressEditedRef.current = false;
-        lastSyncedAddressKey.current = undefined;
-        setSelectedSavedAddressIndex(remaining.length === 0 ? 0 : Math.min(index, remaining.length - 1));
+        const nextIndex = remaining.findIndex((address) => address.isDefault);
+        const next = nextIndex >= 0 ? remaining[nextIndex] : undefined;
+        setSelectedSavedAddressIndex(nextIndex >= 0 ? nextIndex : null);
+        setRecipientName(next?.recipientName || user?.name || "");
+        setDeliveryPhone(next?.phone || user?.phone || "");
+        setStreetAddress(next?.addressLine1 || "");
+        setUnit(next?.addressLine2 || "");
+        setPostcode(next?.postcode || "");
+        setCity(next?.city || "");
+        setStateName(next?.state || "");
+        setDeliveryNotes(next?.instructions || "");
+      } else if (selectedSavedAddressIndex !== null && selectedSavedAddressIndex > index) {
+        setSelectedSavedAddressIndex(selectedSavedAddressIndex - 1);
       }
     } catch (e) {
       setError((e as Error).message);
@@ -821,20 +836,6 @@ export default function ListingDetailScreen() {
       setPendingDeleteIndex(null);
       setAddressActionBusy(false);
     }
-  }
-
-  function formatDeliveryAddress(address: ReturnType<typeof getDeliveryAddress>) {
-    return [
-      address.recipientName.trim(),
-      address.phone.trim(),
-      address.addressLine1.trim(),
-      address.addressLine2.trim(),
-      `${address.postcode.trim()} ${address.city.trim()}`,
-      address.state.trim(),
-      address.instructions.trim(),
-    ]
-      .filter(Boolean)
-      .join(", ");
   }
 
   function deliveryAddressIsComplete() {
@@ -1524,6 +1525,9 @@ export default function ListingDetailScreen() {
               {savedAddresses.length > 0 ? (
                 <View style={{ gap: 8, marginTop: 10 }}>
                   <Text style={styles.inputLabel}>Saved Delivery Details</Text>
+                  {compactSelectedAddressIndex === null && !deliveryAddressIsComplete() && (
+                    <Text style={styles.fieldSubtext}>Select a saved address or add a new one for this booking.</Text>
+                  )}
 
                   {!addressListExpanded && !!compactSelectedAddress ? (
                     // Compact card: only the currently selected record, one line of
@@ -1555,7 +1559,7 @@ export default function ListingDetailScreen() {
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="Edit delivery details"
-                          onPress={() => openEditAddressForm(compactSelectedAddressIndex)}
+                          onPress={() => compactSelectedAddressIndex !== null && openEditAddressForm(compactSelectedAddressIndex)}
                           style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
                         >
                           <Ionicons name="pencil-outline" size={13} color={colors.blue} />
@@ -1788,6 +1792,7 @@ export default function ListingDetailScreen() {
                       <Pressable
                         accessibilityRole="checkbox"
                         accessibilityState={{ checked: setAsDefaultChecked }}
+                        aria-checked={setAsDefaultChecked}
                         accessibilityLabel="Set as Default Address"
                         onPress={() => setSetAsDefaultChecked((value) => !value)}
                         style={styles.insuranceRow}
@@ -2792,7 +2797,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     marginBottom: 2,
   },
-  summaryValue: { ...bookingTypography.pricingValue },
+  summaryValue: { ...bookingTypography.pricingValue, textAlign: "right" },
   depositNote: {
     ...bookingTypography.note,
     marginTop: 4,

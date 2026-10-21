@@ -42,7 +42,7 @@ export type Action =
   | { type: "readChat"; conversationId: string }
   | { type: "saveListing"; listing: Listing }
   | { type: "startDeliveryCheckout"; id: string; listingId: string; start: string; end: string; deliveryAddress: string;
-      deliveryPostcode: string; returnPickupTime?: string }
+      deliveryPostcode: string; deliveryAddressDetails?: SavedDeliveryAddress; returnPickupTime?: string }
   | { type: "correctBookingDeliveryAddress"; bookingId: string; deliveryAddress: string; deliveryPostcode: string }
   | { type: "payDeliveryDemo"; bookingId: string; receiptReference: string }
   | { type: "confirmOutboundDispatch"; bookingId: string; decision: "accept" | "propose" | "dropoff";
@@ -488,9 +488,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
             saved.city === normalized.city &&
             saved.state === normalized.state,
         );
-        // The very first saved address automatically becomes default; later additions
-        // only become default when the renter explicitly ticks "Set as Default".
-        const isDefault = addresses.length === 0 || !!action.setDefault;
+        // Creating an address does not change the account default unless requested.
+        const isDefault = !!action.setDefault;
         if (existingIndex >= 0) {
           addresses[existingIndex] = {
             ...normalized,
@@ -549,16 +548,9 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         user.defaultDeliveryAddressIndex = undefined;
         user.savedDeliveryAddress = undefined;
       } else {
-        // Keep pointing at the same address when one before it was removed; fall back to
-        // the first remaining default (or the first remaining address) when the
-        // previously selected address itself was the one deleted.
-        let newIndex = remaining.findIndex((saved) => saved.isDefault);
-        if (newIndex < 0) {
-          newIndex = 0;
-          remaining[0] = { ...remaining[0], isDefault: true };
-        }
-        user.defaultDeliveryAddressIndex = newIndex;
-        user.savedDeliveryAddress = remaining[newIndex];
+        const defaultIndex = remaining.findIndex((saved) => saved.isDefault);
+        user.defaultDeliveryAddressIndex = defaultIndex >= 0 ? defaultIndex : undefined;
+        user.savedDeliveryAddress = defaultIndex >= 0 ? remaining[defaultIndex] : undefined;
       }
       break;
     }
@@ -903,6 +895,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         durationMinutes: calculateDurationMinutes(action.start, action.end),
         cancellationCutoff: calculateCancellationCutoff(action.start),
         collectionMethod: "Delivery Only", deliveryAddress: action.deliveryAddress,
+        deliveryAddressDetails: action.deliveryAddressDetails,
         deliveryPostcode: action.deliveryPostcode,
         status: "payment_required", quote,
         commissionRate: CURRENT_LENDER_COMMISSION_RATE,
