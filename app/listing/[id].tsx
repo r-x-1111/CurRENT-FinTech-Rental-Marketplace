@@ -770,6 +770,10 @@ export default function ListingDetailScreen() {
       setSelectedSavedAddressIndex(targetIndex);
       setEditingAddressIndex(null);
       setAddressFormOpen(false);
+      // Keep the full saved-address list visible after adding or editing an address.
+      // The Add form collapses it while open; otherwise existing entries appear to vanish
+      // until a refresh remounts this screen with the list expanded again.
+      setAddressListExpanded(true);
       setSuccessNotice("Delivery details saved to your profile.");
     } catch (e) {
       // The form stays open with everything the renter typed intact, so they can fix
