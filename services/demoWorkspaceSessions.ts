@@ -4,9 +4,12 @@ import { withoutRemovedSeedListings, withoutRetiredDemoBookings, withRefreshedCa
 import { repairDemoDeliveryPayments } from "./repairDemoDeliveryPayments";
 import { normalizeDefaultDeliveryAddress } from "./deliveryAddresses";
 
+// Demo accounts have no Supabase row of their own, so this is their only durable store.
+// Everything the workspace holds (bookings, addresses, delivery history, disputes, evidence, ...)
+// is kept as ONE snapshot under this key so there is a single source of truth per account.
+// sessionStorage/in-memory below are just a same-tab cache in front of it, never a second store.
+const WORKSPACE_PREFIX = "current:demo-workspace:";
 const STORAGE_PREFIX = "current:demo-session:";
-const DELIVERY_PREFIX = "current:demo-delivery-history:";
-const ADDRESS_PREFIX = "current:demo-saved-addresses:";
 const memorySessions = new Map<string, Marketplace>();
 
 function isMarketplaceSnapshot(value: unknown): value is Marketplace {
@@ -39,52 +42,46 @@ function browserSessionStorage(): Storage | null {
   }
 }
 
+function browserLocalStorage(): Storage | null {
+  try {
+    return typeof globalThis.localStorage === "undefined"
+      ? null
+      : globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 function key(accountId: string) {
   return `${STORAGE_PREFIX}${accountId}`;
 }
 
-function savedDeliveryHistory(accountId: string): NonNullable<Marketplace["deliveryHistory"]> {
+function workspaceKey(accountId: string) {
+  return `${WORKSPACE_PREFIX}${accountId}`;
+}
+
+function readDurableWorkspace(accountId: string): Marketplace | null {
   try {
-    const raw = globalThis.localStorage?.getItem(`${DELIVERY_PREFIX}${accountId}`);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter((entry) => entry && typeof entry.id === "string" && entry.status === "paid_demo") : [];
-  } catch { return []; }
+    const raw = browserLocalStorage()?.getItem(workspaceKey(accountId));
+    if (!raw) return null;
+    const state: unknown = JSON.parse(raw);
+    return isMarketplaceSnapshot(state) ? state : null;
+  } catch {
+    return null;
+  }
 }
 
-function withPersistentDeliveryHistory(accountId: string, state: Marketplace): Marketplace {
-  const existing = state.deliveryHistory || [];
-  const ids = new Set(existing.map((entry) => entry.id));
-  return repairDemoDeliveryPayments({ ...state, deliveryHistory: [...existing, ...savedDeliveryHistory(accountId).filter((entry) => !ids.has(entry.id))]
-    .sort((a, b) => b.paidAt.localeCompare(a.paidAt)) });
+function withNormalizedAddresses(state: Marketplace): Marketplace {
+  return { ...state, profiles: state.profiles.map((profile) =>
+    profile.id === state.currentUserId ? normalizeDefaultDeliveryAddress(profile) : profile) };
 }
 
-function withPersistentAddresses(accountId: string, state: Marketplace): Marketplace {
-  try {
-    const raw = globalThis.localStorage?.getItem(`${ADDRESS_PREFIX}${accountId}`);
-    if (raw === null || raw === undefined) return state;
-    const saved: unknown = JSON.parse(raw);
-    if (!saved || typeof saved !== "object") return state;
-    const record = saved as { addresses?: unknown; selectedIndex?: unknown };
-    if (!Array.isArray(record.addresses) || !record.addresses.every((address) =>
-      address && typeof address === "object" &&
-      ["recipientName", "phone", "addressLine1", "addressLine2", "postcode", "city", "state", "instructions"]
-        .every((field) => typeof address[field] === "string"))) return state;
-    const profile = state.profiles.find((entry) => entry.id === state.currentUserId);
-    if (!profile) return state;
-    const selectedIndex = typeof record.selectedIndex === "number" &&
-      Number.isInteger(record.selectedIndex) && record.selectedIndex >= 0 &&
-      record.selectedIndex < record.addresses.length ? record.selectedIndex : 0;
-    profile.savedDeliveryAddresses = record.addresses;
-    profile.defaultDeliveryAddressIndex = record.addresses.length ? selectedIndex : undefined;
-    profile.savedDeliveryAddress = record.addresses[selectedIndex];
-  } catch { /* Keep the workspace usable if browser storage is unavailable. */ }
-  return state;
-}
-
-function restoreDemoHistory(accountId: string, state: Marketplace): Marketplace {
-  const restored = withPersistentAddresses(accountId, withPersistentDeliveryHistory(accountId, state));
-  return { ...restored, profiles: restored.profiles.map((profile) =>
-    profile.id === restored.currentUserId ? normalizeDefaultDeliveryAddress(profile) : profile) };
+function sanitize(state: Marketplace): Marketplace {
+  return withNormalizedAddresses(
+    repairDemoDeliveryPayments(
+      withRefreshedCatalogueShippingData(withoutRetiredDemoBookings(withoutRemovedSeedListings(state))),
+    ),
+  );
 }
 
 export function loadDemoWorkspaceSession(accountId: string): Marketplace {
@@ -93,22 +90,31 @@ export function loadDemoWorkspaceSession(accountId: string): Marketplace {
   if (serialized) {
     try {
       const state: unknown = JSON.parse(serialized);
-      if (isMarketplaceSnapshot(state)) return restoreDemoHistory(accountId, withRefreshedCatalogueShippingData(withoutRetiredDemoBookings(withoutRemovedSeedListings(state))));
+      if (isMarketplaceSnapshot(state)) return sanitize(state);
     } catch {
       storage?.removeItem(key(accountId));
     }
   }
 
   const memoryState = memorySessions.get(accountId);
-  if (memoryState && isMarketplaceSnapshot(memoryState)) return restoreDemoHistory(accountId, withRefreshedCatalogueShippingData(withoutRetiredDemoBookings(withoutRemovedSeedListings(memoryState))));
+  if (memoryState && isMarketplaceSnapshot(memoryState)) return sanitize(memoryState);
 
-  const fresh = restoreDemoHistory(accountId, createSeed("admin_demo"));
+  const durable = readDurableWorkspace(accountId);
+  if (durable) {
+    const restored = sanitize(durable);
+    saveDemoWorkspaceSession(accountId, restored);
+    return restored;
+  }
+
+  const fresh = sanitize(createSeed("admin_demo"));
   saveDemoWorkspaceSession(accountId, fresh);
   return fresh;
 }
 
+// Explicitly resets the demo account back to its seed data, discarding anything saved before it.
+// Only ever call this when the user actually wants a fresh demo, never as part of ordinary login.
 export function startDemoWorkspaceSession(accountId: string): Marketplace {
-  const fresh = restoreDemoHistory(accountId, createSeed("admin_demo"));
+  const fresh = sanitize(createSeed("admin_demo"));
   saveDemoWorkspaceSession(accountId, fresh);
   return fresh;
 }
@@ -123,18 +129,13 @@ export function saveDemoWorkspaceSession(
   const copy: Marketplace = JSON.parse(JSON.stringify(state));
   memorySessions.set(accountId, copy);
   browserSessionStorage()?.setItem(key(accountId), JSON.stringify(copy));
-  try { globalThis.localStorage?.setItem(`${DELIVERY_PREFIX}${accountId}`, JSON.stringify(copy.deliveryHistory || [])); } catch { /* Session remains usable without durable browser storage. */ }
-  const profile = copy.profiles.find((entry) => entry.id === copy.currentUserId);
-  if (profile) {
-    try {
-      globalThis.localStorage?.setItem(`${ADDRESS_PREFIX}${accountId}`, JSON.stringify({
-        addresses: profile.savedDeliveryAddresses || [],
-        selectedIndex: profile.defaultDeliveryAddressIndex,
-      }));
-    } catch { /* Session storage still preserves addresses for this tab. */ }
-  }
+  try {
+    browserLocalStorage()?.setItem(workspaceKey(accountId), JSON.stringify(copy));
+  } catch { /* The session remains usable for this tab without durable browser storage. */ }
 }
 
+// Ends the active tab session only. The durable per-account workspace in localStorage is left
+// intact so bookings, addresses, and everything else are there the next time this account signs in.
 export function closeDemoWorkspaceSession(accountId: string): void {
   memorySessions.delete(accountId);
   browserSessionStorage()?.removeItem(key(accountId));

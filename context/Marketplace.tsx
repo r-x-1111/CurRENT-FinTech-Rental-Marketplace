@@ -23,7 +23,6 @@ import {
   closeDemoWorkspaceSession,
   loadDemoWorkspaceSession,
   saveDemoWorkspaceSession,
-  startDemoWorkspaceSession,
 } from "../services/demoWorkspaceSessions";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { fetchOwnChatListings, fetchPublishedChatListings, publishChatListing, unpublishChatListing } from "../services/chat";
@@ -237,7 +236,7 @@ export function MarketplaceProvider({
     }
     let authenticatedState: Marketplace;
     if (account.accountKind === "demo") {
-      authenticatedState = startDemoWorkspaceSession(account.id);
+      authenticatedState = loadDemoWorkspaceSession(account.id);
     } else {
       const workspace = await loadMarketplaceWorkspace(
         supabase,

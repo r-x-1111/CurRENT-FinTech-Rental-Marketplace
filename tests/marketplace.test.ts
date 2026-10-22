@@ -134,22 +134,41 @@ test("a normal account's stale persisted catalogue listing is refreshed to the c
   assert.deepEqual(untouched.listings, state.listings);
 });
 
-test("Demo workspace starts fresh, persists in-session, and clears on sign out", () => {
+test("Demo workspace starts fresh, persists in-session, and survives sign out and back in", () => {
   const accountId = "demo-auth-user";
-  const first = startDemoWorkspaceSession(accountId);
-  first.profiles[0].name = "Changed for this session";
-  saveDemoWorkspaceSession(accountId, first);
+  const previousStorage = globalThis.localStorage;
+  const entries = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => { entries.set(key, value); },
+    },
+  });
+  try {
+    const first = startDemoWorkspaceSession(accountId);
+    first.profiles[0].name = "Changed for this session";
+    saveDemoWorkspaceSession(accountId, first);
 
-  assert.equal(
-    loadDemoWorkspaceSession(accountId).profiles[0].name,
-    "Changed for this session",
-  );
+    assert.equal(
+      loadDemoWorkspaceSession(accountId).profiles[0].name,
+      "Changed for this session",
+    );
 
-  closeDemoWorkspaceSession(accountId);
-  assert.notEqual(
-    loadDemoWorkspaceSession(accountId).profiles[0].name,
-    "Changed for this session",
-  );
+    // Signing out must only end this tab's session, not erase the account's durable demo
+    // workspace (bookings, addresses, etc.) — signing back in must restore it, not reset it.
+    closeDemoWorkspaceSession(accountId);
+    assert.equal(
+      loadDemoWorkspaceSession(accountId).profiles[0].name,
+      "Changed for this session",
+    );
+
+    startDemoWorkspaceSession(accountId);
+    closeDemoWorkspaceSession(accountId);
+  } finally {
+    if (previousStorage === undefined) delete (globalThis as { localStorage?: Storage }).localStorage;
+    else Object.defineProperty(globalThis, "localStorage", { configurable: true, value: previousStorage });
+  }
 });
 
 test("Demo saved addresses survive a fresh session and page reload", () => {
@@ -175,7 +194,7 @@ test("Demo saved addresses survive a fresh session and page reload", () => {
     saveDemoWorkspaceSession(accountId, saved);
     closeDemoWorkspaceSession(accountId);
 
-    const restored = startDemoWorkspaceSession(accountId);
+    const restored = loadDemoWorkspaceSession(accountId);
     const profile = restored.profiles.find((entry) => entry.id === restored.currentUserId);
     assert.deepEqual(profile?.savedDeliveryAddresses?.at(-1), { ...address, isDefault: false });
     const loadedProfile = loadDemoWorkspaceSession(accountId).profiles.find((entry) => entry.id === restored.currentUserId);
