@@ -1734,10 +1734,10 @@ test("quotes use exclusive return day, service minimum, risk deposit and optiona
   assert.deepEqual(quote, {
     days: 2,
     rentalFee: 90,
-    serviceFee: 5,
+    serviceFee: 4.5,
     deposit: 200,
     protection: 5,
-    total: 300,
+    total: 299.5,
   });
   assert.deepEqual(calculateOwnerPayout(90), {
     commission: 11.7,
@@ -2343,7 +2343,7 @@ test("state snapshots preserve a confirmed booking and its financial terms witho
   const booking = loaded.bookings.find(
     (rental: { id: string }) => rental.id === "booking-1",
   );
-  assert.equal(booking.quote.total, 295);
+  assert.equal(booking.quote.total, 294.5);
   assert.equal(booking.payment, "paid");
   assert.equal(booking.agreement, undefined);
 });
@@ -4925,7 +4925,7 @@ test("Section 14.3: Full 30-question FAQ covers all six categories with correct 
   assert.ok(!sampleFaqs.some((f) => f.answer.includes("12%")));
   const feeFaq = sampleFaqs.find((f) => f.question.startsWith("How much does CurRENT charge"));
   assert.ok(feeFaq);
-  assert.ok(feeFaq!.answer.includes("5% of the rental fee, subject to a minimum charge of RM5"));
+  assert.ok(feeFaq!.answer.includes("5% of the total rental fee, with no minimum charge"));
   assert.ok(feeFaq!.answer.includes("13% of the rental fee for new bookings"));
   assert.ok(feeFaq!.answer.includes("87%"));
 

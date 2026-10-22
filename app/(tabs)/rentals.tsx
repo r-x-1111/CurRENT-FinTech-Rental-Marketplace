@@ -358,7 +358,7 @@ export default function RentalsScreen() {
                   <Text style={styles.modalSectionTitle}>Paid to CurRENT</Text>
                   <Row label={`Rental fee · ${b.quote.days ?? ""} days`} value={money(b.quote.rentalFee)} />
                   <Text style={styles.ledgerLineStatus}>{paymentStatusLabel}</Text>
-                  <Row label="CurRENT service fee (5%, min RM5)" value={money(b.quote.serviceFee)} />
+                  <Row label="CurRENT service fee (5%)" value={money(b.quote.serviceFee)} />
                   <Text style={styles.ledgerLineStatus}>{paymentStatusLabel}</Text>
                   {b.insurance?.selected && (
                     <>

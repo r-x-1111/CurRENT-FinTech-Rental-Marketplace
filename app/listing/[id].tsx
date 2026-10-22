@@ -40,7 +40,6 @@ import {
   RENTAL_PROTECTION_MINIMUM_FEE,
   demoSlotAvailable,
   isDemoSeededListing,
-  dateAfter,
   formatMalaysiaDateTime,
   getBookingTotals,
   malaysiaDateKey,
@@ -141,15 +140,13 @@ export default function ListingDetailScreen() {
     return true;
   });
 
-  // The Demo Account preselects a fixed presentation date range (2 days) instead of
-  // "tomorrow" — normal accounts keep the existing relative default unchanged.
+  // Every account — Demo and normal alike — preselects a fixed presentation date range
+  // instead of "tomorrow"; an in-progress checkout's own recorded dates always take priority.
   const [start, setStart] = useState(
-    checkoutBooking ? malaysiaDateKey(checkoutBooking.start)
-      : state.mode === "admin_demo" ? "2026-10-26" : dateAfter(1),
+    checkoutBooking ? malaysiaDateKey(checkoutBooking.start) : "2026-11-17",
   );
   const [end, setEnd] = useState(
-    checkoutBooking ? malaysiaDateKey(checkoutBooking.end)
-      : state.mode === "admin_demo" ? "2026-10-28" : dateAfter(3),
+    checkoutBooking ? malaysiaDateKey(checkoutBooking.end) : "2026-11-19",
   );
   const slotUnavailable = (slot: string) => {
     if (state.mode !== "admin_demo" || !listing || !isDemoSeededListing(listing.id) || !start) return false;
@@ -160,7 +157,7 @@ export default function ListingDetailScreen() {
     return false;
   };
   const [calendarMonth, setCalendarMonth] = useState(
-    () => new Date(`${dateAfter(1).slice(0, 7)}-01T00:00:00Z`),
+    () => new Date(`${(checkoutBooking ? malaysiaDateKey(checkoutBooking.start) : "2026-11-17").slice(0, 7)}-01T00:00:00Z`),
   );
   const [calendarPicker, setCalendarPicker] = useState<"month" | "year" | null>(
     null,
@@ -2073,7 +2070,7 @@ export default function ListingDetailScreen() {
                   </View>
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>
-                      CurRENT service fee (5%, min RM5)
+                      CurRENT service fee (5%)
                     </Text>
                     <Text style={styles.summaryValue}>
                       {money(quote.serviceFee)}

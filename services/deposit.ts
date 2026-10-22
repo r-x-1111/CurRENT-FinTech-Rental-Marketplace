@@ -16,7 +16,7 @@ export function calculateSecurityDeposit(itemValue: number, riskLevel: RiskLevel
 }
 
 export function calculateBorrowerServiceFee(rentalFee: number) {
-  return Math.max(5, Math.round(rentalFee * 0.05 * 100) / 100);
+  return Math.round(rentalFee * 0.05 * 100) / 100;
 }
 
 export const CURRENT_LENDER_COMMISSION_RATE = 0.13;

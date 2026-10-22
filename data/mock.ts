@@ -261,7 +261,7 @@ export const sampleFaqs: FaqItem[] = [
     category: "Payments, Fees and Disputes",
     question: "How much does CurRENT charge renters and lenders?",
     answer:
-      "Renter Service Fee: 5% of the rental fee, subject to a minimum charge of RM5.\n\nLender Commission: 13% of the rental fee for new bookings. The lender receives the remaining 87% of the rental fee before other separately applicable adjustments. Historical bookings retain the commission rate recorded when the booking was created.\n\nRefundable security deposits, third-party insurance premiums and delivery charges must not automatically be classified as CurRENT revenue.",
+      "Renter Service Fee: 5% of the total rental fee, with no minimum charge.\n\nLender Commission: 13% of the rental fee for new bookings. The lender receives the remaining 87% of the rental fee before other separately applicable adjustments. Historical bookings retain the commission rate recorded when the booking was created.\n\nRefundable security deposits, third-party insurance premiums and delivery charges must not automatically be classified as CurRENT revenue.",
   },
   {
     category: "Payments, Fees and Disputes",

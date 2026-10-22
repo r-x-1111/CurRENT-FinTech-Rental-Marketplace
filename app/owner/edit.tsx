@@ -444,6 +444,14 @@ export default function EditListing() {
     }
   }
 
+  // Package weight/dimensions are what the existing automatic delivery-fee calculation (same-state
+  // vehicle selection and cross-state courier quoting) reads — without them, cross-state courier
+  // quoting has no fallback and genuinely cannot price the item (see services/delivery.ts). Demo
+  // listings are exempt because their canonical data/mock.ts values always populate these already.
+  const hasPackageMeasurements =
+    Number(parcelWeight) > 0 &&
+    Object.values(parcelDimensions).every((side) => Number.isFinite(side) && side > 0);
+
   const canPublish =
     title.trim().length > 0 &&
     description.trim().length > 0 &&
@@ -455,6 +463,7 @@ export default function EditListing() {
     dailyPriceNum > 0 &&
     (demoAccount || photos.length >= 6) &&
     (demoAccount || videos.length >= 1) &&
+    (demoAccount || hasPackageMeasurements) &&
     periods.length >= 1 &&
     selectedSlots.length >= 2;
 
@@ -569,7 +578,11 @@ export default function EditListing() {
 
         <View style={styles.formSection}>
           <Text style={styles.sectionHeading}>Delivery & Shipping Information</Text>
-          <Text style={s.caption}>Provide your item's packaged measurements so CurRENT can automatically determine available delivery options.</Text>
+          <Text style={s.caption}>
+            {demoAccount
+              ? "Provide your item's packaged measurements so CurRENT can automatically determine available delivery options."
+              : "Required to publish: CurRENT uses these measurements to automatically calculate same-state and cross-state delivery fees. Without them, cross-state delivery cannot be priced."}
+          </Text>
 
           <Text style={styles.subsectionHeading}>Package Details</Text>
           <Text style={styles.packageSummary}>{extraPackages.length + 1} {extraPackages.length === 0 ? "package" : "packages"} selected</Text>
