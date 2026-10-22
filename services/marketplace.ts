@@ -23,6 +23,8 @@ import {
 import {
   calculateBorrowerServiceFee,
   CURRENT_LENDER_COMMISSION_RATE,
+  LENDER_BOOST_DAYS,
+  LENDER_BOOST_FEE,
 } from "./deposit";
 import { evaluateRentalOutcome, tierForScore } from "./riskScore";
 import { createSeed } from "../data/seed";
@@ -741,7 +743,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       );
       requireThat(!listing.featuredUntil || Date.parse(listing.featuredUntil) <= Date.now(), "This listing is already boosted.");
       requireThat(!state.boostTransactions?.some((record) => record.id === action.transactionId), "Payment already recorded.");
-      const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+      const expiresAt = new Date(Date.now() + LENDER_BOOST_DAYS * 86400000).toISOString();
       listing.featuredUntil = expiresAt;
       state.boostTransactions ||= [];
       state.boostTransactions.unshift({
@@ -752,10 +754,11 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         paidAt: now,
         activatedAt: now,
         expiresAt,
+        amount: LENDER_BOOST_FEE,
       });
       notify(
         user.id,
-        `Listing boosted! "${listing.title}" is now featured for 7 days (RM10 demo fee).`,
+        `Listing boosted! "${listing.title}" is now featured for ${LENDER_BOOST_DAYS} days (RM${LENDER_BOOST_FEE.toFixed(2)} demo fee).`,
       );
       break;
     }

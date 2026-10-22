@@ -2813,7 +2813,7 @@ test("issue report drafts can be prepared while pending but submitted only in th
   }
 });
 
-test("RM10 lender boost features listing for 7 days", () => {
+test("RM35 lender boost features listing for 7 days", () => {
   let state = createSeed();
   state = transition(state, { type: "login", userId: "owner-aiman" });
   const listingId = "sony-a7iii";
@@ -2829,7 +2829,24 @@ test("RM10 lender boost features listing for 7 days", () => {
   assert.ok(diffDays >= 6.9 && diffDays <= 7.1);
   assert.equal(state.boostTransactions?.length, 1);
   assert.equal(state.boostTransactions?.[0].id, "boost-test-1");
+  assert.equal(state.boostTransactions?.[0].amount, 35);
   assert.throws(() => transition(state, { type: "boostListing", listingId, transactionId: "boost-test-1" }), /already boosted/);
+});
+
+test("a previously completed RM10 Boost transaction keeps its historical amount", () => {
+  let state = createSeed();
+  state = transition(state, { type: "login", userId: "owner-aiman" });
+  state.boostTransactions = [{
+    id: "legacy-boost-1",
+    ownerId: "owner-aiman",
+    listingId: "sony-a7iii",
+    listingName: "Sony A7 III",
+    paidAt: "2026-01-01T00:00:00.000Z",
+    activatedAt: "2026-01-01T00:00:00.000Z",
+    expiresAt: "2026-01-08T00:00:00.000Z",
+    // No `amount` field — recorded before the field existed, at the then-current RM10 price.
+  }];
+  assert.equal(state.boostTransactions[0].amount, undefined);
 });
 
 test("Demo availability is stable, listing-specific, and limited to October–December 2026", () => {

@@ -30,6 +30,9 @@ export function calculateOwnerPayout(rentalFee: number, rate = CURRENT_LENDER_CO
   };
 }
 
-export const LENDER_BOOST_FEE = 10; // RM10
+// Single source of truth for the current Listing Boost fee and duration. Every Boost UI/receipt
+// must read this (or a past transaction's own recorded `amount`, for historical purchases made
+// at an earlier price) rather than a literal.
+export const LENDER_BOOST_FEE = 35; // RM35
 export const LENDER_BOOST_DAYS = 7; // 7 days
 

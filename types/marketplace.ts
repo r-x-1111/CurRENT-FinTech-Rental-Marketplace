@@ -354,6 +354,9 @@ export interface Marketplace {
     paidAt: string;
     activatedAt: string;
     expiresAt: string;
+    // The fee actually charged at purchase time. Absent on transactions recorded before this
+    // field existed — those predate the RM35 price change and must still be read as RM10.
+    amount?: number;
   }[];
   messages: Message[];
   chatConversations?: ChatConversation[];

@@ -16,7 +16,7 @@ import {
 } from "../../components/ui";
 import { BookingCard } from "../../components/BookingCard";
 import { useMarketplace } from "../../context/Marketplace";
-import { calculateOwnerPayout, LEGACY_LENDER_COMMISSION_RATE } from "../../services/deposit";
+import { calculateOwnerPayout, LEGACY_LENDER_COMMISSION_RATE, LENDER_BOOST_FEE } from "../../services/deposit";
 import { formatMalaysiaDateTime, getEffectiveBookingStatus, money } from "../../services/booking";
 import { CROSS_STATE_ELIGIBILITY_BADGE, crossStateDeliveryEligibility } from "../../services/delivery";
 import { newId } from "../../services/marketplace";
@@ -246,7 +246,7 @@ export default function OwnerDashboard() {
 
                 {/* Option-2 Compact Action Bar: Boost, Edit, Pause/Resume, Delete */}
                 <View style={styles.actionBar}>
-                  {/* Action 1: Boost (RM10 · 7 days) */}
+                  {/* Action 1: Boost (RM35 · 7 days) */}
                   <Pressable
                     accessibilityRole="button"
                     disabled={Boolean(isBoosted) || l.status !== "published"}
@@ -262,7 +262,7 @@ export default function OwnerDashboard() {
                       style={[styles.actionBtnText, isBoosted && { color: colors.blue, fontWeight: "700" }]}
                       numberOfLines={1}
                     >
-                      {isBoosted ? "Boosted" : "Boost (RM10)"}
+                      {isBoosted ? "Boosted" : `Boost (${money(LENDER_BOOST_FEE)})`}
                     </Text>
                   </Pressable>
 
@@ -403,7 +403,9 @@ export default function OwnerDashboard() {
             <Card key={record.id}>
               <Text style={s.h2}>{record.listingName}</Text>
               <Row label="Transaction type" value="Listing Boost" />
-              <Row label="Amount paid" value="RM10.00" />
+              {/* Historical transactions recorded before the RM35 price change have no `amount`
+                  and must keep showing the RM10 they actually paid, not today's price. */}
+              <Row label="Amount paid" value={money(record.amount ?? 10)} />
               <Row label="Payment method" value="Online Payment (Demo)" />
               <Row label="Payment status" value="Successful" />
               <Row label="Payment date/time" value={formatMalaysiaDateTime(record.paidAt)} />
@@ -420,7 +422,7 @@ export default function OwnerDashboard() {
           <Text style={s.h2}>Payment Confirmation</Text>
           <Row label="Listing name" value={boostListing.title} />
           <Row label="Product" value="Listing Boost — 7 Days" />
-          <Row label="Boost fee" value="RM10.00" />
+          <Row label="Boost fee" value={money(LENDER_BOOST_FEE)} />
           <Row label="Payment method" value="Online Payment (Demo)" />
           <Notice text="Simulated payment. No real money will be charged." />
           {!!error && <Notice text={error} error />}
@@ -443,9 +445,11 @@ export default function OwnerDashboard() {
         <View style={styles.paymentOverlay}><View style={styles.paymentPanel}>{receipt && <Card>
           <Text style={s.h2}>Payment Successful</Text>
           <Row label="Listing name" value={receipt.listingName} />
-          <Row label="Listing Boost" value="RM10.00" />
+          {/* "View Receipt" can reopen an older RM10 purchase too, so fall back to the
+              legacy price rather than today's LENDER_BOOST_FEE when the record predates it. */}
+          <Row label="Listing Boost" value={money(receipt.amount ?? 10)} />
           <Row label="Payment method" value="Online Payment (Demo)" />
-          <Row label="Total paid" value="RM10.00" />
+          <Row label="Total paid" value={money(receipt.amount ?? 10)} />
           <Row label="Payment date/time" value={formatMalaysiaDateTime(receipt.paidAt)} />
           <Row label="Transaction reference" value={receipt.id} />
           <Row label="Boost expiry date" value={formatMalaysiaDateTime(receipt.expiresAt)} />
