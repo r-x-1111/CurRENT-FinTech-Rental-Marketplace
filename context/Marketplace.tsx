@@ -186,15 +186,13 @@ export function MarketplaceProvider({
                 account.id,
                 account.accountKind,
               );
+              // Never eagerly persist a freshly-built empty workspace here: if `loadMarketplaceWorkspace`
+              // ever returns null for an account that actually has a saved row (e.g. a transient
+              // RLS/claim mismatch), writing immediately would silently overwrite — and permanently
+              // lose — that account's real bookings. The empty fallback is only ever used in memory for
+              // this session; it gets persisted naturally (merged with whatever the user does next) the
+              // first time an actual action saves, via act()/actAndPersist(), never as a blind upsert here.
               restored = workspace ?? createNormalAccountWorkspace(account);
-              if (!workspace) {
-                await saveMarketplaceWorkspace(
-                  supabase,
-                  account.id,
-                  account.accountKind,
-                  restored,
-                );
-              }
               restored = await includeSharedListings(restored, account.id);
             }
             authOwnerId.current = account.id;
@@ -246,16 +244,11 @@ export function MarketplaceProvider({
         account.id,
         account.accountKind,
       );
+      // Same reasoning as the app-start restore above: never blindly upsert an empty workspace
+      // just because this read came back with no row — that would risk overwriting a real,
+      // previously-saved account the moment it's reached by a flaky/mismatched read.
       authenticatedState =
         workspace ?? createNormalAccountWorkspace(account);
-      if (!workspace) {
-        await saveMarketplaceWorkspace(
-          supabase,
-          account.id,
-          account.accountKind,
-          authenticatedState,
-        );
-      }
       authenticatedState = await includeSharedListings(authenticatedState, account.id);
     }
     authOwnerId.current = account.id;
