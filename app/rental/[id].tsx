@@ -11,6 +11,7 @@ import {
   Field,
   MediaPicker,
   Notice,
+  RentalStatusBadge,
   Row,
   Screen,
   Section,
@@ -19,6 +20,7 @@ import {
 import { useMarketplace } from "../../context/Marketplace";
 import { HoldToConfirmButton } from "../../components/HoldToConfirm";
 import { BookingSummary } from "../../components/BookingSummary";
+import { ActivityTimeline, buildActivityTimeline } from "../../components/ActivityTimeline";
 import { deriveDisplayDelivery, DOMESTIC_COURIER_NAME } from "../../services/delivery";
 import {
   effectiveDepositStatus,
@@ -27,6 +29,9 @@ import {
   formatShortDate,
   getEffectiveBookingStatus,
   isCancellationEligible,
+  lenderInspectionDeadline,
+  rentalOperationalStatus,
+  rentalTabForBooking,
   malaysiaDateKey,
   money,
   parseMalaysiaTimestamp,
@@ -50,6 +55,10 @@ export default function RentalDetail() {
   const [cancelError, setCancelError] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
   const [isSavingAction, setIsSavingAction] = useState(false);
+  const [rentalCompleteConfirmVisible, setRentalCompleteConfirmVisible] = useState(false);
+  const [rentalCompleteSuccessVisible, setRentalCompleteSuccessVisible] = useState(false);
+  const [rentalCompleteError, setRentalCompleteError] = useState("");
+  const [isCompletingRental, setIsCompletingRental] = useState(false);
   const cancellationInProgress = useRef(false);
   const [checkInPhotos, setCheckInPhotos] = useState<string[]>([]);
   const [checkInVideos, setCheckInVideos] = useState<string[]>([]);
@@ -60,6 +69,15 @@ export default function RentalDetail() {
   const [returnNotes, setReturnNotes] = useState("");
   const [checkOutIssue, setCheckOutIssue] = useState("");
   const [rating, setRating] = useState("5");
+  const [lenderRatingChosen, setLenderRatingChosen] = useState(false);
+  const [lenderBeforePhotos, setLenderBeforePhotos] = useState<string[]>([]);
+  const [lenderBeforeVideos, setLenderBeforeVideos] = useState<string[]>([]);
+  const [lenderBeforeNotes, setLenderBeforeNotes] = useState("");
+  const [lenderBeforeIssue, setLenderBeforeIssue] = useState("");
+  const [lenderAfterPhotos, setLenderAfterPhotos] = useState<string[]>([]);
+  const [lenderAfterVideos, setLenderAfterVideos] = useState<string[]>([]);
+  const [lenderAfterNotes, setLenderAfterNotes] = useState("");
+  const [lenderAfterIssue, setLenderAfterIssue] = useState("");
   const [review, setReview] = useState("");
   const [returnNotice, setReturnNotice] = useState("");
   const [checkOutOffset, setCheckOutOffset] = useState<number | null>(null);
@@ -180,6 +198,12 @@ export default function RentalDetail() {
       setReturnPhotos([]);
       setReturnVideos([]);
       setReturnNotes("");
+      if (action.type === "conditionEvidence" && action.kind === "lender_before_delivery") {
+        setLenderBeforePhotos([]); setLenderBeforeVideos([]); setLenderBeforeNotes("");
+      }
+      if (action.type === "conditionEvidence" && action.kind === "lender_after_return") {
+        setLenderAfterPhotos([]); setLenderAfterVideos([]); setLenderAfterNotes("");
+      }
       if (action.type === "returnConfirm" && action.role === "owner") {
         setSuccessNotice(
           "Rental completed. The simulated deposit ledger was released once; no real money was transferred.",
@@ -191,7 +215,7 @@ export default function RentalDetail() {
       } else if (action.type === "conditionEvidence") {
         setSuccessNotice("Condition evidence submitted and saved.");
       } else if (action.type === "reportIssue") {
-        setSuccessNotice("Issue report submitted and saved for the lender.");
+        setSuccessNotice("Issue report submitted and saved for this rental.");
       } else if (action.type === "confirmReceived") {
         setSuccessNotice("Delivery receipt saved.");
       }
@@ -231,11 +255,50 @@ export default function RentalDetail() {
     }
   }
 
+  async function confirmRentalCompletion() {
+    if (isCompletingRental) return;
+    setIsCompletingRental(true);
+    setRentalCompleteError("");
+    try {
+      await actAndPersist({
+        type: "returnConfirm",
+        bookingId: id,
+        role: "owner",
+        notes: "Owner inspection confirmed clean — No Issue",
+      });
+      setRentalCompleteConfirmVisible(false);
+      setRentalCompleteSuccessVisible(true);
+    } catch (e) {
+      setRentalCompleteError((e as Error).message);
+    } finally {
+      setIsCompletingRental(false);
+    }
+  }
+
+  const rentalConfirmationTab = rentalTabForBooking(b, now);
   const cancelEligible = isCancellationEligible(b.start);
   const lenderCancelEligible =
     effectiveStatus === "upcoming" && b.payment === "paid" && cancelEligible;
   const existingDispute = state.disputes.find((d) => d.bookingId === b.id);
   const disputeEligible = isLenderDisputeEligible(b, now);
+  const rentalCompleteEligible =
+    ["active", "return_pending"].includes(effectiveStatus) &&
+    !!b.renterReturnConfirmedAt &&
+    !!b.lenderReturnReceivedAt &&
+    state.evidence.some((e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "lender_after_return") &&
+    !b.lenderReturnConfirmedAt &&
+    !existingDispute;
+  const rentalCompleteReason = !b.renterReturnConfirmedAt
+    ? "Rental Complete is disabled until the renter confirms return."
+    : !b.lenderReturnReceivedAt
+      ? "Confirm receipt of the returned item before completing the rental."
+      : !state.evidence.some((e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "lender_after_return")
+        ? "Submit After Return condition evidence before completing the rental."
+        : existingDispute
+          ? "An unresolved dispute must be settled before the rental can be completed."
+          : b.lenderReturnConfirmedAt
+            ? "This rental has already been completed."
+            : "";
   const reviewEligible = effectiveStatus === "completed" && isEndReached;
 
   const checkInEvidence = state.evidence.find(
@@ -250,14 +313,97 @@ export default function RentalDetail() {
   const otherReview = state.reviews.find(
     (r) => r.bookingId === id && r.authorId !== user.id,
   );
-  const isDelivered =
-    !!b.renterReceivedAt ||
-    ["active", "return_pending", "completed", "disputed"].includes(
-      effectiveStatus,
-    );
-  const isReturnEligible =
-    (effectiveStatus === "active" && isEndReached) ||
-    ["return_pending", "completed", "disputed"].includes(effectiveStatus);
+  const isDelivered = !!b.renterReceivedAt || !!checkInEvidence;
+  const isReturnEvidenceAvailable = isDelivered && effectiveStatus === "active";
+  function lenderEvidenceState(stage: "lender_before_delivery" | "lender_after_return") {
+    const booking = b!;
+    const actor = user!;
+    const before = stage === "lender_before_delivery";
+    const recorded = state.evidence.find((item) => item.bookingId === booking.id && item.kind === stage && item.authorId === actor.id);
+    const report = state.issueReports?.find((item) => item.bookingId === booking.id && item.stage === stage && item.authorId === actor.id);
+    const available = before
+      ? effectiveStatus === "upcoming" && booking.payment === "paid" && !booking.renterReceivedAt && !booking.lenderHandoverAt && !booking.lenderOutboundDispatchConfirmedAt
+      : effectiveStatus === "return_pending" && !!booking.lenderReturnReceivedAt && !booking.lenderReturnConfirmedAt;
+    const inspectionReady = available;
+    const deadline = before ? null : lenderInspectionDeadline(booking.lenderReturnReceivedAt);
+    const overdue = !before && !!deadline && now > parseMalaysiaTimestamp(deadline) && !recorded && !booking.lenderReturnConfirmedAt;
+    return { booking, actor, before, recorded, report, available, inspectionReady, deadline, overdue };
+  }
+  // Standard evidence-card structure (reference: Check-in — Before Delivery): title + status badge,
+  // helper description, requirement chips + upload blocks (via MediaPicker), condition notes, Submit
+  // Evidence. `showIssueReport` is false for the After Return stage so the caller can place the
+  // Report an Issue block after the Return Management and Renter Evidence panel instead — see
+  // renderLenderIssueReport below and its call site after that panel.
+  function renderLenderEvidence(stage: "lender_before_delivery" | "lender_after_return", opts: { showIssueReport?: boolean } = {}) {
+    const showIssueReport = opts.showIssueReport ?? true;
+    const { booking, actor, before, recorded, available, inspectionReady, deadline, overdue } = lenderEvidenceState(stage);
+    const photos = before ? lenderBeforePhotos : lenderAfterPhotos;
+    const videos = before ? lenderBeforeVideos : lenderAfterVideos;
+    const notes = before ? lenderBeforeNotes : lenderAfterNotes;
+    const title = before ? "Check-in — Before Delivery" : "Check-out — After Return";
+    // Never hide this card once the booking exists — a Completed, Cancelled or Disputed rental
+    // without a recorded checkpoint shows "No Evidence Submitted" (read-only) rather than
+    // disappearing entirely, so evidence history is never lost just because the status changed.
+    const finalized = ["completed", "cancelled", "disputed"].includes(effectiveStatus);
+    return <Card>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <Text style={s.h2}>{title}</Text>
+        <Badge
+          text={
+            recorded ? "Submitted"
+              : overdue ? "Inspection Overdue"
+              : inspectionReady ? "Inspection Required"
+              : finalized ? "No Evidence Submitted"
+              : before && !available ? "Inspection Unavailable"
+              : before ? "Pending Delivery" : "Pending Return"
+          }
+          green={!!recorded}
+        />
+      </View>
+      {recorded ? (
+        <Text style={s.caption}>{before ? "Condition evidence submitted successfully before delivery." : "Condition evidence submitted successfully after the returned item was received."}</Text>
+      ) : (
+        <Text style={s.caption}>{before ? "Document the item's condition before courier collection or handover to the renter." : "Document the returned item's condition after you confirm receipt of it."}</Text>
+      )}
+      {!before && !recorded && booking.lenderReturnReceivedAt && <Text style={s.caption}>Return received {formatMalaysiaDateTime(booking.lenderReturnReceivedAt)} MYT. Inspect within 3 Malaysia working days{deadline ? ` (estimated deadline ${formatMalaysiaDateTime(deadline)} MYT)` : "; exact holiday-adjusted deadline unavailable"}.</Text>}
+      {overdue && <Notice text="Inspection Overdue. Submit the required evidence and choose clean return or report an issue. No completion or deposit release has been assumed." />}
+      {!before && !recorded && !booking.lenderReturnReceivedAt && booking.renterReturnConfirmedAt && <Button secondary disabled={isSavingAction} onPress={() => run({ type: "confirmReturnReceipt", bookingId: booking.id })}>Confirm Returned Item Received</Button>}
+      {recorded ? <>
+        <Text style={s.caption}>Submitted {formatMalaysiaDateTime(recorded.createdAt)} MYT by {actor.name}</Text>
+        <MediaPicker disabled photos={recorded.photos || (recorded.photo ? [recorded.photo] : [])} onPhotosChange={() => {}} videos={recorded.videos || []} onVideosChange={() => {}} minPhotos={6} minVideos={1} />
+        <Text style={s.body}>{recorded.notes}</Text>
+      </> : inspectionReady ? <>
+        <MediaPicker photos={photos} onPhotosChange={before ? setLenderBeforePhotos : setLenderAfterPhotos} videos={videos} onVideosChange={before ? setLenderBeforeVideos : setLenderAfterVideos} minPhotos={6} minVideos={1} samplePrefix={before ? "lender-before-delivery" : "lender-after-return"} />
+        <Field label="Condition notes" value={notes} onChangeText={before ? setLenderBeforeNotes : setLenderAfterNotes} multiline />
+        <Button disabled={photos.length < 6 || videos.length < 1 || isSavingAction} onPress={() => run({ type: "conditionEvidence", bookingId: booking.id, kind: stage, photos, videos, notes })}>Submit Evidence</Button>
+      </> : finalized ? (
+        <Notice text="No condition evidence was submitted for this checkpoint." />
+      ) : (
+        <Notice text={before ? "Before-delivery inspection is no longer available after dispatch or handover." : "After-return inspection begins when the lender confirms actual receipt of the returned item."} />
+      )}
+      {showIssueReport && !finalized && renderLenderIssueReportFields(stage)}
+    </Card>;
+  }
+  // The "Report an Issue" sub-block shared by both lender evidence stages. Rendered inline inside
+  // renderLenderEvidence for Before Delivery, but pulled out and rendered after the Return Management
+  // and Renter Evidence panel for After Return (see JSX order below) per the required section order.
+  function renderLenderIssueReportFields(stage: "lender_before_delivery" | "lender_after_return") {
+    const { booking, actor, report, inspectionReady } = lenderEvidenceState(stage);
+    const before = stage === "lender_before_delivery";
+    const issue = before ? lenderBeforeIssue : lenderAfterIssue;
+    return <View style={{ marginTop: 14, gap: 8 }}>
+      <Text style={s.bold}>Report an Issue</Text>
+      <Field label="Issue details" value={report?.text || issue} onChangeText={before ? setLenderBeforeIssue : setLenderAfterIssue} editable={inspectionReady && !report} multiline />
+      {report ? <Text style={s.caption}>Submitted {formatMalaysiaDateTime(report.createdAt)} MYT by {actor.name}</Text> : inspectionReady ? <Button secondary disabled={!issue.trim() || isSavingAction} onPress={() => run({ type: "reportIssue", bookingId: booking.id, stage, text: issue })}>Submit Report</Button> : null}
+    </View>;
+  }
+  // Standalone Report an Issue card for the After Return stage, placed after the Return Management
+  // and Renter Evidence panel.
+  function renderLenderIssueReport(stage: "lender_before_delivery" | "lender_after_return") {
+    const { recorded, report } = lenderEvidenceState(stage);
+    if (!recorded && !report && !["upcoming", "active", "return_pending"].includes(effectiveStatus)) return null;
+    return <Card>{renderLenderIssueReportFields(stage)}</Card>;
+  }
   function renderIssueReport(
     stage: "check_in" | "check_out",
     stageAvailable: boolean,
@@ -315,19 +461,22 @@ export default function RentalDetail() {
       </View>
     );
   }
+  // One shared Report an Issue section for the renter — never duplicated per checkpoint — covers
+  // whichever renter checkpoint is currently relevant: Check-in until the item has actually been
+  // returned, Check-out once return evidence becomes available or return has been confirmed.
+  function renderRenterIssueReportSection() {
+    const stage: "check_in" | "check_out" =
+      state.issueReports?.some((r) => r.bookingId === b!.id && r.stage === "check_out")
+        ? "check_out"
+        : state.issueReports?.some((r) => r.bookingId === b!.id && r.stage === "check_in")
+          ? "check_in"
+          : isReturnEvidenceAvailable || effectiveStatus === "return_pending" || !!b!.renterReturnConfirmedAt
+            ? "check_out"
+            : "check_in";
+    const stageAvailable = stage === "check_in" ? isDelivered : isReturnEvidenceAvailable || effectiveStatus === "return_pending";
+    return <Card>{renderIssueReport(stage, stageAvailable)}</Card>;
+  }
 
-  const confirmationStatus: Record<string, string> = {
-    pending: "Pending",
-    approved: "Approved",
-    upcoming: "Confirmed",
-    confirmed: "Confirmed",
-    active: "Active",
-    return_pending: "Return pending",
-    completed: "Completed",
-    cancelled: "Cancelled",
-    rejected: "Rejected",
-    disputed: "Disputed",
-  };
 
   // Mirrors BookingSummary's lender-facing deposit status wording, for the post-cancellation
   // summary card below — always read from the booking's actual current state, never fixed text.
@@ -336,7 +485,9 @@ export default function RentalDetail() {
     secured: "Held in Escrow",
     held: "Held in Escrow",
     release_pending: "Release Pending",
-    released: "Released",
+    // This map is only ever read for the post-cancellation summary card below, so "released"
+    // here always means the cancellation's simulated deposit refund has actually completed.
+    released: "Security Deposit Refunded (Demo)",
     disputed: "Held — Dispute Under Review",
   };
 
@@ -415,17 +566,15 @@ export default function RentalDetail() {
           }}
         >
           <Text style={[s.h2, { flex: 1 }]}>Rental Confirmation</Text>
-          <Badge
-            text={confirmationStatus[effectiveStatus] || effectiveStatus}
-            green={["upcoming", "confirmed", "active", "completed"].includes(
-              effectiveStatus,
-            )}
+          <RentalStatusBadge
+            label={rentalConfirmationTab === "Payment & Transaction History" ? "Payment Required" : rentalConfirmationTab}
           />
         </View>
         <Text style={[s.bold, { fontSize: 17 }]}>{b.title}</Text>
         <Text style={s.body}>
           Renter: {renterName} · Lender: {lenderName}
         </Text>
+        {rentalOperationalStatus(b, now) && <Text style={s.caption}>{rentalOperationalStatus(b, now)}</Text>}
         <View style={[s.divider, { marginVertical: 4 }]} />
         <View
           style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}
@@ -494,6 +643,20 @@ export default function RentalDetail() {
             >
               Cancel Booking (100% Simulated Refund & RM0 Fee)
             </Button>
+            <Button
+              disabled={!rentalCompleteEligible}
+              onPress={() => {
+                setRentalCompleteError("");
+                setRentalCompleteConfirmVisible(true);
+              }}
+            >
+              Rental Complete
+            </Button>
+            {!rentalCompleteEligible && !!rentalCompleteReason && (
+              <Text style={[s.caption, { textAlign: "center" }]}>
+                {rentalCompleteReason}
+              </Text>
+            )}
             <Button
               danger
               secondary
@@ -729,6 +892,9 @@ export default function RentalDetail() {
         </Card>
       )}
 
+      {owner && <Section title="Condition Evidence" />}
+      {owner && renderLenderEvidence("lender_before_delivery", { showIssueReport: false })}
+
       {/* ACTIVE RENTAL */}
       {effectiveStatus === "active" && (
         <>
@@ -770,10 +936,12 @@ export default function RentalDetail() {
       )}
 
       {/* CONDITION EVIDENCE (SECTION 4.4 & 14.3 - NEVER EMPTY) */}
-      <Section title="Condition Evidence" />
+      {!owner && <Section title="Condition Evidence" />}
 
-      {/* STAGE 1: CHECK-IN — AFTER DELIVERY */}
-      <Card>
+      {owner && renderLenderEvidence("lender_after_return", { showIssueReport: false })}
+
+      {/* Renter's after-delivery checkpoint; lender may inspect the recorded media below. */}
+      {!owner && <Card>
         <View
           style={{
             flexDirection: "row",
@@ -784,9 +952,9 @@ export default function RentalDetail() {
         >
           <Text style={s.h2}>Check-in — After Delivery</Text>
           {checkInEvidence ? (
-            <Badge text="Check-in Recorded" green />
+            <Badge text="Evidence Submitted" green />
           ) : isDelivered ? (
-            <Badge text="Check-in Active" />
+            <Badge text="Inspection Available" />
           ) : (
             <Badge text="Pending Delivery" />
           )}
@@ -903,8 +1071,16 @@ export default function RentalDetail() {
             />
           </>
         )}
-        {renderIssueReport("check_in", isDelivered)}
-      </Card>
+      </Card>}
+
+      {owner && checkInEvidence && <Card>
+        <Text style={s.h2}>Renter After Delivery Evidence</Text>
+        <Badge text="Evidence Submitted" green />
+        <Text style={s.caption}>Submitted {formatMalaysiaDateTime(checkInEvidence.createdAt)} MYT by {state.profiles.find((p) => p.id === checkInEvidence.authorId)?.name || "Renter"}</Text>
+        <MediaPicker disabled photos={checkInEvidence.photos || (checkInEvidence.photo ? [checkInEvidence.photo] : [])} onPhotosChange={() => {}} videos={checkInEvidence.videos || []} onVideosChange={() => {}} minPhotos={6} minVideos={1} />
+        <Text style={s.body}>{checkInEvidence.notes}</Text>
+        {state.issueReports?.filter((report) => report.bookingId === b.id && report.stage === "check_in").map((report) => <Text key={report.id} style={s.caption}>Renter issue: {report.text} · {formatMalaysiaDateTime(report.createdAt)} MYT</Text>)}
+      </Card>}
 
       {/* STAGE 2: CHECK-OUT — BEFORE RETURN */}
       <Card
@@ -923,17 +1099,20 @@ export default function RentalDetail() {
             marginBottom: 6,
           }}
         >
-          <Text style={s.h2}>Check-out — Before Return</Text>
-          {effectiveStatus === "completed" ? (
+          <Text style={s.h2}>{owner ? "Return Management and Renter Evidence" : "Check-out — Before Return"}</Text>
+          {owner ? (
+            <Badge text={b.lenderReturnConfirmedAt ? "Inspection Completed" : checkOutEvidence ? "Evidence Submitted" : "Pending Return"} green={!!b.lenderReturnConfirmedAt} />
+          ) : effectiveStatus === "completed" ? (
             <Badge text="Settled — No Issues" green />
           ) : checkOutEvidence || b.renterReturnConfirmedAt ? (
             <Badge text="Return Confirmed" />
-          ) : isReturnEligible ? (
-            <Badge text="Return Active" />
+          ) : isReturnEvidenceAvailable ? (
+            <Badge text="Inspection Available" />
           ) : (
             <Badge text="Pending Active Rental" />
           )}
         </View>
+        {owner && <Text style={s.caption}>Review the renter's return evidence below and confirm a clean return once your own After Return inspection is submitted.</Text>}
 
         {!!returnNotice && (
           <View style={{ marginBottom: 10 }}>
@@ -941,10 +1120,10 @@ export default function RentalDetail() {
           </View>
         )}
 
-        {!isReturnEligible ? (
+        {!owner && !isReturnEvidenceAvailable && !checkOutEvidence && !b.renterReturnConfirmedAt ? (
           <>
             <Text style={s.caption}>
-              {`Check-out condition evidence will be available from ${formatMalaysiaDateTime(endMs)}.`}
+              Check-out condition evidence becomes available during the active rental after delivery.
             </Text>
             <MediaPicker
               disabled
@@ -955,11 +1134,10 @@ export default function RentalDetail() {
               minPhotos={6}
               minVideos={1}
             />
-            {renderIssueReport("check_out", false)}
           </>
         ) : !owner ? (
           <>
-            {b.renterReturnConfirmedAt ? (
+            {b.renterReturnConfirmedAt || checkOutEvidence ? (
               <>
                 <View style={{ gap: 8, marginTop: 4 }}>
                   <View
@@ -972,14 +1150,14 @@ export default function RentalDetail() {
                     }}
                   >
                     <Text style={[s.bold, { color: "#065F46" }]}>
-                      ✓ Return Confirmed · Awaiting Lender Review
+                      {b.renterReturnConfirmedAt ? "✓ Return Confirmed · Awaiting Lender Review" : "✓ Evidence Submitted · Return Not Yet Confirmed"}
                     </Text>
                     <Text
                       style={[s.caption, { color: "#047857", marginTop: 2 }]}
                     >
-                      Your return evidence has been submitted. Your simulated
-                      security deposit remains held until the lender completes
-                      the return inspection.
+                      {b.renterReturnConfirmedAt
+                        ? "Your return evidence has been submitted. Your simulated security deposit remains held until the lender completes the return inspection."
+                        : "Your condition evidence is saved. Confirm Return when the scheduled rental end is reached and the item is handed to the return courier."}
                     </Text>
                   </View>
                   {checkOutEvidence && (
@@ -1031,10 +1209,7 @@ export default function RentalDetail() {
                     </>
                   )}
                 </View>
-                {renderIssueReport(
-                  "check_out",
-                  isReturnEligible && isEndReached,
-                )}
+                {!b.renterReturnConfirmedAt && (isEndReached ? <Button disabled={isSavingAction} onPress={() => run({ type: "returnConfirm", bookingId: id, role: "renter" })}>Confirm Return</Button> : <Notice text={`Confirm Return becomes available at ${formatMalaysiaDateTime(endMs)}. Your evidence is already saved.`} />)}
               </>
             ) : (
               <>
@@ -1058,11 +1233,8 @@ export default function RentalDetail() {
                   multiline
                   placeholder="Confirm all accessories are included and condition is clean."
                 />
-                {renderIssueReport(
-                  "check_out",
-                  isReturnEligible && isEndReached,
-                )}
-                <Button
+                <Button disabled={returnPhotos.length < 6 || returnVideos.length < 1 || isSavingAction} onPress={() => run({ type: "conditionEvidence", bookingId: id, kind: "check_out", photos: returnPhotos, videos: returnVideos, notes: returnNotes })}>Submit Check-out Evidence</Button>
+                {isEndReached && <Button
                   disabled={returnPhotos.length < 6 || returnVideos.length < 1}
                   onPress={() =>
                     run({
@@ -1076,7 +1248,7 @@ export default function RentalDetail() {
                   }
                 >
                   Confirm Return
-                </Button>
+                </Button>}
               </>
             )}
           </>
@@ -1134,27 +1306,19 @@ export default function RentalDetail() {
                   )?.name || "Renter"}
                 </Text>
               </View>
-            ) : (
-              <>
-                <Notice text="Waiting for renter to upload return condition evidence and submit check-out confirmation." />
-                <MediaPicker
-                  disabled
-                  photos={[]}
-                  onPhotosChange={() => {}}
-                  videos={[]}
-                  onVideosChange={() => {}}
-                  minPhotos={6}
-                  minVideos={1}
-                />
-              </>
-            )}
+            ) : !b.lenderReturnConfirmedAt ? (
+              // Only a genuinely outstanding wait — never shown once the lender has already
+              // confirmed a clean return (Inspection Completed), even if no renter check-out
+              // media happens to be on record for this booking.
+              <Notice text="Waiting for renter to upload return condition evidence and submit check-out confirmation." />
+            ) : null}
 
-            {renderIssueReport("check_out", isReturnEligible && isEndReached)}
+            {state.issueReports?.filter((report) => report.bookingId === b.id && report.stage === "check_out").map((report) => <Text key={report.id} style={s.caption}>Renter issue: {report.text} · {formatMalaysiaDateTime(report.createdAt)} MYT</Text>)}
 
             {["active", "return_pending"].includes(effectiveStatus) && (
               <View style={{ marginTop: 14, gap: 10 }}>
                 <Button
-                  disabled={isSavingAction || !b.renterReturnConfirmedAt}
+                  disabled={isSavingAction || !b.renterReturnConfirmedAt || !b.lenderReturnReceivedAt || !state.evidence.some((e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "lender_after_return")}
                   onPress={() =>
                     run({
                       type: "returnConfirm",
@@ -1164,14 +1328,15 @@ export default function RentalDetail() {
                     })
                   }
                 >
-                  No Issue – End Rental
+                  Confirm Clean Return
                 </Button>
                 {!b.renterReturnConfirmedAt && (
                   <Text style={[s.caption, { textAlign: "center" }]}>
-                    "No Issue – End Rental" is disabled until renter completes
+                    Clean return confirmation is disabled until renter completes
                     check-out and confirms return.
                   </Text>
                 )}
+                {b.renterReturnConfirmedAt && (!b.lenderReturnReceivedAt || !state.evidence.some((e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "lender_after_return")) && <Text style={s.caption}>Confirm receipt and submit After Return evidence before confirming a clean return.</Text>}
               </View>
             )}
 
@@ -1198,6 +1363,22 @@ export default function RentalDetail() {
           </>
         )}
       </Card>
+
+      {/* One Report an Issue section for the lender — never duplicated per checkpoint — sits after
+          the Return Management and Renter Evidence panel above, per the required section order.
+          It covers whichever lender checkpoint is currently relevant: Before Delivery until the
+          item has actually been returned, After Return once the renter has confirmed return. */}
+      {owner && renderLenderIssueReport(
+        state.issueReports?.some((r) => r.bookingId === b.id && r.stage === "lender_after_return")
+          ? "lender_after_return"
+          : state.issueReports?.some((r) => r.bookingId === b.id && r.stage === "lender_before_delivery")
+            ? "lender_before_delivery"
+            : effectiveStatus === "return_pending" ? "lender_after_return" : "lender_before_delivery",
+      )}
+
+      {/* One Report an Issue section for the renter — never duplicated per checkpoint — sits
+          after both Condition Evidence cards. */}
+      {!owner && renderRenterIssueReportSection()}
 
       {/* DISPUTE RESOLUTION FIXTURES (PHASE 5) */}
       {effectiveStatus === "disputed" && (
@@ -1316,92 +1497,13 @@ export default function RentalDetail() {
           View Delivery Receipt
         </Button>
       )}
-      {/* ACTIVITY TIMELINE — derived from existing booking/dispute timestamps, no new storage.
-          Cross-state (Domestic Courier) history shows dates only, never a specific hour/minute —
-          courier transit was never scheduled to an exact time, so showing one would misrepresent
-          it as confirmed. Same-state (GrabExpress) history is unchanged and keeps full date+time.
-          The underlying timestamps are untouched; only this display formatting differs. */}
+      {/* ACTIVITY TIMELINE — a consistent two-column checklist (see components/ActivityTimeline),
+          derived entirely from existing booking/dispute timestamps, no new storage. The checklist
+          contents switch by effective status (standard / cancelled / disputed); the visual design
+          is identical across all statuses. */}
       <Section title="Activity Timeline" />
       <Card>
-        {(() => {
-          const crossState = displayDelivery.method === "Domestic Courier (Demo)";
-          // Cross-state bookings that reached a normal (non-cancelled, non-disputed) lifecycle use
-          // a fixed, named 11-step sequence so renters/lenders see every stage the courier process
-          // is supposed to go through — showing "Not Recorded" for any step this demo never
-          // actually captured, rather than inventing a timestamp or silently hiding the step.
-          // Cancelled/disputed bookings fall back to the general-purpose timeline below, which
-          // already handles those cases correctly.
-          if (crossState && b.status !== "cancelled" && b.status !== "rejected" && !existingDispute) {
-            const crossStateEvents: { label: string; at: string | null }[] = [
-              { label: "Booking confirmed", at: b.createdAt },
-              { label: "Payment completed (Demo)", at: b.payment === "paid" || b.payment === "refunded" ? b.createdAt : null },
-              { label: "Item dispatched by lender", at: b.lenderOutboundDispatchConfirmedAt || null },
-              { label: "Item delivered to renter", at: b.renterReceivedAt || null },
-              { label: "Rental started", at: b.activationTimestamp || null },
-              { label: "Rental period ended", at: parseMalaysiaTimestamp(b.end) <= Date.now() ? b.end : null },
-              { label: "Item handed to return courier", at: b.deliveryDemo?.returnDropoffConfirmedAt || null },
-              { label: "Item received by lender", at: b.actualReturnTimestamp || null },
-              { label: "Lender confirmed clean return", at: b.lenderReturnConfirmedAt || null },
-              { label: "Security deposit released", at: b.deposit === "released" ? (b.lenderReturnConfirmedAt || b.actualReturnTimestamp || null) : null },
-              { label: "Rental completed", at: b.status === "completed" ? (b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.end) : null },
-            ];
-            return crossStateEvents.map((event, index) => (
-              <View key={`${event.label}-${index}`} style={styles.timelineRow}>
-                <View style={styles.timelineDot} />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.bold}>{event.label}</Text>
-                  <Text style={s.caption}>{event.at ? formatShortDate(malaysiaDateKey(event.at)) : "Not Recorded"}</Text>
-                </View>
-              </View>
-            ));
-          }
-          const events: { label: string; at: string }[] = [];
-          events.push({ label: "Booking confirmed", at: b.createdAt });
-          if (b.payment === "paid" || b.payment === "refunded") events.push({ label: "Payment completed (Demo)", at: b.createdAt });
-          if (b.lenderHandoverAt) events.push({ label: "Item collected", at: b.lenderHandoverAt });
-          if (b.activationTimestamp) events.push({ label: "Rental started", at: b.activationTimestamp });
-          if (b.actualReturnTimestamp) events.push({ label: "Item returned", at: b.actualReturnTimestamp });
-          if (b.renterReturnConfirmedAt) events.push({ label: "Renter confirmed return", at: b.renterReturnConfirmedAt });
-          if (existingDispute) {
-            events.push({ label: "Lender reported an issue", at: existingDispute.createdAt });
-            events.push({ label: "Renter submitted a response", at: existingDispute.createdAt });
-            events.push({ label: "Case under review (Demo)", at: existingDispute.createdAt });
-          } else if (b.lenderReturnConfirmedAt) {
-            events.push({ label: "Lender confirmed clean return", at: b.lenderReturnConfirmedAt });
-          }
-          // A cancelled booking's deposit release is never dated from the original scheduled
-          // rental end (b.end) — that's often weeks or months after the cancellation itself.
-          // It's dated from the computed release deadline (cancelledDepositReleaseDeadline),
-          // stored on depositReleasedAt, and the event only claims "released" once that deadline
-          // has actually passed (effectiveDepositStatus) rather than assuming an instant release.
-          if (!existingDispute && b.status !== "cancelled" && b.status !== "rejected" && b.deposit === "released") {
-            events.push({ label: "Security deposit released", at: b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.end });
-          }
-          if (b.status === "completed") events.push({ label: "Rental completed", at: b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.end });
-          if (b.status === "cancelled") {
-            events.push({ label: `Booking cancelled${b.cancelledById === b.renterId ? " by renter" : " by lender"}`, at: b.cancelledAt || b.createdAt });
-            if (!existingDispute && b.depositReleasedAt) {
-              const released = effectiveDepositStatus(b) === "released";
-              events.push({
-                label: released ? "Security deposit released (Demo)" : "Security deposit release scheduled (Demo)",
-                at: b.depositReleasedAt,
-              });
-            } else if (!existingDispute && b.deposit === "required") {
-              events.push({ label: "Deposit not charged — checkout was cancelled before payment", at: b.cancelledAt || b.createdAt });
-            }
-          }
-          if (b.payment === "refunded") events.push({ label: "Payment refunded (Demo)", at: b.cancelledAt || b.createdAt });
-          events.sort((x, y) => x.at.localeCompare(y.at));
-          return events.map((event, index) => (
-            <View key={`${event.label}-${index}`} style={styles.timelineRow}>
-              <View style={styles.timelineDot} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.bold}>{event.label}</Text>
-                <Text style={s.caption}>{crossState ? formatShortDate(malaysiaDateKey(event.at)) : formatMalaysiaDateTime(event.at)}</Text>
-              </View>
-            </View>
-          ));
-        })()}
+        <ActivityTimeline items={buildActivityTimeline(b, existingDispute, Date.now(), state.evidence)} />
         {existingDispute && (
           <Pressable
             accessibilityRole="button"
@@ -1414,8 +1516,8 @@ export default function RentalDetail() {
         )}
       </Card>
 
-      {/* REVIEWS — HOW DID IT GO? */}
-      <>
+      {/* REVIEWS — HOW DID IT GO? Renter-only: lenders don't submit or see a review prompt here. */}
+      {!owner && <>
         <Section title="How did it go?" />
         {!myReview && !reviewEligible && (
           <Notice
@@ -1453,12 +1555,12 @@ export default function RentalDetail() {
           <Card>
             <Text style={[s.caption, { marginBottom: 8 }]}>
               {owner
-                ? `Rate your rental experience with ${other?.name || "the renter"}.`
+                ? `Rate your experience with ${other?.name || "the renter"}.`
                 : `Rate your rental experience with ${other?.name || "the lender"}.`}
             </Text>
             <View style={{ flexDirection: "row", gap: 10, marginVertical: 8 }}>
               {["1", "2", "3", "4", "5"].map((val) => {
-                const isSelected = rating === val;
+                const isSelected = rating === val && (!owner || lenderRatingChosen);
                 return (
                   <TouchableOpacity
                     key={val}
@@ -1466,7 +1568,7 @@ export default function RentalDetail() {
                     accessibilityLabel={`${val} star rating`}
                     accessibilityState={{ disabled: !reviewEligible }}
                     disabled={!reviewEligible}
-                    onPress={() => setRating(val)}
+                    onPress={() => { setRating(val); if (owner) setLenderRatingChosen(true); }}
                     style={{
                       width: 44,
                       height: 44,
@@ -1506,7 +1608,7 @@ export default function RentalDetail() {
               }
             />
             <Button
-              disabled={!reviewEligible || isSavingAction}
+              disabled={!reviewEligible || (owner && !lenderRatingChosen) || isSavingAction}
               onPress={() =>
                 run({
                   type: "review",
@@ -1516,7 +1618,7 @@ export default function RentalDetail() {
                 })
               }
             >
-              Leave {rating}-star review
+              {owner ? `Leave a review for ${other?.name || "the renter"}` : `Leave ${rating}-star review`}
             </Button>
           </Card>
         )}
@@ -1551,7 +1653,7 @@ export default function RentalDetail() {
             </Text>
           </Card>
         )}
-      </>
+      </>}
       <Modal
         visible={cancelConfirmationVisible}
         transparent
@@ -1591,6 +1693,66 @@ export default function RentalDetail() {
           </View>
         </View>
       </Modal>
+      <Modal
+        visible={rentalCompleteConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isCompletingRental) setRentalCompleteConfirmVisible(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            accessibilityRole="alert"
+            accessibilityViewIsModal
+            style={styles.modalCard}
+          >
+            <Text style={s.h2}>Complete This Rental?</Text>
+            <Text style={s.body}>
+              Please confirm that the item has been returned and all required
+              inspections have been completed. Once confirmed, the rental will
+              be marked as completed.
+            </Text>
+            {!!rentalCompleteError && <Notice text={rentalCompleteError} error />}
+            <Button
+              disabled={isCompletingRental}
+              onPress={confirmRentalCompletion}
+            >
+              {isCompletingRental ? "Completing…" : "Confirm Completion"}
+            </Button>
+            <Button
+              secondary
+              disabled={isCompletingRental}
+              onPress={() => setRentalCompleteConfirmVisible(false)}
+            >
+              Cancel
+            </Button>
+          </View>
+        </View>
+      </Modal>
+      <Modal
+        visible={rentalCompleteSuccessVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRentalCompleteSuccessVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            accessibilityRole="alert"
+            accessibilityViewIsModal
+            style={styles.modalCard}
+          >
+            <Text style={s.h2}>Rental Completed Successfully</Text>
+            <Text style={s.body}>
+              This rental has been completed successfully. The rental status
+              and transaction history have been updated.
+            </Text>
+            <Button onPress={() => setRentalCompleteSuccessVisible(false)}>
+              Close
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -1610,17 +1772,5 @@ const styles = {
     padding: 20,
     borderRadius: 18,
     backgroundColor: "#FFFFFF",
-  },
-  timelineRow: {
-    flexDirection: "row" as const,
-    gap: 10,
-    paddingVertical: 6,
-  },
-  timelineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.blue,
-    marginTop: 6,
   },
 };

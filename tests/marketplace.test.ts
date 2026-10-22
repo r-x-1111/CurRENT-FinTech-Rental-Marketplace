@@ -23,7 +23,9 @@ import {
   cancelledDepositReleaseDeadline,
   dateAfter,
   demoSlotAvailable,
+  depositReleaseDeadline,
   effectiveDepositStatus,
+  isDepositReleaseOverdue,
   formatMalaysiaDateTime,
   formatScheduledReturnPickup,
   calculateProtectionBasePremium,
@@ -42,6 +44,7 @@ import {
   toMalaysiaUtcTimestamp,
 } from "../services/booking";
 import { calculateOwnerPayout } from "../services/deposit";
+import { withoutRetiredDemoBookings } from "../services/catalogue";
 import { calculateChargeableWeightKg, calculateVolumetricWeightKg, crossStateDeliveryEligibility, deriveDeliveryRefundStatus, deriveDisplayDelivery, DOMESTIC_COURIER_NAME, eligibleDeliveryVehicles, estimatedCourierTransitDays, hasReliableCourierTransitEstimate, isDispatchDateFeasible, quoteAutomaticDomesticCourier, quoteAutomaticVehicleDelivery, quoteDemoDelivery, recommendDispatchDate, recommendsFragileHandling, selectDeliveryVehicle, selectListingDeliveryVehicle } from "../services/delivery";
 import { estimateAutomaticDelivery, resolvePostcodeCoordinate } from "../services/geo";
 import { repairDemoDeliveryPayments } from "../services/repairDemoDeliveryPayments";
@@ -67,11 +70,11 @@ import {
   startDemoWorkspaceSession,
 } from "../services/demoWorkspaceSessions";
 
-test("paymentMethodLabel shows FPX wording without changing the stored payment method value", () => {
-  assert.equal(paymentMethodLabel("Demo FPX"), "FPX (Demo)");
-  assert.equal(paymentMethodLabel("FPX"), "FPX");
+test("paymentMethodLabel shows Online Payment (Demo) wording without changing the stored payment method value", () => {
+  assert.equal(paymentMethodLabel("Demo FPX"), "Online Payment (Demo)");
+  assert.equal(paymentMethodLabel("FPX"), "Online Payment (Demo)");
   assert.equal(paymentMethodLabel("BNPL (Demo)"), "BNPL (Demo)");
-  assert.equal(paymentMethodLabel(undefined), "FPX");
+  assert.equal(paymentMethodLabel(undefined), "Online Payment (Demo)");
 });
 
 test("message rental links select the tab for each booking condition", () => {
@@ -81,7 +84,7 @@ test("message rental links select the tab for each booking condition", () => {
   assert.equal(rentalTabForBooking({ ...withStatus("upcoming"), start: "2026-10-17", end: "2026-10-19" }, now), "Upcoming");
   assert.equal(rentalTabForBooking({ ...withStatus("active"), end: "2026-10-17" }, now), "Active");
   assert.equal(rentalTabForBooking({ ...withStatus("active"), end: "2026-10-15", renterReturnConfirmedAt: null }, now), "Return Due");
-  assert.equal(rentalTabForBooking(withStatus("return_pending"), now), "Active");
+  assert.equal(rentalTabForBooking(withStatus("return_pending"), now), "Return Due");
   assert.equal(rentalTabForBooking(withStatus("completed"), now), "Completed");
   assert.equal(rentalTabForBooking(withStatus("cancelled"), now), "Cancelled");
   assert.equal(rentalTabForBooking(withStatus("disputed"), now), "Disputed");
@@ -1106,13 +1109,16 @@ test("Payment & Transaction History: grouping by booking ID, subtotal/grand tota
   assert.equal(noDeliveryFigures.grandTotal, noDeliveryFigures.totals.subtotal);
 
   // The Luxury Watch cancellation includes the original prepaid delivery and a separate refund.
+  // Its cancellation deadline (5 Malaysia working days from 5 Oct 2026) has long since passed
+  // with no unresolved dispute, so its deposit auto-completes as released/refunded — the fee
+  // refund and the deposit refund are both reflected in refundsTotal, leaving no net balance.
   const cancelledWatch = renterBookings.find((b) => b.id === "demo-booking-cancelled-1")!;
   assert.ok(cancelledWatch, "Expected the seeded Luxury Watch cancellation booking");
   assert.equal(cancelledWatch.title, "Luxury Watch");
   const cancelledWatchFigures = ledgerFigures(cancelledWatch);
   assert.equal(cancelledWatchFigures.totals.subtotal, 810);
   assert.equal(cancelledWatchFigures.grandTotal, 810 + cancelledWatch.deliveryDemo!.fee);
-  assert.equal(cancelledWatchFigures.refundsTotal, 810 + cancelledWatch.deliveryDemo!.fee);
+  assert.equal(cancelledWatchFigures.refundsTotal, 210 + cancelledWatch.quote.deposit + cancelledWatch.deliveryDemo!.fee);
   assert.equal(cancelledWatchFigures.netCost, 0);
 
   // Summary tiles: "Total paid" and "Refunded" sum cleanly across every card, and "Deposits held
@@ -1132,6 +1138,20 @@ test("Payment & Transaction History: grouping by booking ID, subtotal/grand tota
   const heldBooking = renterBookings.find((b) => b.deposit === "held" && b.status !== "cancelled" && b.deliveryDemo?.status !== "refunded_demo");
   assert.ok(heldBooking, "Expected at least one seeded booking with a currently held deposit");
   assert.equal(ledgerFigures(heldBooking!).refundsTotal, 0);
+
+  // The Luxury Watch cancellation's RAW stored deposit field stays "release_pending" (the
+  // historical fact that it was once held/scheduled is preserved), but its EFFECTIVE status —
+  // and therefore the ledger — report it as released/refunded now that its deadline has passed.
+  assert.equal(cancelledWatch.deposit, "release_pending");
+  assert.equal(effectiveDepositStatus(cancelledWatch), "released");
+
+  // A cancellation whose deposit release deadline has NOT yet passed must still report the fee
+  // refund alone — the deposit remains a distinct "release_pending" record, never prematurely
+  // folded into Refunded just because the rental fee was already refunded.
+  const notYetDueCancellation = { ...cancelledWatch, cancelledAt: "2026-10-21T11:00:00Z", depositReleasedAt: cancelledDepositReleaseDeadline("2026-10-21T11:00:00Z") };
+  const notYetDueFigures = ledgerFigures(notYetDueCancellation);
+  assert.equal(notYetDueFigures.refundsTotal, 210 + cancelledWatch.deliveryDemo!.fee,
+    "Refunded total must equal the fee + delivery refund only while the deposit deadline hasn't passed yet");
 });
 
 test("manually typed Malaysian addresses (Petaling Jaya, Mont Kiara, George Town, Johor Bahru) all resolve a two-way delivery estimate from postcode alone", () => {
@@ -1297,7 +1317,7 @@ test("Domestic Courier (Demo) scheduling: CurRENT recommends dates, the lender c
   booking = j.state.bookings.find((b) => b.id === "courier-schedule")!;
   assert.ok(booking.deliveryDemo?.returnDropoffConfirmedAt, "Expected the courier drop-off to be stamped");
   assert.ok(booking.deliveryDemo?.returnTrackingRef);
-  assert.equal(booking.deposit, "release_pending", "Deposit stays held, not released, until the lender also confirms");
+  assert.equal(booking.deposit, "held", "Deposit stays held until clean-return confirmation");
 
   // Drop-off arrangement (outbound leg) on a second booking.
   j.login("demo-renter");
@@ -2592,6 +2612,41 @@ test("renter issue reports remain stage-specific, visible to lenders, and retry-
   assert.throws(() => transition(state, checkInReport), /Only the renter/);
 });
 
+test("lender condition checkpoints are booking-scoped, timed by actions, and recorded once", () => {
+  let state = createSeed("admin_demo");
+  const booking = state.bookings.find((item) => item.status === "upcoming" && item.payment === "paid" && !item.lenderOutboundDispatchConfirmedAt)!;
+  const otherBooking = state.bookings.find((item) => item.id !== booking.id)!;
+  const photos = Array.from({ length: 6 }, (_, i) => `/lender-${i}.jpg`);
+  const videos = ["/lender.mp4"];
+  state = transition(state, { type: "login", userId: booking.ownerId });
+  const before = { type: "conditionEvidence" as const, bookingId: booking.id, kind: "lender_before_delivery" as const, photos, videos };
+  state = transition(state, before);
+  const recorded = state.evidence.find((item) => item.bookingId === booking.id && item.kind === before.kind && item.authorId === booking.ownerId);
+  assert.ok(recorded?.createdAt);
+  assert.equal(state.evidence.filter((item) => item.bookingId === otherBooking.id && item.kind === before.kind).length, 0);
+  assert.throws(() => transition(state, before), /already submitted/);
+  assert.throws(() => transition(state, { ...before, kind: "lender_after_return" }), /after confirmed lender receipt/);
+  state.bookings.find((item) => item.id === booking.id)!.status = "active";
+  state = transition(state, { type: "login", userId: booking.renterId });
+  assert.throws(() => transition(state, { ...before, kind: "lender_before_delivery" }), /Only the lender/);
+  assert.throws(() => transition(state, { ...before, kind: "check_in" }), /must be delivered/);
+  state.bookings.find((item) => item.id === booking.id)!.renterReceivedAt = new Date().toISOString();
+  state = transition(state, { ...before, kind: "check_in" });
+  state = transition(state, { ...before, kind: "check_out" });
+  assert.deepEqual(
+    state.evidence.filter((item) => item.bookingId === booking.id && item.kind !== "dispute").map((item) => item.kind),
+    ["lender_before_delivery", "check_in", "check_out"],
+  );
+  state.bookings.find((item) => item.id === booking.id)!.status = "return_pending";
+  state.bookings.find((item) => item.id === booking.id)!.renterReturnConfirmedAt = new Date().toISOString();
+  state = transition(state, { type: "login", userId: booking.ownerId });
+  assert.throws(() => transition(state, { ...before, kind: "lender_after_return" }), /after confirmed lender receipt/);
+  state = transition(state, { type: "confirmReturnReceipt", bookingId: booking.id });
+  state = transition(state, { ...before, kind: "lender_after_return" });
+  assert.ok(state.evidence.some((item) => item.bookingId === booking.id && item.kind === "lender_after_return" && item.authorId === booking.ownerId));
+  assert.equal(state.evidence.filter((item) => item.bookingId === booking.id && item.kind !== "dispute").length, 4);
+});
+
 test("issue comment boxes follow delivery/end-stage access in Normal and Demo rentals", () => {
   for (const _mode of ["normal", "admin_demo"] as const) {
     for (const stage of ["check_in", "check_out"] as const) {
@@ -2721,6 +2776,7 @@ test("issue report drafts can be prepared while pending but submitted only in th
           ? {
               ...item,
               status: "return_pending",
+              renterReceivedAt: new Date(Date.now() - 86_400_000).toISOString(),
               start: new Date(Date.now() - 86_400_000).toISOString(),
               end: new Date(Date.now() - 1).toISOString(),
               effectiveReturnDeadline: undefined,
@@ -2951,7 +3007,7 @@ test("scheduled start derives Active independently of delivery receipt or later 
   assert.equal(booking.end, end);
 });
 
-test("check-out media and return confirmation stay locked until the final scheduled end", () => {
+test("check-out evidence can precede handover while return confirmation keeps its scheduled-end gate", () => {
   let state = createSeed("admin_demo");
   const initialBooking = state.bookings.find(
     (item) => item.id === "demo-booking-active-1",
@@ -2980,25 +3036,25 @@ test("check-out media and return confirmation stay locked until the final schedu
     photos: evidence.photos,
     videos: evidence.videos,
   };
-  assert.throws(() => transition(state, evidence), /scheduled rental end/);
+  state = transition(state, evidence);
+  assert.equal(state.evidence.filter((item) => item.bookingId === booking.id && item.kind === "check_out" && item.authorId === booking.renterId).length, 1);
   assert.throws(() => transition(state, returnAction), /scheduled rental end/);
-  assert.throws(
-    () =>
-      transition(state, {
+  state = transition(state, {
         type: "reportIssue",
         bookingId: booking.id,
         stage: "check_out",
         text: "A late-stage issue.",
-      }),
-    /relevant active rental stage/,
-  );
+      });
+  assert.ok(state.issueReports?.some((report) => report.bookingId === booking.id && report.stage === "check_out"));
 
-  booking.end = new Date(Date.now() - 1).toISOString();
-  booking.scheduledReturn = new Date(Date.now() + 86_400_000).toISOString();
-  booking.effectiveReturnDeadline = new Date(
+  const currentBooking = state.bookings.find((item) => item.id === booking.id)!;
+  currentBooking.end = new Date(Date.now() - 1).toISOString();
+  currentBooking.scheduledReturn = new Date(Date.now() + 86_400_000).toISOString();
+  currentBooking.effectiveReturnDeadline = new Date(
     Date.now() + 86_400_000,
   ).toISOString();
   state = transition(state, returnAction);
+  assert.equal(state.evidence.filter((item) => item.bookingId === booking.id && item.kind === "check_out" && item.authorId === booking.renterId).length, 1);
   assert.equal(
     state.bookings.find((item) => item.id === booking.id)?.status,
     "return_pending",
@@ -3129,10 +3185,20 @@ test("Cancelled-booking deposit release: 5 Malaysia working days from cancellati
   // effectiveDepositStatus only reports "released" once the computed deadline has actually
   // passed — a booking cancelled "now" must not show as released immediately.
   const now = Date.parse("2026-10-19T10:00:00Z");
-  const justCancelled = { deposit: "release_pending" as const, depositReleasedAt: cancelledDepositReleaseDeadline("2026-10-19T09:00:00Z") };
+  const justCancelled = { status: "cancelled" as const, deposit: "release_pending" as const, depositReleasedAt: cancelledDepositReleaseDeadline("2026-10-19T09:00:00Z") };
   assert.equal(effectiveDepositStatus(justCancelled, now), "release_pending");
-  const longSinceCancelled = { deposit: "release_pending" as const, depositReleasedAt: "2026-10-01T09:00:00Z" };
+  // Once a cancelled booking's deadline has genuinely passed with no unresolved dispute, the
+  // simulated refund completes automatically — no manual correction needed as the demo "today"
+  // advances past each scheduled release date.
+  const longSinceCancelled = { status: "cancelled" as const, deposit: "release_pending" as const, depositReleasedAt: "2026-10-01T09:00:00Z" };
   assert.equal(effectiveDepositStatus(longSinceCancelled, now), "released");
+  // An unresolved dispute still blocks the automatic completion even past the deadline.
+  assert.equal(effectiveDepositStatus(longSinceCancelled, now, true), "release_pending");
+  // The same overdue deadline on a NON-cancelled booking (e.g. a normal rental's post-completion
+  // release) must stay manual — only a cancellation's refund is eligible for auto-completion.
+  const completedOverdue = { status: "completed" as const, deposit: "release_pending" as const, depositReleasedAt: "2026-10-01T09:00:00Z" };
+  assert.equal(effectiveDepositStatus(completedOverdue, now), "release_pending");
+  assert.equal(effectiveDepositStatus({ deposit: "released" as const }, now), "released");
   // Deposit states unrelated to cancellation pass through unchanged.
   assert.equal(effectiveDepositStatus({ deposit: "held" as const }, now), "held");
   assert.equal(effectiveDepositStatus({ deposit: "disputed" as const }, now), "disputed");
@@ -3169,6 +3235,69 @@ test("Cancelled-booking deposit release: 5 Malaysia working days from cancellati
     assert.ok(daysFromCancellation <= 9, `${booking.id}: release deadline is ${daysFromCancellation.toFixed(1)} days after cancellation — expected at most ~9 (5 working days plus a weekend)`);
     assert.notEqual(booking.depositReleasedAt, booking.end, `${booking.id}: release deadline must not equal the original scheduled rental end date`);
   }
+});
+
+test("Completed-rental deposit release: same 5-working-day window, triggered by completion not the scheduled end, and overdue releases are flagged rather than silently kept held or hidden", () => {
+  // Same working-day arithmetic as a cancellation release, just triggered by the clean-return
+  // completion instant instead of the cancellation instant.
+  assert.equal(depositReleaseDeadline("2026-10-19T09:00:00Z"), cancelledDepositReleaseDeadline("2026-10-19T09:00:00Z"));
+
+  let state = createSeed("admin_demo");
+  const booking = state.bookings.find((b) => b.id === "booking-return" || b.id === "demo-booking-return-due-1") ||
+    state.bookings.find((b) => b.renterId === "demo-renter" && b.status === "return_pending")!;
+  state.bookings.find((b) => b.id === booking.id)!.renterReturnConfirmedAt = new Date().toISOString();
+  state = transition(state, { type: "login", userId: booking.ownerId });
+  state = transition(state, { type: "confirmReturnReceipt", bookingId: booking.id });
+  state = transition(state, {
+    type: "conditionEvidence", bookingId: booking.id, kind: "lender_after_return",
+    photos: ["/p1", "/p2", "/p3", "/p4", "/p5", "/p6"], videos: ["/v1"],
+  });
+  state = transition(state, { type: "returnConfirm", bookingId: booking.id, role: "owner" });
+  const completed = state.bookings.find((b) => b.id === booking.id)!;
+  assert.equal(completed.status, "completed");
+  assert.equal(completed.deposit, "release_pending");
+  assert.ok(completed.completedAt);
+  assert.ok(completed.depositReleasedAt, "Completion must stamp a computed release deadline");
+  assert.equal(completed.depositReleasedAt, depositReleaseDeadline(completed.completedAt!));
+
+  // Not yet overdue right after completion.
+  assert.equal(isDepositReleaseOverdue(completed, parseMalaysiaTimestamp(completed.completedAt!)), false);
+  // Overdue once the 5-working-day deadline has actually passed without an actual release.
+  const wellPastDeadline = parseMalaysiaTimestamp(completed.depositReleasedAt!) + 10 * 86400000;
+  assert.equal(isDepositReleaseOverdue(completed, wellPastDeadline), true);
+  // A genuinely released deposit is never reported as overdue, regardless of elapsed time.
+  assert.equal(isDepositReleaseOverdue({ ...completed, deposit: "released" }, wellPastDeadline), false);
+});
+
+test("Demo session load strips retired Return Due demo bookings (and their evidence, issue reports, messages, notifications) from stale persisted state, without touching unrelated bookings", () => {
+  const seed = createSeed("admin_demo");
+  const retiredIds = ["demo-booking-return-due-2", "demo-booking-return-due-3"];
+  for (const id of retiredIds) {
+    assert.ok(!seed.bookings.some((b) => b.id === id), `${id} must no longer be seeded`);
+  }
+  // The two intended Return Due demo examples remain.
+  const returnDueTitles = seed.bookings
+    .filter((b) => b.renterId === "demo-renter" && rentalTabForBooking(b) === "Return Due")
+    .map((b) => b.title);
+  assert.deepEqual(new Set(returnDueTitles), new Set(["Pressure Washer", "Epson Portable Projector"]));
+
+  // A session persisted before this cleanup still carries the retired booking (and its evidence,
+  // issue report, message and notification records) in its own saved snapshot. Re-seeding alone
+  // never reaches that already-saved snapshot, so loading it must strip these explicitly rather
+  // than leaving stale held-deposit records behind.
+  const staleRetiredBooking = { ...seed.bookings.find((b) => b.renterId === "demo-renter")!, id: "demo-booking-return-due-2" };
+  const staleState = {
+    ...seed,
+    bookings: [...seed.bookings, staleRetiredBooking],
+    evidence: [...seed.evidence, { id: "ev-stale", bookingId: "demo-booking-return-due-2", authorId: "demo-renter", kind: "check_in" as const, photo: "", notes: "", createdAt: "2026-10-01T00:00:00Z" }],
+    messages: [...seed.messages, { id: "msg-stale", bookingId: "demo-booking-return-due-2", authorId: "demo-renter", text: "stale", createdAt: "2026-10-01T00:00:00Z" }],
+  };
+  const cleaned = withoutRetiredDemoBookings(staleState);
+  assert.ok(!cleaned.bookings.some((b) => b.id === "demo-booking-return-due-2"), "Stale retired booking must be stripped on load");
+  assert.ok(!cleaned.evidence.some((e) => e.bookingId === "demo-booking-return-due-2"), "Stale evidence for the retired booking must be stripped");
+  assert.ok(!cleaned.messages.some((m) => m.bookingId === "demo-booking-return-due-2"), "Stale messages for the retired booking must be stripped");
+  // Genuine unrelated bookings (same renter, different id) are untouched.
+  assert.equal(cleaned.bookings.length, seed.bookings.length);
 });
 
 test("Delivery refunds are the delivery company's responsibility, never auto-approved just because a rental was cancelled", () => {
@@ -3238,6 +3367,127 @@ test("Lender Rental Details renders one persistent action panel without the old 
   assert.match(disputeSource, /"PENDING"/);
   assert.match(disputeSource, /actAndPersist/);
   assert.match(disputeSource, /New financial charge/);
+});
+
+test("Return Management never shows the renter-evidence waiting message once the lender has already confirmed a clean return", () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "app/rental/[id].tsx"),
+    "utf8",
+  );
+  const waitingMessage = source.indexOf(
+    "Waiting for renter to upload return condition evidence and submit check-out confirmation.",
+  );
+  const guard = source.lastIndexOf("!b.lenderReturnConfirmedAt", waitingMessage);
+  assert.ok(waitingMessage >= 0, "Expected the waiting-message Notice to still exist for genuinely pending cases");
+  assert.ok(guard >= 0 && guard < waitingMessage, "The waiting message must be gated behind !b.lenderReturnConfirmedAt");
+
+  // Real repro: demo-lender-completed-1 (Office Chair) has an already-confirmed clean return
+  // (lenderReturnConfirmedAt set) but no renter check_out evidence record on file — the exact
+  // combination that used to show the contradictory "Waiting for renter…" message alongside
+  // "Inspection Completed".
+  const seed = createSeed("admin_demo");
+  const booking = seed.bookings.find((b) => b.id === "demo-lender-completed-1")!;
+  assert.ok(booking.lenderReturnConfirmedAt, "Expected an already-confirmed clean return");
+  assert.ok(
+    !seed.evidence.some((e) => e.bookingId === booking.id && e.kind === "check_out"),
+    "This booking has no renter check_out evidence on file — the exact case the fix covers",
+  );
+});
+
+test("The four cancelled demo bookings past their scheduled deposit release date auto-complete as refunded, with no unresolved dispute holding them", () => {
+  const seed = createSeed("admin_demo");
+  const expected: Record<string, number> = {
+    "demo-booking-cancelled-1": 600, // Luxury Watch
+    "demo-booking-cancelled-2": 60, // Fishing Rod & Reel Set
+    "demo-booking-cancelled-3": 150, // Wedding Arch & Drapes
+    "demo-booking-protection-cancelled": 75, // GoPro HERO12 Black
+  };
+  let totalReleased = 0;
+  for (const [id, expectedDeposit] of Object.entries(expected)) {
+    const booking = seed.bookings.find((b) => b.id === id);
+    if (!booking) continue; // not every id is guaranteed present across seed revisions
+    assert.equal(booking.status, "cancelled");
+    assert.equal(booking.deposit, "release_pending", `${id}: raw stored field preserves the historical fact it was once release_pending`);
+    assert.ok(booking.depositReleasedAt && Date.now() >= Date.parse(booking.depositReleasedAt),
+      `${id}: scheduled release date must already be in the past for this test`);
+    assert.ok(!seed.disputes.some((d) => d.bookingId === id && d.status === "under_review"), `${id}: must have no unresolved dispute`);
+    assert.equal(effectiveDepositStatus(booking), "released", `${id}: must auto-complete as released past its deadline`);
+    assert.equal(isDepositReleaseOverdue(booking), false, `${id}: must never show as overdue once auto-released`);
+    totalReleased += booking.quote.deposit;
+    assert.equal(booking.quote.deposit, expectedDeposit, `${id}: unexpected deposit amount`);
+  }
+  assert.equal(totalReleased, 885, "Total of the four named deposits must equal RM885.00");
+});
+
+test("Payment & Transaction History never labels a cancelled booking's still-pending deposit as 'Refunded' — fee refund and deposit release are distinct statuses", () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "app/(tabs)/rentals.tsx"),
+    "utf8",
+  );
+  // The cancelled-booking status chip must branch on the deposit's own status before claiming
+  // "Refunded" outright — a plain `payment === "refunded" ? "Cancelled · Refunded" : "Cancelled"`
+  // ternary (the previous bug) would silently claim the deposit was refunded too.
+  assert.match(source, /depositStatus === "release_pending"/);
+  assert.match(source, /Fee refunded, deposit pending/);
+  assert.match(source, /Fee refunded, deposit overdue/);
+  // The deposit-release refund row keeps "release" wording, distinct from a payment "refund".
+  assert.match(source, /"Security deposit release"/);
+  assert.doesNotMatch(source, /"Security deposit refund"/);
+});
+
+test("Successfully completed demo-renter-as-lender rental shows submitted lender evidence for both checkpoints, not fabricated for other statuses", () => {
+  const seed = createSeed("admin_demo");
+  for (const id of ["demo-lender-completed-1"]) {
+    const booking = seed.bookings.find((b) => b.id === id)!;
+    assert.equal(booking.status, "completed");
+    assert.ok(booking.lenderReturnReceivedAt, `${id}: lender must have confirmed receipt`);
+    assert.ok(booking.lenderReturnConfirmedAt, `${id}: lender must have confirmed a clean return`);
+    const before = seed.evidence.find((e) => e.bookingId === id && e.kind === "lender_before_delivery" && e.authorId === booking.ownerId);
+    const after = seed.evidence.find((e) => e.bookingId === id && e.kind === "lender_after_return" && e.authorId === booking.ownerId);
+    assert.ok(before, `${id}: Check-in — Before Delivery evidence must be recorded`);
+    assert.ok(after, `${id}: Check-out — After Return evidence must be recorded`);
+    assert.ok(before!.photos && before!.photos.length >= 6 && before!.videos && before!.videos.length >= 1);
+    assert.ok(after!.photos && after!.photos.length >= 6 && after!.videos && after!.videos.length >= 1);
+    // Before-delivery evidence must precede handover; after-return evidence must follow receipt
+    // and precede the lender's clean-return confirmation — never invented out of sequence.
+    assert.ok(parseMalaysiaTimestamp(before!.createdAt) <= parseMalaysiaTimestamp(booking.lenderHandoverAt!));
+    assert.ok(parseMalaysiaTimestamp(after!.createdAt) >= parseMalaysiaTimestamp(booking.lenderReturnReceivedAt!));
+    assert.ok(parseMalaysiaTimestamp(after!.createdAt) <= parseMalaysiaTimestamp(booking.lenderReturnConfirmedAt!));
+  }
+
+  // Other statuses must not be auto-marked as submitted — the three Return Due examples remain
+  // genuinely awaiting lender receipt/inspection (see the earlier Return Due cleanup).
+  for (const id of ["demo-booking-return-due-1", "demo-booking-protection-return-due"]) {
+    const booking = seed.bookings.find((b) => b.id === id)!;
+    assert.ok(!booking.lenderReturnReceivedAt, `${id}: must remain genuinely awaiting lender receipt, not fabricated as submitted`);
+    assert.ok(!seed.evidence.some((e) => e.bookingId === id && e.kind === "lender_after_return"));
+  }
+});
+
+test("Rental Details renders exactly one Report an Issue section per role, never duplicated inside individual Condition Evidence checkpoints", () => {
+  const source = fs.readFileSync(
+    path.resolve(process.cwd(), "app/rental/[id].tsx"),
+    "utf8",
+  );
+  // Both lender evidence checkpoints must suppress their own inline issue block — the single
+  // shared lender Report an Issue card (after Return Management/Renter Evidence) is the only one.
+  assert.match(source, /renderLenderEvidence\("lender_before_delivery",\s*\{\s*showIssueReport:\s*false\s*\}\)/);
+  assert.match(source, /renderLenderEvidence\("lender_after_return",\s*\{\s*showIssueReport:\s*false\s*\}\)/);
+  // One function definition + exactly one call site = rendered exactly once.
+  assert.equal(
+    (source.match(/renderLenderIssueReport\(/g) || []).length,
+    2,
+    "renderLenderIssueReport must be defined once and called exactly once",
+  );
+  assert.equal(
+    (source.match(/renderRenterIssueReportSection\(\)/g) || []).length,
+    2,
+    "renderRenterIssueReportSection must be defined once and called exactly once",
+  );
+  // renderIssueReport itself (the function that actually renders "Report an Issue") must only be
+  // invoked from inside that one shared wrapper, never directly from the Check-in/Check-out cards.
+  const directCalls = (source.match(/renderIssueReport\(/g) || []).length;
+  assert.equal(directCalls, 2, "renderIssueReport must be defined once and called exactly once (by renderRenterIssueReportSection)");
 });
 
 test("lender disputes unlock at scheduled end, persist once, and do not change financial state", () => {
@@ -3383,10 +3633,12 @@ test("return evidence releases the deposit and preserves the unassessed timing o
   });
   const bHalfReturned = state.bookings.find((b) => b.id === "booking-return")!;
   assert.equal(bHalfReturned.status, "return_pending");
-  assert.equal(bHalfReturned.deposit, "release_pending"); // Not released yet!
+  assert.equal(bHalfReturned.deposit, "held");
 
   // Owner confirms return inspection (No Issue – End Rental) by reviewing shared media without uploading media
   state = transition(state, { type: "login", userId: "owner-aiman" });
+  state = transition(state, { type: "confirmReturnReceipt", bookingId: "booking-return" });
+  state = transition(state, { type: "conditionEvidence", bookingId: "booking-return", kind: "lender_after_return", photos: samplePhotos, videos: sampleVideos });
   state = transition(state, {
     type: "returnConfirm",
     bookingId: "booking-return",
@@ -3396,7 +3648,8 @@ test("return evidence releases the deposit and preserves the unassessed timing o
 
   const bCompleted = state.bookings.find((b) => b.id === "booking-return")!;
   assert.equal(bCompleted.status, "completed");
-  assert.equal(bCompleted.deposit, "released");
+  assert.equal(bCompleted.deposit, "release_pending");
+  assert.ok(bCompleted.completedAt);
 
   const scoreAfter = state.profiles.find(
     (p) => p.id === "demo-renter",
@@ -3664,15 +3917,18 @@ test("V3.36 Demo Account has 2 completed rentals and a history-derived score of 
     `Expected >= 3 active rentals, got ${active.length}`,
   );
 
-  // 4. At least 3 Return Due rentals
+  // 4. Exactly 2 Return Due rentals (Pressure Washer, Epson Portable Projector) — deliberately
+  // reduced from the earlier >= 3 demo-variety baseline per the latest product requirement that
+  // My Rentals > Return Due show only these two intended demo examples.
   const returnDue = userBookings.filter(
     (b) =>
       b.status === "return_pending" ||
       (b.status === "active" && b.end <= dateAfter(1)),
   );
-  assert.ok(
-    returnDue.length >= 3,
-    `Expected >= 3 return due rentals, got ${returnDue.length}`,
+  assert.equal(
+    returnDue.length,
+    2,
+    `Expected exactly 2 return due rentals, got ${returnDue.length}`,
   );
 
   // 5. At least 3 Cancelled rentals
@@ -4277,6 +4533,8 @@ test("Section 4.4 & 16: Renter condition evidence requires >= 6 photos and >= 1 
 
   // 4. Lender confirms return (No Issue - End Rental) WITHOUT requiring photo/video upload
   state = transition(state, { type: "login", userId: "owner-sarah" });
+  state = transition(state, { type: "confirmReturnReceipt", bookingId: "demo-booking-active-1" });
+  state = transition(state, { type: "conditionEvidence", bookingId: "demo-booking-active-1", kind: "lender_after_return", photos: samplePhotos, videos: sampleVideos });
   state = transition(state, {
     type: "returnConfirm",
     bookingId: "demo-booking-active-1",
@@ -4288,7 +4546,7 @@ test("Section 4.4 & 16: Renter condition evidence requires >= 6 photos and >= 1 
     (b) => b.id === "demo-booking-active-1",
   )!;
   assert.equal(bCompleted.status, "completed");
-  assert.equal(bCompleted.deposit, "released");
+  assert.equal(bCompleted.deposit, "release_pending");
 });
 
 test("Section 4.3: Owner listing supports 8 fixed delivery time slots", () => {
@@ -4440,7 +4698,7 @@ test("Section 30: Post-rental 'How did it go?' rating and review submission for 
   assert.match(rentalDetailSource, /editable={reviewEligible}/);
   assert.match(
     rentalDetailSource,
-    /disabled={!reviewEligible \|\| isSavingAction}/,
+    /disabled={!reviewEligible \|\| \(owner && !lenderRatingChosen\) \|\| isSavingAction}/,
   );
 });
 
@@ -4484,6 +4742,8 @@ test("Section 4.4 & 30: Lender Check-out and Check-in condition evidence preserv
 
   // Lender inspects shared evidence and ends rental cleanly
   state = transition(state, { type: "login", userId: activeBooking.ownerId });
+  state = transition(state, { type: "confirmReturnReceipt", bookingId: activeBooking.id });
+  state = transition(state, { type: "conditionEvidence", bookingId: activeBooking.id, kind: "lender_after_return", photos: ["/p1", "/p2", "/p3", "/p4", "/p5", "/p6"], videos: ["/v1"] });
   state = transition(state, {
     type: "returnConfirm",
     bookingId: activeBooking.id,

@@ -46,6 +46,7 @@ export default function OwnerDashboard() {
   const contentY = useRef(0);
 
   function openSummarySection(section: "Listings" | "Rentals" | "Payout") {
+    if (section !== "Listings") setSuccess("");
     setTab(section);
     setScrollToY(Math.max(0, contentY.current - 20));
     setScrollRequestId((request) => request + 1);
@@ -156,11 +157,17 @@ export default function OwnerDashboard() {
       <Chips
         options={["Listings", "Rentals", "Payout", "Transaction"]}
         selected={tab}
-        onSelect={setTab}
+        onSelect={(nextTab) => {
+          // The listing submission success message belongs only to the moment right after a
+          // submission, on the Listings tab — leaving that tab clears it so it never resurfaces
+          // (stale) on Rentals/Payout/Transaction or on a later return to Listings.
+          if (nextTab !== "Listings") setSuccess("");
+          setTab(nextTab);
+        }}
       />
 
       {!!error && <Notice text={error} error />}
-      {!!success && <Notice text={success} />}
+      {tab === "Listings" && !!success && <Notice text={success} />}
 
       <View onLayout={(event) => { contentY.current = event.nativeEvent.layout.y; }} />
 
@@ -397,7 +404,7 @@ export default function OwnerDashboard() {
               <Text style={s.h2}>{record.listingName}</Text>
               <Row label="Transaction type" value="Listing Boost" />
               <Row label="Amount paid" value="RM10.00" />
-              <Row label="Payment method" value="FPX (Demo)" />
+              <Row label="Payment method" value="Online Payment (Demo)" />
               <Row label="Payment status" value="Successful" />
               <Row label="Payment date/time" value={formatMalaysiaDateTime(record.paidAt)} />
               <Row label="Transaction reference" value={record.id} />
@@ -414,7 +421,7 @@ export default function OwnerDashboard() {
           <Row label="Listing name" value={boostListing.title} />
           <Row label="Product" value="Listing Boost — 7 Days" />
           <Row label="Boost fee" value="RM10.00" />
-          <Row label="Payment method" value="FPX" />
+          <Row label="Payment method" value="Online Payment (Demo)" />
           <Notice text="Simulated payment. No real money will be charged." />
           {!!error && <Notice text={error} error />}
           <Button disabled={paying} onPress={async () => {
@@ -437,7 +444,7 @@ export default function OwnerDashboard() {
           <Text style={s.h2}>Payment Successful</Text>
           <Row label="Listing name" value={receipt.listingName} />
           <Row label="Listing Boost" value="RM10.00" />
-          <Row label="Payment method" value="FPX (Demo)" />
+          <Row label="Payment method" value="Online Payment (Demo)" />
           <Row label="Total paid" value="RM10.00" />
           <Row label="Payment date/time" value={formatMalaysiaDateTime(receipt.paidAt)} />
           <Row label="Transaction reference" value={receipt.id} />

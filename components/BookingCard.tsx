@@ -4,15 +4,20 @@ import { Ionicons } from "@expo/vector-icons";
 import type { Booking } from "../types/marketplace";
 import { useMarketplace } from "../context/Marketplace";
 import {
+  effectiveDepositStatus,
   formatMalaysiaDateTime,
   formatScheduledReturnPickup,
   formatShortDate,
   getEffectiveBookingStatus,
+  isDepositReleaseOverdue,
   malaysiaDateKey,
   money,
+  rentalTabForBooking,
+  rentalOperationalStatus,
 } from "../services/booking";
 import { DOMESTIC_COURIER_NAME } from "../services/delivery";
 import { colors } from "../constants/theme";
+import { RentalStatusBadge } from "./ui";
 
 export function BookingCard({
   booking,
@@ -38,52 +43,15 @@ export function BookingCard({
   ).length;
 
   const status = getEffectiveBookingStatus(booking);
-  const isUpcoming = status === "upcoming";
-  const isActive = status === "active";
-  const isReturnPending = status === "return_pending";
+  // displayStatus is the single rental status label/colour source — see RentalStatusBadge — so
+  // My Rentals cards, Lender rental cards and Rental Details always agree on wording and colour.
+  const displayStatus = rentalTabForBooking(booking);
+  const isActive = displayStatus === "Active";
+  const isReturnPending = displayStatus === "Return Due";
   const isCompleted = status === "completed";
   const isCancelled =
     status === "cancelled" || status === "rejected";
   const isDisputed = status === "disputed";
-
-  let headerSub = "Confirmed reservation";
-  if (isActive) headerSub = "Current rental";
-  else if (isReturnPending) headerSub = "Return due";
-  else if (isCompleted) headerSub = "Completed rental";
-  else if (isCancelled) headerSub = "Cancelled reservation";
-  else if (isDisputed) headerSub = "Disputed rental";
-
-  let tagLabel = "Upcoming";
-  let tagBg = "#EFF6FF";
-  let tagBorder = "#BFDBFE";
-  let tagColor = colors.blue;
-
-  if (isActive) {
-    tagLabel = "Active";
-    tagBg = "#DCFCE7";
-    tagBorder = "#BBF7D0";
-    tagColor = "#166534";
-  } else if (isReturnPending) {
-    tagLabel = "Return Due";
-    tagBg = "#FEF3C7";
-    tagBorder = "#FDE68A";
-    tagColor = "#92400E";
-  } else if (isCompleted) {
-    tagLabel = "Completed";
-    tagBg = "#F0FDF4";
-    tagBorder = "#BBF7D0";
-    tagColor = "#15803D";
-  } else if (isCancelled) {
-    tagLabel = "Cancelled";
-    tagBg = "#FEE2E2";
-    tagBorder = "#FECACA";
-    tagColor = "#B91C1C";
-  } else if (isDisputed) {
-    tagLabel = "Disputed";
-    tagBg = "#FEE2E2";
-    tagBorder = "#FECACA";
-    tagColor = "#B91C1C";
-  }
 
   // Cross-state (Domestic Courier) bookings show dates only — courier transit was never
   // scheduled to an exact hour, so showing one would misrepresent it as confirmed. The
@@ -103,16 +71,23 @@ export function BookingCard({
     dateInfo = `${startFormatted} – ${endFormatted}`;
   }
 
+  // Always read the EFFECTIVE status, never the raw stored field — a cancelled booking's
+  // deposit auto-completes its simulated refund once the recorded release deadline has
+  // genuinely passed, and this card must reflect that instead of still showing "release
+  // overdue" against a stale raw "release_pending" value.
+  const effectiveDeposit = effectiveDepositStatus(booking);
   let depositStatusText = `${money(booking.quote.deposit)} held`;
-  if (booking.deposit === "released") {
-    depositStatusText = `${money(booking.quote.deposit)} released`;
-  } else if (booking.deposit === "disputed") {
+  if (effectiveDeposit === "released") {
+    depositStatusText = isCancelled
+      ? `${money(booking.quote.deposit)} refunded (Demo)`
+      : `${money(booking.quote.deposit)} released`;
+  } else if (effectiveDeposit === "release_pending") {
+    depositStatusText = isDepositReleaseOverdue(booking)
+      ? `${money(booking.quote.deposit)} release overdue`
+      : `${money(booking.quote.deposit)} release pending`;
+  } else if (effectiveDeposit === "disputed") {
     depositStatusText = `${money(booking.quote.deposit)} held (Disputed)`;
   }
-
-  const statusBadge = <View style={[styles.tag, mobile && styles.mobileTag, { backgroundColor: tagBg, borderColor: tagBorder }]}>
-    <Text style={[styles.tagText, { color: tagColor }]}>{tagLabel}</Text>
-  </View>;
 
   return (
     <View style={[styles.card, mobile && styles.mobileCard]}>
@@ -125,11 +100,13 @@ export function BookingCard({
         <View style={[styles.topRow, mobile && styles.mobileTopRow]}>
           <Image source={{ uri: booking.image }} style={[styles.thumb, mobile && styles.mobileThumb]} />
           <View style={{ flex: 1, gap: 4 }}>
-            <Text style={[styles.subtext, mobile && styles.mobileSubtext]}>{headerSub}</Text>
+            {/* Status badge is shown once, above the title, never duplicated on the right. */}
+            <RentalStatusBadge label={displayStatus} style={styles.headerTag} />
             <Text style={styles.title} numberOfLines={1}>
               {booking.title}
             </Text>
             <Text style={styles.dateText}>{dateInfo}</Text>
+            {rentalOperationalStatus(booking) && <Text style={styles.statLabel}>{rentalOperationalStatus(booking)}</Text>}
             {!!booking.paymentMethod && (
               <Text style={styles.statLabel}>Payment method: {booking.paymentMethod}</Text>
             )}
@@ -139,9 +116,7 @@ export function BookingCard({
                 <Text style={styles.insuranceTagText}>Rental Protection · Third-party demo · {money(booking.insurance.premium)}</Text>
               </View>
             )}
-            {mobile && statusBadge}
           </View>
-          {!mobile && statusBadge}
         </View>
 
         <View style={styles.divider} />
@@ -214,8 +189,6 @@ const styles = StyleSheet.create({
   mobileCard: { padding: 14, borderRadius: 19, gap: 10, shadowOpacity: 0.07, shadowRadius: 12 },
   mobileTopRow: { alignItems: "flex-start", gap: 11 },
   mobileThumb: { width: 72, height: 72, borderRadius: 12 },
-  mobileSubtext: { fontSize: 10, letterSpacing: 0.2 },
-  mobileTag: { alignSelf: "flex-start", paddingHorizontal: 9, paddingVertical: 4 },
   card: {
     backgroundColor: "white",
     borderRadius: 16,
@@ -240,13 +213,6 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 10,
     backgroundColor: colors.lightGrey,
-  },
-  subtext: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.muted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
   title: {
     fontSize: 16,
@@ -273,15 +239,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.blue,
   },
-  tag: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  tagText: {
-    fontSize: 12,
-    fontWeight: "700",
+  headerTag: {
+    marginBottom: 2,
   },
   divider: {
     height: 1,

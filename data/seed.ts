@@ -297,7 +297,10 @@ export function createAdminDemoSeed(): Marketplace {
       ownerId: "owner-sarah",
       renterId: "demo-renter",
       start: "2026-10-09T14:00:00Z",
-      end: "2026-10-15T14:00:00Z",
+      // Scheduled return extended beyond the current demo "today" so this stays a genuinely
+      // ongoing Active rental, not a lapsed one — Return Due is reserved for the two intended
+      // demo examples (Pressure Washer, Epson Portable Projector). See README's dated note.
+      end: "2026-10-29T14:00:00Z",
       collectionMethod: "Delivery Only",
       // Local (Subang Jaya -> Kuala Lumpur): stays on the existing GrabExpress path.
       deliveryAddress: "Kuala Lumpur",
@@ -317,12 +320,12 @@ export function createAdminDemoSeed(): Marketplace {
       paymentMethod: "Demo FPX",
       createdAt: "2026-10-08T10:00:00Z",
       scheduledPickup: "2026-10-09T14:00:00Z",
-      scheduledReturn: "2026-10-15T14:00:00Z",
+      scheduledReturn: "2026-10-29T14:00:00Z",
       durationMinutes: 8640,
       lenderHandoverAt: "2026-10-09T14:05:00Z",
       renterReceivedAt: "2026-10-09T14:10:00Z",
       activationTimestamp: "2026-10-09T14:10:00Z",
-      effectiveReturnDeadline: "2026-10-15T14:10:00Z",
+      effectiveReturnDeadline: "2026-10-29T14:10:00Z",
       contextMode: "admin_demo",
     },
     {
@@ -333,8 +336,10 @@ export function createAdminDemoSeed(): Marketplace {
       image: "/products/led-lighting-kit.jpg",
       ownerId: "owner-sarah",
       renterId: "demo-renter",
+      // Scheduled return extended beyond the current demo "today" — see the matching note on
+      // demo-booking-active-1. Return Due keeps only the two intended demo examples.
       start: "2026-10-08T10:00:00Z",
-      end: "2026-10-14T10:00:00Z",
+      end: "2026-10-31T10:00:00Z",
       collectionMethod: "Delivery Only",
       deliveryAddress: "Petaling Jaya, Selangor",
       status: "active",
@@ -352,12 +357,12 @@ export function createAdminDemoSeed(): Marketplace {
       paymentMethod: "Demo FPX",
       createdAt: "2026-10-07T14:00:00Z",
       scheduledPickup: "2026-10-08T10:00:00Z",
-      scheduledReturn: "2026-10-14T10:00:00Z",
+      scheduledReturn: "2026-10-31T10:00:00Z",
       durationMinutes: 8640,
       lenderHandoverAt: "2026-10-08T10:02:00Z",
       renterReceivedAt: "2026-10-08T10:05:00Z",
       activationTimestamp: "2026-10-08T10:05:00Z",
-      effectiveReturnDeadline: "2026-10-14T10:05:00Z",
+      effectiveReturnDeadline: "2026-10-31T10:05:00Z",
       contextMode: "admin_demo",
     },
     {
@@ -368,8 +373,10 @@ export function createAdminDemoSeed(): Marketplace {
       image: "/products/tabletop-oven.jpg",
       ownerId: "owner-daniel",
       renterId: "demo-renter",
+      // Scheduled return extended beyond the current demo "today" — see the matching note on
+      // demo-booking-active-1. Return Due keeps only the two intended demo examples.
       start: "2026-10-07T09:00:00Z",
-      end: "2026-10-13T09:00:00Z",
+      end: "2026-11-01T09:00:00Z",
       collectionMethod: "Delivery Only",
       deliveryAddress: "Subang Jaya, Selangor",
       status: "active",
@@ -387,12 +394,12 @@ export function createAdminDemoSeed(): Marketplace {
       paymentMethod: "Demo FPX",
       createdAt: "2026-10-06T15:00:00Z",
       scheduledPickup: "2026-10-07T09:00:00Z",
-      scheduledReturn: "2026-10-13T09:00:00Z",
+      scheduledReturn: "2026-11-01T09:00:00Z",
       durationMinutes: 8640,
       lenderHandoverAt: "2026-10-07T09:05:00Z",
       renterReceivedAt: "2026-10-07T09:12:00Z",
       activationTimestamp: "2026-10-07T09:12:00Z",
-      effectiveReturnDeadline: "2026-10-13T09:12:00Z",
+      effectiveReturnDeadline: "2026-11-01T09:12:00Z",
       contextMode: "admin_demo",
     },
 
@@ -410,8 +417,11 @@ export function createAdminDemoSeed(): Marketplace {
       image: "/products/pressure-washer.jpg",
       ownerId: "owner-aiman",
       renterId: "demo-renter",
-      start: "2026-10-05T10:00:00Z",
-      end: "2026-10-10T10:00:00Z",
+      // Updated post-return demo scenario (30 Oct – 5 Nov 2026): the renter has already confirmed
+      // return, but the lender has not yet confirmed receipt or completed the After Return
+      // inspection, so this stays Return Due · Awaiting Lender Inspection, never auto-completed.
+      start: "2026-10-31T10:00:00Z",
+      end: "2026-11-05T10:00:00Z",
       collectionMethod: "Delivery Only",
       // Cross-state (Kuantan, Pahang -> Petaling Jaya): demonstrates the Domestic Courier (Demo) path.
       deliveryAddress: "Petaling Jaya, Selangor",
@@ -419,12 +429,13 @@ export function createAdminDemoSeed(): Marketplace {
       // Outbound dispatch already confirmed by the lender, and the renter has already dropped
       // the parcel off for return (renterReturnConfirmedAt below is already set) — demonstrates
       // both a "confirmed" outbound arrangement and a completed return drop-off. Amounts/dates
-      // are regenerated by repairDemoDeliveryPayments; only the state below is preserved.
+      // are regenerated by repairDemoDeliveryPayments (which derives the delivery payment
+      // timestamp as createdAt minus 1 minute); only the state below is preserved.
       deliveryDemo: {
         provider: "J&T Express (Demo)", origin: "", destination: "", fee: 0, status: "required",
         outboundDispatchStatus: "confirmed",
         outboundTrackingRef: "DEMO-JT-OUT-DEMO-BOOKING-RETURN-DUE-1",
-        returnDropoffConfirmedAt: "2026-10-10T09:30:00Z",
+        returnDropoffConfirmedAt: "2026-11-05T09:30:00Z",
         returnTrackingRef: "DEMO-JT-RET-DEMO-BOOKING-RETURN-DUE-1",
       },
       status: "return_pending",
@@ -438,94 +449,27 @@ export function createAdminDemoSeed(): Marketplace {
       },
       riskScore: 78,
       payment: "paid",
-      deposit: "release_pending",
+      // Held, not release_pending: the renter confirmed return and drop-off, but the lender has
+      // not yet confirmed receipt or completed the After Return inspection — deposit release only
+      // begins once the lender actually confirms a clean return (see services/marketplace.ts).
+      deposit: "held",
       paymentMethod: "BNPL (Demo)",
-      createdAt: "2026-10-04T10:00:00Z",
-      scheduledPickup: "2026-10-05T10:00:00Z",
-      scheduledReturn: "2026-10-10T10:00:00Z",
+      createdAt: "2026-10-30T10:00:00Z", // Booking confirmed, 30 Oct 2026, 6:00 PM MYT
+      scheduledPickup: "2026-10-31T10:00:00Z",
+      scheduledReturn: "2026-11-05T10:00:00Z",
       durationMinutes: 7200,
-      lenderHandoverAt: "2026-10-05T10:00:00Z",
-      renterReceivedAt: "2026-10-05T10:05:00Z",
-      activationTimestamp: "2026-10-05T10:05:00Z",
-      effectiveReturnDeadline: "2026-10-10T10:05:00Z",
-      renterReturnConfirmedAt: "2026-10-10T09:30:00Z",
-      actualReturnTimestamp: "2026-10-10T09:30:00Z",
+      lenderHandoverAt: "2026-10-31T10:00:00Z", // Item collected, 31 Oct 2026, 6:00 PM MYT
+      renterReceivedAt: "2026-10-31T10:02:00Z",
+      activationTimestamp: "2026-10-31T10:05:00Z", // Rental started, 31 Oct 2026, 6:05 PM MYT
+      effectiveReturnDeadline: "2026-11-05T10:05:00Z",
+      renterReturnConfirmedAt: "2026-11-05T09:30:00Z", // 5 Nov 2026, 5:30 PM MYT
+      actualReturnTimestamp: "2026-11-05T09:30:00Z", // Item returned, 5 Nov 2026, 5:30 PM MYT
       contextMode: "admin_demo",
     },
-    {
-      id: "demo-booking-return-due-2",
-      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
-      listingId: "luxury-handbag",
-      title: "Luxury Handbag",
-      image: "/products/luxury-handbag.jpg",
-      ownerId: "owner-sarah",
-      renterId: "demo-renter",
-      start: "2026-10-06T11:00:00Z",
-      end: "2026-10-10T11:00:00Z",
-      collectionMethod: "Delivery Only",
-      deliveryAddress: "Georgetown, Penang",
-      status: "return_pending",
-      quote: {
-        days: 4,
-        rentalFee: 220,
-        serviceFee: 11,
-        deposit: 650, // 10% of RM6,500 = RM650
-        protection: 0,
-        total: 881,
-      },
-      riskScore: 78,
-      payment: "paid",
-      deposit: "release_pending",
-      paymentMethod: "Demo FPX",
-      createdAt: "2026-10-05T09:00:00Z",
-      scheduledPickup: "2026-10-06T11:00:00Z",
-      scheduledReturn: "2026-10-10T11:00:00Z",
-      durationMinutes: 5760,
-      lenderHandoverAt: "2026-10-06T11:00:00Z",
-      renterReceivedAt: "2026-10-06T11:08:00Z",
-      activationTimestamp: "2026-10-06T11:08:00Z",
-      effectiveReturnDeadline: "2026-10-10T11:08:00Z",
-      renterReturnConfirmedAt: "2026-10-10T10:00:00Z",
-      actualReturnTimestamp: "2026-10-10T10:00:00Z",
-      contextMode: "admin_demo",
-    },
-    {
-      id: "demo-booking-return-due-3",
-      commissionRate: CURRENT_LENDER_COMMISSION_RATE,
-      listingId: "power-station",
-      title: "Portable Power Station",
-      image: "/products/power-station.jpg",
-      ownerId: "owner-daniel",
-      renterId: "demo-renter",
-      start: "2026-10-08T12:00:00Z",
-      end: "2026-10-10T12:00:00Z",
-      collectionMethod: "Delivery Only",
-      deliveryAddress: "Bayan Lepas, Penang",
-      status: "return_pending",
-      quote: {
-        days: 2,
-        rentalFee: 100,
-        serviceFee: 5,
-        deposit: 150,
-        protection: 0,
-        total: 255,
-      },
-      riskScore: 78,
-      payment: "paid",
-      deposit: "release_pending",
-      paymentMethod: "Demo FPX",
-      createdAt: "2026-10-07T11:00:00Z",
-      scheduledPickup: "2026-10-08T12:00:00Z",
-      scheduledReturn: "2026-10-10T12:00:00Z",
-      durationMinutes: 2880,
-      lenderHandoverAt: "2026-10-08T12:00:00Z",
-      renterReceivedAt: "2026-10-08T12:05:00Z",
-      activationTimestamp: "2026-10-08T12:05:00Z",
-      effectiveReturnDeadline: "2026-10-10T12:05:00Z",
-      renterReturnConfirmedAt: "2026-10-10T11:45:00Z",
-      actualReturnTimestamp: "2026-10-10T11:45:00Z",
-      contextMode: "admin_demo",
-    },
+    // demo-booking-return-due-2 (Luxury Handbag) and demo-booking-return-due-3 (Portable Power
+    // Station) were removed per the latest requirement that My Rentals > Return Due show only
+    // the two intended demo examples (Pressure Washer, Epson Portable Projector). No other code
+    // or test referenced either id.
 
     // ------------------------------------------------------------------------
     // 4. CANCELLED RENTALS (3 distinct, realistic records for demo-renter)
@@ -908,8 +852,11 @@ export function createAdminDemoSeed(): Marketplace {
       image: "/products/sony-a7iii.jpg",
       ownerId: "owner-aiman",
       renterId: "demo-renter",
-      start: "2026-10-13T02:00:00Z",
-      end: "2026-10-19T02:00:00Z",
+      // Window moved to 26–30 Oct 2026 — both beyond the current demo "today" (so it is not
+      // overdue; Return Due keeps only the two intended demo examples) and clear of the fixed
+      // 23–25 Oct availability window another sony-a7iii test fixture books on this same listing.
+      start: "2026-10-26T02:00:00Z",
+      end: "2026-10-30T02:00:00Z",
       collectionMethod: "Delivery Only",
       deliveryAddress: "Petaling Jaya, Selangor",
       status: "active",
@@ -926,14 +873,14 @@ export function createAdminDemoSeed(): Marketplace {
       deposit: "held",
       paymentMethod: "Demo FPX",
       insurance: null,
-      createdAt: "2026-10-12T02:00:00Z",
-      scheduledPickup: "2026-10-13T02:00:00Z",
-      scheduledReturn: "2026-10-19T02:00:00Z",
+      createdAt: "2026-10-25T02:00:00Z",
+      scheduledPickup: "2026-10-26T02:00:00Z",
+      scheduledReturn: "2026-10-30T02:00:00Z",
       durationMinutes: 8640,
-      lenderHandoverAt: "2026-10-13T02:03:00Z",
-      renterReceivedAt: "2026-10-13T02:08:00Z",
-      activationTimestamp: "2026-10-13T02:08:00Z",
-      effectiveReturnDeadline: "2026-10-19T02:08:00Z",
+      lenderHandoverAt: "2026-10-26T02:03:00Z",
+      renterReceivedAt: "2026-10-26T02:08:00Z",
+      activationTimestamp: "2026-10-26T02:08:00Z",
+      effectiveReturnDeadline: "2026-10-30T02:08:00Z",
       contextMode: "admin_demo",
     },
     {
@@ -1185,6 +1132,7 @@ export function createAdminDemoSeed(): Marketplace {
       renterReceivedAt: "2026-09-05T10:06:00Z",
       activationTimestamp: "2026-09-05T10:06:00Z",
       renterReturnConfirmedAt: "2026-09-08T09:50:00Z",
+      lenderReturnReceivedAt: "2026-09-08T09:52:00Z",
       lenderReturnConfirmedAt: "2026-09-08T09:55:00Z",
       actualReturnTimestamp: "2026-09-08T09:50:00Z",
       contextMode: "admin_demo",
@@ -1332,7 +1280,7 @@ export function createAdminDemoSeed(): Marketplace {
       bookingId: "demo-booking-return-due-1",
       authorId: "demo-renter",
       text: "Hi Aiman, I have submitted the return condition photos and completed check-out.",
-      createdAt: "2026-10-10T09:35:00Z",
+      createdAt: "2026-11-05T09:35:00Z",
       read: true,
     },
     {
@@ -1340,7 +1288,7 @@ export function createAdminDemoSeed(): Marketplace {
       bookingId: "demo-booking-return-due-1",
       authorId: "owner-aiman",
       text: "Received notification! Our courier driver is on the way to collect the package.",
-      createdAt: "2026-10-10T09:40:00Z",
+      createdAt: "2026-11-05T09:40:00Z",
       read: false,
     },
 
@@ -1478,7 +1426,7 @@ export function createAdminDemoSeed(): Marketplace {
       photos: sampleConditionImages,
       videos: sampleVideos,
       notes: "Pressure washer and hose attachment inspected after delivery with zero damage.",
-      createdAt: "2026-10-07T10:15:00Z",
+      createdAt: "2026-11-02T10:15:00Z", // Renter After Delivery evidence submitted, 2 Nov 2026, 6:15 PM MYT
     },
     {
       id: "ev-checkin-3",
@@ -1525,7 +1473,7 @@ export function createAdminDemoSeed(): Marketplace {
       videos: sampleVideos,
       notes:
         "Pressure washer, hose and foam lance all enclosed cleanly with no visible damage.",
-      createdAt: "2026-10-10T09:30:00Z",
+      createdAt: "2026-11-05T09:30:00Z", // Renter Before Return evidence submitted, 5 Nov 2026, 5:30 PM MYT
     },
     {
       id: "ev-4",
@@ -1537,6 +1485,36 @@ export function createAdminDemoSeed(): Marketplace {
       videos: sampleVideos,
       notes: "Screen shows a hairline crack in the bottom corner upon return inspection.",
       createdAt: "2026-09-22T11:30:00Z",
+    },
+
+    // Lender-side Check-in — Before Delivery / Check-out — After Return evidence for the one
+    // successfully completed demo-renter-as-lender rental that's actually surfaced in Lender
+    // Mode (Office Chair — demo-lender-completed-2/3 are defined above but intentionally excluded
+    // from the seeded demo workspace, see demoWorkspaceBookings). This was completed before the
+    // lender_before_delivery/lender_after_return evidence checkpoints existed, so neither record
+    // was ever seeded — this backfills both checkpoints consistently with the booking's own
+    // recorded handover/return timestamps, rather than leaving it showing "No Evidence Submitted".
+    {
+      id: "ev-lender-completed-1-before",
+      bookingId: "demo-lender-completed-1",
+      authorId: "demo-renter",
+      kind: "lender_before_delivery",
+      photo: "/products/office-chair.jpg",
+      photos: sampleConditionImages,
+      videos: sampleVideos,
+      notes: "Office chair inspected and photographed before courier handover — no damage, all casters intact.",
+      createdAt: "2026-09-05T09:55:00Z",
+    },
+    {
+      id: "ev-lender-completed-1-after",
+      bookingId: "demo-lender-completed-1",
+      authorId: "demo-renter",
+      kind: "lender_after_return",
+      photo: "/products/office-chair.jpg",
+      photos: sampleConditionImages,
+      videos: sampleVideos,
+      notes: "Returned chair inspected — clean condition, no damage, deposit released in full.",
+      createdAt: "2026-09-08T09:53:00Z",
     },
   ];
 

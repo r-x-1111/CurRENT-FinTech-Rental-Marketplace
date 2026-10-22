@@ -14,10 +14,9 @@ export const money = (value: number) => `RM${value.toFixed(2)}`;
  * and tests — only how it's shown to the renter/lender is updated. BNPL is kept as its
  * own distinct option. */
 export function paymentMethodLabel(paymentMethod: string | undefined): string {
-  if (!paymentMethod) return "FPX";
+  if (!paymentMethod) return "Online Payment (Demo)";
   if (paymentMethod === "BNPL (Demo)") return "BNPL (Demo)";
-  if (paymentMethod === "Demo FPX") return "FPX (Demo)";
-  if (paymentMethod === "FPX") return "FPX";
+  if (paymentMethod === "Demo FPX" || paymentMethod === "FPX") return "Online Payment (Demo)";
   return paymentMethod;
 }
 
@@ -115,6 +114,9 @@ export function getEffectiveBookingStatus(
   booking: Booking,
   now = Date.now(),
 ): Booking["status"] {
+  if (["active", "return_pending"].includes(booking.status) && booking.renterReturnConfirmedAt && booking.lenderReturnConfirmedAt) {
+    return "completed";
+  }
   if (
     booking.status === "upcoming" &&
     booking.payment === "paid" &&
@@ -130,8 +132,8 @@ export function rentalTabForBooking(booking: Booking, now = Date.now()) {
   if (status === "disputed") return "Disputed";
   if (status === "completed") return "Completed";
   if (status === "cancelled" || status === "rejected") return "Cancelled";
-  if (status === "active" && !booking.renterReturnConfirmedAt && parseMalaysiaTimestamp(booking.end) <= now) return "Return Due";
-  if (status === "active" || status === "return_pending") return "Active";
+  if (status === "return_pending" || (status === "active" && parseMalaysiaTimestamp(booking.end) <= now)) return "Return Due";
+  if (status === "active") return "Active";
   if (status === "upcoming") return "Upcoming";
   return "Payment & Transaction History";
 }
@@ -255,24 +257,70 @@ export function addMalaysiaWorkingDays(timestamp: string, workingDays: number): 
   return new Date(cursor).toISOString();
 }
 
+/** The shared 5-Malaysia-working-day simulated settlement window, triggered either by a
+ * cancellation approval or by clean-return completion — never by the original scheduled rental
+ * end date. */
+export function depositReleaseDeadline(triggerAt: string): string {
+  return addMalaysiaWorkingDays(triggerAt, 5);
+}
+
 /** A cancelled booking's refundable deposit releases within 5 Malaysia working days of
  * cancellation approval — never calculated from the original scheduled rental end date. */
 export function cancelledDepositReleaseDeadline(cancelledAt: string): string {
-  return addMalaysiaWorkingDays(cancelledAt, 5);
+  return depositReleaseDeadline(cancelledAt);
 }
 
+/** True once a "release_pending" deposit's 5-working-day settlement deadline has passed without
+ * an actual recorded release — a genuine overdue simulated settlement, never silently hidden. For
+ * a cancelled/rejected booking this is never true once effectiveDepositStatus has already
+ * completed the automatic refund (see there) — overdue only describes a deposit still genuinely
+ * stuck "release_pending" (e.g. a normal rental's post-completion release, which stays manual). */
+export function isDepositReleaseOverdue(
+  booking: { status?: Booking["status"]; deposit: Booking["deposit"]; depositReleasedAt?: string | null },
+  now: number = Date.now(),
+): boolean {
+  if (effectiveDepositStatus(booking, now) !== "release_pending") return false;
+  return !!booking.depositReleasedAt && now > parseTimestamp(booking.depositReleasedAt);
+}
+
+/** An estimate until an authoritative holiday calendar for the lender's state is available. */
+export function lenderInspectionDeadline(receivedAt?: string | null): string | null {
+  if (!receivedAt || malaysiaDateKey(receivedAt).slice(0, 4) !== "2026") return null;
+  const deadline = addMalaysiaWorkingDays(receivedAt, 3);
+  return malaysiaDateKey(deadline).slice(0, 4) === "2026" ? deadline : null;
+}
+
+export function rentalOperationalStatus(booking: Booking, now = Date.now()): string | null {
+  if (booking.status === "disputed") return "Under Dispute";
+  if (rentalTabForBooking(booking, now) !== "Return Due") return null;
+  if (!booking.renterReturnConfirmedAt) return "Awaiting Return";
+  const deadline = lenderInspectionDeadline(booking.lenderReturnReceivedAt);
+  if (deadline && now > parseMalaysiaTimestamp(deadline) && !booking.lenderReturnConfirmedAt) return "Inspection Overdue";
+  return "Awaiting Lender Inspection";
+}
+
+/** A deadline is a promise to process a release, not a recorded refund. */
 /**
- * The deposit status actually in effect right now for a cancelled booking: once the computed
- * release deadline has passed, a "release_pending" deposit is treated as released even though the
- * stored enum value was set at cancellation time (this demo has no background job to flip it).
- * Non-cancellation deposit states (held, disputed, required, already released) pass through.
+ * The deposit status actually in effect right now. For a cancelled/rejected booking, once its
+ * computed release deadline has genuinely passed and no unresolved dispute holds it, a
+ * "release_pending" deposit is reported as "released" — the platform's refund policy completes
+ * automatically rather than needing a manual correction every time a demo deadline passes. This
+ * does NOT apply to a normal (non-cancelled) rental's post-completion release, which still
+ * requires an explicit lender/admin action (see isDepositReleaseOverdue) — only a cancellation's
+ * deposit refund is eligible for this automatic completion.
  */
 export function effectiveDepositStatus(
-  booking: { deposit: Booking["deposit"]; depositReleasedAt?: string | null },
+  booking: { status?: Booking["status"]; deposit: Booking["deposit"]; depositReleasedAt?: string | null },
   now: number = Date.now(),
+  hasUnresolvedDispute: boolean = false,
 ): Booking["deposit"] {
-  if (booking.deposit === "release_pending" && booking.depositReleasedAt &&
-    now >= parseTimestamp(booking.depositReleasedAt)) {
+  if (
+    (booking.status === "cancelled" || booking.status === "rejected") &&
+    booking.deposit === "release_pending" &&
+    !hasUnresolvedDispute &&
+    booking.depositReleasedAt &&
+    now >= parseTimestamp(booking.depositReleasedAt)
+  ) {
     return "released";
   }
   return booking.deposit;

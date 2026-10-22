@@ -1,6 +1,6 @@
 import { createSeed } from "../data/seed";
 import type { Marketplace } from "../types/marketplace";
-import { withoutRemovedSeedListings, withRefreshedCatalogueShippingData } from "./catalogue";
+import { withoutRemovedSeedListings, withoutRetiredDemoBookings, withRefreshedCatalogueShippingData } from "./catalogue";
 import { repairDemoDeliveryPayments } from "./repairDemoDeliveryPayments";
 import { normalizeDefaultDeliveryAddress } from "./deliveryAddresses";
 
@@ -93,14 +93,14 @@ export function loadDemoWorkspaceSession(accountId: string): Marketplace {
   if (serialized) {
     try {
       const state: unknown = JSON.parse(serialized);
-      if (isMarketplaceSnapshot(state)) return restoreDemoHistory(accountId, withRefreshedCatalogueShippingData(withoutRemovedSeedListings(state)));
+      if (isMarketplaceSnapshot(state)) return restoreDemoHistory(accountId, withRefreshedCatalogueShippingData(withoutRetiredDemoBookings(withoutRemovedSeedListings(state))));
     } catch {
       storage?.removeItem(key(accountId));
     }
   }
 
   const memoryState = memorySessions.get(accountId);
-  if (memoryState && isMarketplaceSnapshot(memoryState)) return restoreDemoHistory(accountId, withRefreshedCatalogueShippingData(withoutRemovedSeedListings(memoryState)));
+  if (memoryState && isMarketplaceSnapshot(memoryState)) return restoreDemoHistory(accountId, withRefreshedCatalogueShippingData(withoutRetiredDemoBookings(withoutRemovedSeedListings(memoryState))));
 
   const fresh = restoreDemoHistory(accountId, createSeed("admin_demo"));
   saveDemoWorkspaceSession(accountId, fresh);

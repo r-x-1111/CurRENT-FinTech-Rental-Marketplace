@@ -13,9 +13,11 @@ import {
   formatShortDate,
   getBookingTotals,
   getEffectiveBookingStatus,
+  isDepositReleaseOverdue,
   money,
   parseMalaysiaTimestamp,
   paymentMethodLabel,
+  rentalTabForBooking,
 } from "../../services/booking";
 import { DELIVERY_REFUND_STATUS_LABEL, deriveDeliveryRefundStatus, deriveDisplayDelivery, type DisplayDelivery } from "../../services/delivery";
 import { colors } from "../../constants/theme";
@@ -72,29 +74,8 @@ export default function RentalsScreen() {
   const userBookings = state.bookings.filter((b) => b.renterId === user?.id);
 
   // Filter bookings based on activeTab
-  const filteredBookings = userBookings.filter((b) => {
-    const status = getEffectiveBookingStatus(b, now);
-    switch (activeTab) {
-      case "Upcoming":
-        return status === "upcoming";
-      case "Active":
-        return status === "active" || status === "return_pending";
-      case "Return Due":
-        return (
-          status === "active" &&
-          !b.renterReturnConfirmedAt &&
-          parseMalaysiaTimestamp(b.end) <= now
-        );
-      case "Completed":
-        return b.status === "completed";
-      case "Cancelled":
-        return b.status === "cancelled" || b.status === "rejected";
-      case "Disputed":
-        return b.status === "disputed";
-      default:
-        return false;
-    }
-  }).sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId));
+  const filteredBookings = userBookings.filter((b) => rentalTabForBooking(b, now) === activeTab)
+    .sort((a, b) => Number(b.id === bookingId) - Number(a.id === bookingId));
 
   function depositStatusLabel(b: Booking): string {
     const status = effectiveDepositStatus(b);
@@ -104,10 +85,12 @@ export default function RentalsScreen() {
     if (cancelled && status === "required") return "Deposit Not Charged";
     switch (status) {
       case "held": return "Held securely";
-      case "release_pending": return cancelled && b.depositReleasedAt
-        ? `Release pending (by ${formatShortDate(b.depositReleasedAt)})`
-        : "Release pending";
-      case "released": return "Released";
+      case "release_pending":
+        if (isDepositReleaseOverdue(b)) return `Release overdue (was due ${formatShortDate(b.depositReleasedAt!)})`;
+        return b.depositReleasedAt
+          ? `Release pending (by ${formatShortDate(b.depositReleasedAt)})`
+          : "Release pending";
+      case "released": return cancelled ? "Security Deposit Refunded (Demo)" : "Released";
       case "disputed": return "Held for dispute review";
       case "required": return "Required";
       default: return "Secured";
@@ -116,9 +99,28 @@ export default function RentalsScreen() {
 
   function statusChipFor(b: Booking): { text: string; tone: "red" | "grey" | "amber" | "blue" | "green" } {
     if (b.status === "disputed") return { text: "Disputed", tone: "red" };
-    if (b.status === "cancelled" || b.status === "rejected") return { text: b.payment === "refunded" ? "Cancelled · Refunded" : "Cancelled", tone: "grey" };
+    if (b.status === "cancelled" || b.status === "rejected") {
+      // "Refunded" here describes the rental/service fee refund only — the security deposit is a
+      // separate financial event with its own status, so it's never folded silently into this
+      // chip's wording. A booking whose deposit is still release_pending (or overdue) must never
+      // read as fully "Refunded"; one whose rental payment was never collected has nothing to
+      // call Refunded either.
+      if (b.payment !== "refunded") return { text: "Cancelled", tone: "grey" };
+      const depositStatus = effectiveDepositStatus(b);
+      if (depositStatus === "release_pending") {
+        return isDepositReleaseOverdue(b)
+          ? { text: "Cancelled · Fee refunded, deposit overdue", tone: "amber" }
+          : { text: "Cancelled · Fee refunded, deposit pending", tone: "amber" };
+      }
+      if (depositStatus === "released") return { text: "Cancelled · Payment and deposit refunded", tone: "grey" };
+      return { text: "Cancelled · Refunded", tone: "grey" };
+    }
     const depositStatus = effectiveDepositStatus(b);
-    if (depositStatus === "release_pending") return { text: "Deposit release pending", tone: "amber" };
+    if (depositStatus === "release_pending") {
+      return isDepositReleaseOverdue(b)
+        ? { text: "Deposit release overdue", tone: "red" }
+        : { text: "Deposit release pending", tone: "amber" };
+    }
     if (depositStatus === "released") return { text: "Completed · Deposit released", tone: "green" };
     return { text: "Deposit held", tone: "blue" };
   }
@@ -168,8 +170,10 @@ export default function RentalsScreen() {
       });
     }
     if (effectiveDepositStatus(b) === "released") {
+      // Labelled "release", not "refund" — a returned security deposit was never charged as a
+      // payment to reverse, unlike a cancellation's rental/service fee refund above.
       refundRows.push({
-        label: "Security deposit refund",
+        label: "Security deposit release",
         amount: b.quote.deposit,
         date: (b.depositReleasedAt || b.lenderReturnConfirmedAt || b.actualReturnTimestamp || b.cancelledAt || b.createdAt).slice(0, 10),
       });
@@ -212,10 +216,16 @@ export default function RentalsScreen() {
       (c.booking.payment === "paid" || c.booking.payment === "refunded" ? c.booking.quote.total : 0) +
       (c.booking.deliveryDemo?.status === "paid_demo" || c.booking.deliveryDemo?.status === "refunded_demo" ? c.booking.deliveryDemo.fee : 0), 0) * 100) / 100;
     const totalRefunded = Math.round(cards.reduce((sum, c) => sum + c.refundsTotal, 0) * 100) / 100;
+    // "release_pending" only counts as still-held while its 5-Malaysia-working-day settlement
+    // window hasn't lapsed — once overdue, it's a genuine simulated settlement problem, flagged
+    // per-transaction (see depositStatusLabel) rather than silently kept in this escrow total or
+    // hidden from the record entirely.
     const depositsInEscrow = Math.round(
       cards.reduce((sum, c) => {
         const status = effectiveDepositStatus(c.booking);
-        return sum + (status === "held" || status === "release_pending" ? c.booking.quote.deposit : 0);
+        const stillHeld = status === "held" ||
+          (status === "release_pending" && !isDepositReleaseOverdue(c.booking));
+        return sum + (stillHeld ? c.booking.quote.deposit : 0);
       }, 0) * 100,
     ) / 100;
 

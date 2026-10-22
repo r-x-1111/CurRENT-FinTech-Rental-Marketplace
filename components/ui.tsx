@@ -289,6 +289,7 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
   );
 }
 const BADGE_TONES: Record<string, { backgroundColor: string; borderColor: string; color: string }> = {
+  blue: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue, color: colors.blue },
   green: { backgroundColor: "#E7F6EC", borderColor: "#A7F3D0", color: colors.green },
   red: { backgroundColor: "#FDECEC", borderColor: "#F5B5B5", color: colors.danger },
   amber: { backgroundColor: "#FEF3E2", borderColor: "#FBD9A5", color: "#B45309" },
@@ -316,6 +317,29 @@ export function Badge({
       <Text style={[s.badgeText, resolved && { color: resolved.color }]}>
         {text.replaceAll("_", " ")}
       </Text>
+    </View>
+  );
+}
+
+/** The single rental status colour convention — Upcoming/blue, Active/green, Return Due/amber,
+ * Completed/green, Cancelled/grey, Disputed/red — shared by every rental status badge across
+ * My Rentals cards, Lender rental cards and Rental Details, so the same status always carries
+ * the same wording, colour and pill styling wherever it appears. Not for payment/deposit/delivery
+ * statuses, which keep their own distinct `Badge` tones. */
+const RENTAL_STATUS_TONES: Record<string, { backgroundColor: string; borderColor: string; color: string }> = {
+  Upcoming: { backgroundColor: colors.paleBlue, borderColor: colors.softBlue, color: colors.blue },
+  Active: { backgroundColor: "#DCFCE7", borderColor: "#BBF7D0", color: "#166534" },
+  "Return Due": { backgroundColor: "#FEF3C7", borderColor: "#FDE68A", color: "#92400E" },
+  Completed: { backgroundColor: "#F0FDF4", borderColor: "#BBF7D0", color: "#15803D" },
+  Cancelled: { backgroundColor: colors.lightGrey, borderColor: colors.border, color: colors.muted },
+  Disputed: { backgroundColor: "#FEE2E2", borderColor: "#FECACA", color: "#B91C1C" },
+};
+
+export function RentalStatusBadge({ label, style }: { label: string; style?: StyleProp<ViewStyle> }) {
+  const tone = RENTAL_STATUS_TONES[label];
+  return (
+    <View style={[s.rentalStatusBadge, tone && { backgroundColor: tone.backgroundColor, borderColor: tone.borderColor }, style]}>
+      <Text style={[s.rentalStatusBadgeText, tone && { color: tone.color }]}>{label}</Text>
     </View>
   );
 }
@@ -620,6 +644,21 @@ export const s = StyleSheet.create({
     fontWeight: "700",
     fontFamily: boldFont,
     textTransform: "capitalize",
+  },
+  rentalStatusBadge: {
+    backgroundColor: colors.paleBlue,
+    borderWidth: 1,
+    borderColor: colors.softBlue,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    alignSelf: "flex-start",
+  },
+  rentalStatusBadgeText: {
+    color: colors.blue,
+    fontSize: 12,
+    fontWeight: "600",
+    fontFamily: bodyFont,
   },
   notice: {
     backgroundColor: colors.paleBlue,

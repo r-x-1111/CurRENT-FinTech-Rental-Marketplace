@@ -10,6 +10,7 @@ import {
   calculateCancellationCutoff,
   calculateDurationMinutes,
   cancelledDepositReleaseDeadline,
+  depositReleaseDeadline,
   formatMalaysiaDateTime,
   getEffectiveBookingStatus,
   isCancellationEligible,
@@ -88,18 +89,24 @@ export type Action =
       notes?: string;
     }
   | {
+      type: "confirmReturnReceipt";
+      bookingId: string;
+    }
+  | {
       type: "conditionEvidence";
       bookingId: string;
-      kind: "check_in" | "check_out";
+      kind: "check_in" | "check_out" | "lender_before_delivery" | "lender_after_return";
       photos: string[];
       videos: string[];
       notes?: string;
+      receivedReturnedItem?: boolean;
     }
   | {
       type: "reportIssue";
       bookingId: string;
-      stage: "check_in" | "check_out";
+      stage: "check_in" | "check_out" | "lender_before_delivery" | "lender_after_return";
       text: string;
+      receivedReturnedItem?: boolean;
     }
   | {
       type: "resolveDispute";
@@ -1314,8 +1321,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       b.payment = "refunded";
       // The deposit was genuinely held (this path requires payment === "paid"), so it releases
       // within 5 Malaysia working days of this cancellation — never on the original scheduled
-      // rental end date. effectiveDepositStatus() reports "released" automatically once that
-      // deadline has actually passed.
+      // rental end date. It stays "release_pending" (not "released") until an actual release is
+      // recorded; isDepositReleaseOverdue() flags it once that deadline has passed unactioned.
       b.deposit = "release_pending";
       b.cancelledAt = now;
       b.cancelledById = user.id;
@@ -1365,6 +1372,17 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       break;
     }
 
+    case "confirmReturnReceipt": {
+      const b = bookingFor(action.bookingId);
+      requireThat(user.id === b.ownerId, "Only the lender can confirm receipt of the returned item.");
+      requireThat(b.status === "return_pending" && !!b.renterReturnConfirmedAt,
+        "Renter return confirmation is required before lender receipt.");
+      requireThat(!b.lenderReturnReceivedAt, "Return receipt has already been confirmed.");
+      b.lenderReturnReceivedAt = now;
+      notify(b.renterId, `Lender confirmed receipt of the returned item for ${b.title}.`, b.id);
+      break;
+    }
+
     case "returnConfirm": {
       const b = bookingFor(action.bookingId);
       const owner = user.id === b.ownerId;
@@ -1388,7 +1406,7 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
 
       const photos = action.photos || (action.photo ? [action.photo] : []);
       const videos = action.videos || [];
-      if (photos.length > 0 || videos.length > 0) {
+      if ((photos.length > 0 || videos.length > 0) && !state.evidence.some((e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "check_out")) {
         state.evidence.push({
           id: newId(),
           bookingId: b.id,
@@ -1432,7 +1450,6 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
 
         b.renterReturnConfirmedAt = now;
         b.status = "return_pending";
-        b.deposit = "release_pending";
         // Courier Branch Drop-off: this is the moment the renter confirms they've dropped the
         // returned parcel off, so stamp the demo drop-off confirmation + tracking reference
         // here rather than a separate action. The deposit stays held until the lender also
@@ -1452,6 +1469,9 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
           !!b.renterReturnConfirmedAt,
           "Renter must complete return check-out before lender can end the rental.",
         );
+        requireThat(!!b.lenderReturnReceivedAt, "Confirm receipt of the returned item before ending the rental.");
+        requireThat(state.evidence.some((e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "lender_after_return"),
+          "Submit lender After Return evidence before confirming a clean return.");
 
         b.lenderReturnConfirmedAt = now;
         notify(
@@ -1469,7 +1489,11 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         )
       ) {
         b.status = "completed";
-        b.deposit = "released";
+        b.completedAt = now;
+        b.deposit = "release_pending";
+        // Same 5-Malaysia-working-day settlement window as a cancellation release, triggered by
+        // the clean-return completion instant instead of the cancellation instant.
+        b.depositReleasedAt = depositReleaseDeadline(now);
 
         const returnInstant = b.actualReturnTimestamp
           ? parseMalaysiaTimestamp(b.actualReturnTimestamp)
@@ -1538,27 +1562,34 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       const b = bookingFor(action.bookingId);
       const owner = user.id === b.ownerId;
       const effectiveStatus = getEffectiveBookingStatus(b);
-      requireThat(!owner, "Only the renter submits condition evidence.");
+      const lenderStage = action.kind === "lender_before_delivery" || action.kind === "lender_after_return";
+      requireThat(owner === lenderStage, lenderStage ? "Only the lender submits lender condition evidence." : "Only the renter submits condition evidence.");
       requireThat(
-        ["upcoming", "active", "return_pending"].includes(effectiveStatus),
+        lenderStage || ["upcoming", "active", "return_pending"].includes(effectiveStatus),
         "Condition evidence can only be submitted for active, upcoming or returning rentals.",
       );
-      if (action.kind === "check_in") {
+      if (action.kind === "lender_before_delivery") {
+        requireThat(effectiveStatus === "upcoming" && b.payment === "paid" && !b.renterReceivedAt && !b.lenderHandoverAt && !b.lenderOutboundDispatchConfirmedAt,
+          "Before-delivery evidence must be submitted before dispatch or handover.");
+      } else if (action.kind === "lender_after_return") {
+        requireThat(effectiveStatus === "return_pending" && !!b.lenderReturnReceivedAt && !b.lenderReturnConfirmedAt,
+          "After-return evidence is available after confirmed lender receipt.");
+      } else if (action.kind === "check_in") {
         requireThat(
-          !!b.renterReceivedAt || effectiveStatus === "active",
+          !!b.renterReceivedAt,
           "Item must be delivered before submitting check-in condition evidence.",
         );
       } else {
         requireThat(
-          Date.now() >=
-            parseMalaysiaTimestamp(b.end),
-          "Check-out evidence is available from the scheduled rental end.",
+          effectiveStatus === "active" && !!b.renterReceivedAt,
+          "Check-out evidence is available during the active rental after delivery.",
         );
       }
       requireThat(
         action.photos.length >= 6 && action.videos.length >= 1,
         `Condition evidence requires at least 6 photos and 1 video. Currently have ${action.photos.length} photos and ${action.videos.length} videos.`,
       );
+      if (lenderStage || action.kind === "check_out") requireThat(!state.evidence.some((e) => e.bookingId === b.id && e.authorId === user.id && e.kind === action.kind), "Condition evidence already submitted for this checkpoint.");
 
       state.evidence.push({
         id: newId(),
@@ -1575,8 +1606,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       });
 
       notify(
-        b.ownerId,
-        `Renter submitted ${action.kind === "check_in" ? "check-in" : "check-out"} condition evidence for ${b.title}.`,
+        owner ? b.renterId : b.ownerId,
+        `${owner ? "Lender" : "Renter"} submitted condition evidence for ${b.title}.`,
         b.id,
       );
       break;
@@ -1585,10 +1616,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
     case "reportIssue": {
       const b = bookingFor(action.bookingId);
       const effectiveStatus = getEffectiveBookingStatus(b);
-      requireThat(
-        user.id === b.renterId,
-        "Only the renter can submit a condition issue report.",
-      );
+      const lenderStage = action.stage === "lender_before_delivery" || action.stage === "lender_after_return";
+      requireThat(user.id === (lenderStage ? b.ownerId : b.renterId), lenderStage ? "Only the lender can submit this condition issue report." : "Only the renter can submit a condition issue report.");
       const text = action.text.trim();
       requireThat(
         text.length > 0,
@@ -1608,13 +1637,13 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
       }
 
       requireThat(
-        action.stage === "check_in"
+        action.stage === "lender_before_delivery"
+          ? effectiveStatus === "upcoming" && b.payment === "paid" && !b.renterReceivedAt && !b.lenderOutboundDispatchConfirmedAt
+          : action.stage === "lender_after_return"
+          ? effectiveStatus === "return_pending" && !!b.lenderReturnReceivedAt && !b.lenderReturnConfirmedAt
+          : action.stage === "check_in"
           ? effectiveStatus === "active"
-          : ["active", "return_pending", "disputed"].includes(
-              effectiveStatus,
-            ) &&
-            Date.now() >=
-              parseMalaysiaTimestamp(b.end),
+          : ["active", "return_pending"].includes(effectiveStatus) && !!b.renterReceivedAt,
         "Issue reports can only be submitted during the relevant active rental stage.",
       );
       state.issueReports.unshift({
@@ -1626,8 +1655,8 @@ export function transition(previous: Marketplace, action: Action): Marketplace {
         createdAt: now,
       });
       notify(
-        b.ownerId,
-        `Renter reported an issue during ${action.stage === "check_in" ? "check-in" : "check-out"} for ${b.title}.`,
+        lenderStage ? b.renterId : b.ownerId,
+        `${lenderStage ? "Lender" : "Renter"} reported a condition issue for ${b.title}.`,
         b.id,
       );
       break;

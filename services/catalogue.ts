@@ -13,6 +13,36 @@ export function withoutRemovedSeedListings(state: Marketplace): Marketplace {
   return listings.length === state.listings.length ? state : { ...state, listings };
 }
 
+// Retired demo Return Due fixtures (Luxury Handbag, Portable Power Station) — the intended demo
+// scenario now keeps only Pressure Washer and Epson Portable Projector. A Demo Account session
+// persisted before this cleanup still carries these booking ids (and their stale "held" deposit,
+// evidence, issue-report, message and notification records) in browser storage; re-seeding alone
+// never reaches an already-saved session, so this strips them explicitly on every load — never a
+// genuine normal-account booking, since these ids only ever exist in the admin_demo seed.
+const retiredDemoBookingIds = new Map([
+  ["demo-booking-return-due-2", "demo-renter"],
+  ["demo-booking-return-due-3", "demo-renter"],
+]);
+
+export function withoutRetiredDemoBookings(state: Marketplace): Marketplace {
+  const isRetired = (bookingId: string | undefined) =>
+    !!bookingId && retiredDemoBookingIds.has(bookingId);
+  const bookings = state.bookings.filter(
+    (booking) => retiredDemoBookingIds.get(booking.id) !== booking.renterId,
+  );
+  if (bookings.length === state.bookings.length) return state;
+  return {
+    ...state,
+    bookings,
+    evidence: state.evidence.filter((item) => !isRetired(item.bookingId)),
+    issueReports: state.issueReports?.filter((item) => !isRetired(item.bookingId)),
+    messages: state.messages.filter((item) => !isRetired(item.bookingId)),
+    notifications: state.notifications.filter((item) => !isRetired(item.bookingId)),
+    disputes: state.disputes.filter((item) => !isRetired(item.bookingId)),
+    reviews: state.reviews.filter((item) => !isRetired(item.bookingId)),
+  };
+}
+
 const canonicalCatalogueListingsById = new Map(
   canonicalCatalogueListings.map((listing) => [listing.id, listing]),
 );

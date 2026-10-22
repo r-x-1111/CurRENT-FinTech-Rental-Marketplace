@@ -69,7 +69,9 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
     secured: "Held in Escrow",
     held: "Held in Escrow",
     release_pending: "Release Pending",
-    released: "Released",
+    // A cancelled booking's returned deposit is a refund, never collected as a payment to
+    // "release" in the completion sense — the wording distinguishes the two.
+    released: cancelled ? "Security Deposit Refunded (Demo)" : "Released",
     disputed: "Held — Dispute Under Review",
   };
 
@@ -239,6 +241,7 @@ export function BookingSummary({ booking, listing, lender = false }: Props) {
         if (cancelled && status === "release_pending" && booking.depositReleasedAt) {
           return `release pending (by ${formatShortDate(booking.depositReleasedAt)})`;
         }
+        if (cancelled && status === "released") return "refunded (Demo)";
         return status.replace("_", " ");
       })()} />
       {booking.payment === "refunded" && <Row label="Rental payment refund" value={money(booking.quote.total)} />}

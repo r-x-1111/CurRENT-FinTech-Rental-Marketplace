@@ -210,7 +210,9 @@ export interface Booking {
   activationTimestamp?: string | null;
   effectiveReturnDeadline?: string | null;
   renterReturnConfirmedAt?: string | null;
+  lenderReturnReceivedAt?: string | null;
   lenderReturnConfirmedAt?: string | null;
+  completedAt?: string | null;
   actualReturnTimestamp?: string | null;
   conflictOffer?: {
     revisedEnd: string;
@@ -252,7 +254,7 @@ export interface Evidence {
   id: string;
   bookingId: string;
   authorId: string;
-  kind: "check_in" | "check_out" | "dispute";
+  kind: "check_in" | "check_out" | "lender_before_delivery" | "lender_after_return" | "dispute";
   photo: string;
   photos?: string[];
   videos?: string[];
@@ -264,7 +266,7 @@ export interface ConditionIssueReport {
   id: string;
   bookingId: string;
   authorId: string;
-  stage: "check_in" | "check_out";
+  stage: "check_in" | "check_out" | "lender_before_delivery" | "lender_after_return";
   text: string;
   createdAt: string;
 }
