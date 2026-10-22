@@ -3369,29 +3369,32 @@ test("Lender Rental Details renders one persistent action panel without the old 
   assert.match(disputeSource, /New financial charge/);
 });
 
-test("Return Management never shows the renter-evidence waiting message once the lender has already confirmed a clean return", () => {
+test("The standalone Return Management and Renter Evidence card is completely removed from Lender Mode; its essential renter-evidence comparison and completion confirmation moved into Check-out — After Return", () => {
   const source = fs.readFileSync(
     path.resolve(process.cwd(), "app/rental/[id].tsx"),
     "utf8",
   );
-  const waitingMessage = source.indexOf(
-    "Waiting for renter to upload return condition evidence and submit check-out confirmation.",
-  );
-  const guard = source.lastIndexOf("!b.lenderReturnConfirmedAt", waitingMessage);
-  assert.ok(waitingMessage >= 0, "Expected the waiting-message Notice to still exist for genuinely pending cases");
-  assert.ok(guard >= 0 && guard < waitingMessage, "The waiting message must be gated behind !b.lenderReturnConfirmedAt");
-
-  // Real repro: demo-lender-completed-1 (Office Chair) has an already-confirmed clean return
-  // (lenderReturnConfirmedAt set) but no renter check_out evidence record on file — the exact
-  // combination that used to show the contradictory "Waiting for renter…" message alongside
-  // "Inspection Completed".
-  const seed = createSeed("admin_demo");
-  const booking = seed.bookings.find((b) => b.id === "demo-lender-completed-1")!;
-  assert.ok(booking.lenderReturnConfirmedAt, "Expected an already-confirmed clean return");
-  assert.ok(
-    !seed.evidence.some((e) => e.bookingId === booking.id && e.kind === "check_out"),
-    "This booking has no renter check_out evidence on file — the exact case the fix covers",
-  );
+  // The redundant card, its heading, its contradictory waiting message, its "Confirm Clean
+  // Return" button (now redundant with Lender Actions' "Rental Complete") and its old
+  // "Rental Concluded" box must all be gone — not just hidden behind a style.
+  assert.doesNotMatch(source, /Return Management and Renter Evidence/);
+  assert.doesNotMatch(source, /Waiting for renter to upload return condition evidence/);
+  assert.doesNotMatch(source, /Confirm Clean Return/);
+  assert.doesNotMatch(source, /Rental Concluded — No Issues/);
+  assert.doesNotMatch(source, /Renter Return Media:/);
+  // The Check-out — Before Return card now renders only for the renter.
+  assert.match(source, /\{!owner && <Card/);
+  assert.match(source, /<Text style={s\.h2}>Check-out — Before Return<\/Text>/);
+  // Its essential functionality is preserved inside the lender's own After Return checkpoint:
+  // a read-only view of the renter's Check-out evidence for comparison/dispute review, and an
+  // accurate completed-inspection confirmation gated on an actual recorded clean-return
+  // confirmation (never claimed for Active/Return Due/Disputed).
+  assert.match(source, /Renter's Check-out Evidence/);
+  assert.match(source, /Return Inspection Completed — No Issues/);
+  assert.match(source, /!before && effectiveStatus === "completed" && booking\.lenderReturnConfirmedAt/);
+  // Rental completion itself still only comes from the existing "Rental Complete" button in
+  // Lender Actions (added previously) — confirm it's still the sole completion entry point.
+  assert.match(source, />\s*Rental Complete\s*</);
 });
 
 test("The four cancelled demo bookings past their scheduled deposit release date auto-complete as refunded, with no unresolved dispute holding them", () => {
@@ -3464,30 +3467,31 @@ test("Successfully completed demo-renter-as-lender rental shows submitted lender
   }
 });
 
-test("Rental Details renders exactly one Report an Issue section per role, never duplicated inside individual Condition Evidence checkpoints", () => {
+test("Rental Details restores an independent Report an Issue form inside every Condition Evidence checkpoint — Check-in and Check-out never share one form", () => {
   const source = fs.readFileSync(
     path.resolve(process.cwd(), "app/rental/[id].tsx"),
     "utf8",
   );
-  // Both lender evidence checkpoints must suppress their own inline issue block — the single
-  // shared lender Report an Issue card (after Return Management/Renter Evidence) is the only one.
-  assert.match(source, /renderLenderEvidence\("lender_before_delivery",\s*\{\s*showIssueReport:\s*false\s*\}\)/);
-  assert.match(source, /renderLenderEvidence\("lender_after_return",\s*\{\s*showIssueReport:\s*false\s*\}\)/);
-  // One function definition + exactly one call site = rendered exactly once.
-  assert.equal(
-    (source.match(/renderLenderIssueReport\(/g) || []).length,
-    2,
-    "renderLenderIssueReport must be defined once and called exactly once",
-  );
-  assert.equal(
-    (source.match(/renderRenterIssueReportSection\(\)/g) || []).length,
-    2,
-    "renderRenterIssueReportSection must be defined once and called exactly once",
-  );
-  // renderIssueReport itself (the function that actually renders "Report an Issue") must only be
-  // invoked from inside that one shared wrapper, never directly from the Check-in/Check-out cards.
-  const directCalls = (source.match(/renderIssueReport\(/g) || []).length;
-  assert.equal(directCalls, 2, "renderIssueReport must be defined once and called exactly once (by renderRenterIssueReportSection)");
+  // The lender's evidence card renders its own Report an Issue block inline — no more
+  // showIssueReport opt-out, no more separate shared card after Return Management.
+  assert.doesNotMatch(source, /showIssueReport/);
+  assert.doesNotMatch(source, /renderLenderIssueReport\(/);
+  assert.doesNotMatch(source, /renderRenterIssueReportSection/);
+  assert.match(source, /\{renderLenderIssueReportFields\(stage\)\}/);
+  // renderLenderEvidence is called once per checkpoint (Before Delivery, After Return) with no
+  // extra options — each call renders its own complete card, issue block included.
+  assert.match(source, /renderLenderEvidence\("lender_before_delivery"\)/);
+  assert.match(source, /renderLenderEvidence\("lender_after_return"\)/);
+  // Renter: `renderIssueReport` (the function that actually renders "Report an Issue") is
+  // defined once and called once inside the Check-in card and three times across the Check-out
+  // card's renter branches (not-yet-eligible, evidence-already-submitted, still-uploading) —
+  // four live call sites plus the definition, never a single shared wrapper used by both
+  // checkpoints.
+  const matches = source.match(/renderIssueReport\(/g) || [];
+  assert.equal(matches.length, 5, "Expected the definition + 4 call sites (1 check_in, 3 check_out branches)");
+  assert.match(source, /renderIssueReport\("check_in", isDelivered\)/);
+  assert.match(source, /renderIssueReport\(\s*"check_out",\s*false\s*\)/);
+  assert.match(source, /renderIssueReport\(\s*"check_out",\s*isReturnEvidenceAvailable/);
 });
 
 test("lender disputes unlock at scheduled end, persist once, and do not change financial state", () => {

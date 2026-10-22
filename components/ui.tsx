@@ -49,7 +49,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { colors, fonts, radius, shadow, type } from "../constants/theme";
+import { breakpoints, colors, fonts, radius, shadow, type } from "../constants/theme";
 import { useMarketplace } from "../context/Marketplace";
 export { colors } from "../constants/theme";
 // Web-only font family (DM Sans, loaded in app/_layout.tsx); native keeps the system sans-serif
@@ -88,7 +88,11 @@ export function Screen({
   onBack?: () => void;
 }) {
   const { storageError } = useMarketplace();
-  const mobile = useWindowDimensions().width < 768;
+  const width = useWindowDimensions().width;
+  const mobile = width < breakpoints.tablet;
+  // Keeps horizontal gutters readable on the narrowest phones (320–375px) without shrinking
+  // the existing desktop/tablet padding.
+  const edgePadding = width < breakpoints.mobile ? 16 : 22;
   const scrollViewRef = useRef<ScrollView>(null);
   useEffect(() => {
     if (scrollToY !== undefined && scrollToY !== null) {
@@ -131,9 +135,9 @@ export function Screen({
         <View pointerEvents="none" style={mobile ? s.mobileBackgroundCurve : s.desktopBackgroundCurve} />
       )}
       {bounded ? (
-        <View style={[s.content, s.boundedContent, contentStyle]}>{content}</View>
+        <View style={[s.content, { paddingHorizontal: edgePadding }, s.boundedContent, contentStyle]}>{content}</View>
       ) : (
-        <ScrollView ref={scrollViewRef} keyboardShouldPersistTaps="handled" contentContainerStyle={[s.content, contentStyle]}>{content}</ScrollView>
+        <ScrollView ref={scrollViewRef} keyboardShouldPersistTaps="handled" contentContainerStyle={[s.content, { paddingHorizontal: edgePadding }, contentStyle]}>{content}</ScrollView>
       )}
     </SafeAreaView>
   );
@@ -625,7 +629,7 @@ export const s = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: type.md16 - 1,
+    fontSize: type.md16, // kept at 16px (not md16-1) so iOS Safari doesn't auto-zoom on focus
     fontFamily: bodyFont,
     color: colors.text,
   },

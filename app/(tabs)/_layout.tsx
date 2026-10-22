@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "../../constants/theme";
 import { useMarketplace } from "../../context/Marketplace";
 import { fetchChatInbox } from "../../services/chat";
@@ -16,6 +17,7 @@ const icons = {
 
 export default function TabsLayout() {
   const mobile = useWindowDimensions().width < 768;
+  const insets = useSafeAreaInsets();
   const { user, state } = useMarketplace();
   const [sharedUnread, setSharedUnread] = useState(0);
   useEffect(() => {
@@ -35,9 +37,10 @@ export default function TabsLayout() {
         tabBarActiveTintColor: mobile ? "#2463FF" : colors.blue,
         tabBarInactiveTintColor: mobile ? "#64789A" : colors.muted,
         tabBarStyle: {
-          minHeight: mobile ? 82 : 72,
+          minHeight: mobile ? 60 + Math.max(insets.bottom, 22) : 72,
           paddingTop: mobile ? 11 : 9,
-          paddingBottom: mobile ? 22 : 12,
+          // Clears the home indicator / gesture bar on notched phones instead of a fixed 22px.
+          paddingBottom: mobile ? Math.max(insets.bottom, 22) : 12,
           borderTopColor: colors.border,
           backgroundColor: "white",
         },

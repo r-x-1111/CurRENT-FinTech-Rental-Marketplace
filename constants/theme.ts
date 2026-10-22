@@ -18,6 +18,14 @@ export const colors = {
   danger: '#DC2626',
 };
 
+// Shared responsive breakpoints (CSS viewport widths), used wherever a screen needs to branch
+// its layout instead of hardcoding one device size.
+export const breakpoints = {
+  mobile: 480,
+  tablet: 768,
+  desktop: 1024,
+};
+
 export const spacing = {
   xs: 6,
   sm: 10,

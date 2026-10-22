@@ -331,11 +331,10 @@ export default function RentalDetail() {
   }
   // Standard evidence-card structure (reference: Check-in — Before Delivery): title + status badge,
   // helper description, requirement chips + upload blocks (via MediaPicker), condition notes, Submit
-  // Evidence. `showIssueReport` is false for the After Return stage so the caller can place the
-  // Report an Issue block after the Return Management and Renter Evidence panel instead — see
-  // renderLenderIssueReport below and its call site after that panel.
-  function renderLenderEvidence(stage: "lender_before_delivery" | "lender_after_return", opts: { showIssueReport?: boolean } = {}) {
-    const showIssueReport = opts.showIssueReport ?? true;
+  // Evidence, and its own independent Report an Issue block — Check-in and Check-out are separate
+  // reporting contexts (different stages of the rental), so each checkpoint keeps exactly one
+  // issue-reporting form, never a shared one across checkpoints.
+  function renderLenderEvidence(stage: "lender_before_delivery" | "lender_after_return") {
     const { booking, actor, before, recorded, available, inspectionReady, deadline, overdue } = lenderEvidenceState(stage);
     const photos = before ? lenderBeforePhotos : lenderAfterPhotos;
     const videos = before ? lenderBeforeVideos : lenderAfterVideos;
@@ -378,15 +377,60 @@ export default function RentalDetail() {
         <Button disabled={photos.length < 6 || videos.length < 1 || isSavingAction} onPress={() => run({ type: "conditionEvidence", bookingId: booking.id, kind: stage, photos, videos, notes })}>Submit Evidence</Button>
       </> : finalized ? (
         <Notice text="No condition evidence was submitted for this checkpoint." />
-      ) : (
+      ) : <>
+        {/* Same upload-form structure as the ready state — chips, tiles, notes, button — just
+            disabled, so a not-yet-eligible checkpoint looks consistent with every other evidence
+            card instead of collapsing to a bare notice. */}
         <Notice text={before ? "Before-delivery inspection is no longer available after dispatch or handover." : "After-return inspection begins when the lender confirms actual receipt of the returned item."} />
+        <MediaPicker disabled photos={[]} onPhotosChange={() => {}} videos={[]} onVideosChange={() => {}} minPhotos={6} minVideos={1} />
+        <Field label="Condition notes" value="" onChangeText={() => {}} editable={false} multiline />
+        <Button disabled onPress={() => {}}>Submit Evidence</Button>
+      </>}
+      {/* Optional informational block: the renter's own Check-out evidence, kept visible here for
+          comparison/dispute review (the Return Management card this replaced used to show this),
+          plus a concise completed-inspection confirmation once the lender's clean-return
+          confirmation is actually recorded — never claimed for Active/Return Due/Disputed. */}
+      {!before && checkOutEvidence && (
+        <View style={{ marginTop: 14, gap: 8 }}>
+          <Text style={s.bold}>Renter's Check-out Evidence</Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={[s.caption, { fontWeight: "700", color: colors.navy }]}>
+              {checkOutEvidence.photos?.length || (checkOutEvidence.photo ? 1 : 0)} photos · {checkOutEvidence.videos?.length || 0} video(s)
+            </Text>
+            <Text style={s.caption}>{formatMalaysiaDateTime(checkOutEvidence.createdAt)} MYT</Text>
+          </View>
+          <MediaPicker
+            disabled
+            photos={checkOutEvidence.photos && checkOutEvidence.photos.length > 0 ? checkOutEvidence.photos : checkOutEvidence.photo ? [checkOutEvidence.photo] : []}
+            onPhotosChange={() => {}}
+            videos={checkOutEvidence.videos || []}
+            onVideosChange={() => {}}
+            minPhotos={6}
+            minVideos={1}
+          />
+          <Text style={s.body}>{checkOutEvidence.notes || "Check-out condition evidence recorded by renter."}</Text>
+          <Text style={s.caption}>Submitted by {state.profiles.find((p) => p.id === checkOutEvidence.authorId)?.name || "Renter"}</Text>
+          {state.issueReports?.filter((r) => r.bookingId === booking.id && r.stage === "check_out").map((r) => (
+            <Text key={r.id} style={s.caption}>Renter issue: {r.text} · {formatMalaysiaDateTime(r.createdAt)} MYT</Text>
+          ))}
+        </View>
       )}
-      {showIssueReport && !finalized && renderLenderIssueReportFields(stage)}
+      {!before && effectiveStatus === "completed" && booking.lenderReturnConfirmedAt && (
+        <View style={{ backgroundColor: "#ECFDF5", borderWidth: 1, borderColor: "#A7F3D0", padding: 10, borderRadius: 8, marginTop: 14 }}>
+          <Text style={[s.bold, { color: "#065F46" }]}>✓ Return Inspection Completed — No Issues</Text>
+          <Text style={[s.caption, { color: "#047857", marginTop: 2 }]}>
+            The returned item's condition has been inspected and confirmed.
+            {effectiveDepositStatus(booking) === "released" ? " Simulated security deposit released in full." : ""}
+          </Text>
+        </View>
+      )}
+      {renderLenderIssueReportFields(stage)}
     </Card>;
   }
-  // The "Report an Issue" sub-block shared by both lender evidence stages. Rendered inline inside
-  // renderLenderEvidence for Before Delivery, but pulled out and rendered after the Return Management
-  // and Renter Evidence panel for After Return (see JSX order below) per the required section order.
+  // The "Report an Issue" block for one lender evidence checkpoint — independent per checkpoint
+  // (Before Delivery / After Return), so a renter/lender can report a different issue at each
+  // stage. Never hidden just because evidence was already submitted — only read-only once a
+  // report already exists for this checkpoint.
   function renderLenderIssueReportFields(stage: "lender_before_delivery" | "lender_after_return") {
     const { booking, actor, report, inspectionReady } = lenderEvidenceState(stage);
     const before = stage === "lender_before_delivery";
@@ -396,13 +440,6 @@ export default function RentalDetail() {
       <Field label="Issue details" value={report?.text || issue} onChangeText={before ? setLenderBeforeIssue : setLenderAfterIssue} editable={inspectionReady && !report} multiline />
       {report ? <Text style={s.caption}>Submitted {formatMalaysiaDateTime(report.createdAt)} MYT by {actor.name}</Text> : inspectionReady ? <Button secondary disabled={!issue.trim() || isSavingAction} onPress={() => run({ type: "reportIssue", bookingId: booking.id, stage, text: issue })}>Submit Report</Button> : null}
     </View>;
-  }
-  // Standalone Report an Issue card for the After Return stage, placed after the Return Management
-  // and Renter Evidence panel.
-  function renderLenderIssueReport(stage: "lender_before_delivery" | "lender_after_return") {
-    const { recorded, report } = lenderEvidenceState(stage);
-    if (!recorded && !report && !["upcoming", "active", "return_pending"].includes(effectiveStatus)) return null;
-    return <Card>{renderLenderIssueReportFields(stage)}</Card>;
   }
   function renderIssueReport(
     stage: "check_in" | "check_out",
@@ -461,23 +498,6 @@ export default function RentalDetail() {
       </View>
     );
   }
-  // One shared Report an Issue section for the renter — never duplicated per checkpoint — covers
-  // whichever renter checkpoint is currently relevant: Check-in until the item has actually been
-  // returned, Check-out once return evidence becomes available or return has been confirmed.
-  function renderRenterIssueReportSection() {
-    const stage: "check_in" | "check_out" =
-      state.issueReports?.some((r) => r.bookingId === b!.id && r.stage === "check_out")
-        ? "check_out"
-        : state.issueReports?.some((r) => r.bookingId === b!.id && r.stage === "check_in")
-          ? "check_in"
-          : isReturnEvidenceAvailable || effectiveStatus === "return_pending" || !!b!.renterReturnConfirmedAt
-            ? "check_out"
-            : "check_in";
-    const stageAvailable = stage === "check_in" ? isDelivered : isReturnEvidenceAvailable || effectiveStatus === "return_pending";
-    return <Card>{renderIssueReport(stage, stageAvailable)}</Card>;
-  }
-
-
   // Mirrors BookingSummary's lender-facing deposit status wording, for the post-cancellation
   // summary card below — always read from the booking's actual current state, never fixed text.
   const depositStatusLabel: Record<Booking["deposit"], string> = {
@@ -893,7 +913,7 @@ export default function RentalDetail() {
       )}
 
       {owner && <Section title="Condition Evidence" />}
-      {owner && renderLenderEvidence("lender_before_delivery", { showIssueReport: false })}
+      {owner && renderLenderEvidence("lender_before_delivery")}
 
       {/* ACTIVE RENTAL */}
       {effectiveStatus === "active" && (
@@ -938,7 +958,7 @@ export default function RentalDetail() {
       {/* CONDITION EVIDENCE (SECTION 4.4 & 14.3 - NEVER EMPTY) */}
       {!owner && <Section title="Condition Evidence" />}
 
-      {owner && renderLenderEvidence("lender_after_return", { showIssueReport: false })}
+      {owner && renderLenderEvidence("lender_after_return")}
 
       {/* Renter's after-delivery checkpoint; lender may inspect the recorded media below. */}
       {!owner && <Card>
@@ -1071,6 +1091,7 @@ export default function RentalDetail() {
             />
           </>
         )}
+        {renderIssueReport("check_in", isDelivered)}
       </Card>}
 
       {owner && checkInEvidence && <Card>
@@ -1082,8 +1103,10 @@ export default function RentalDetail() {
         {state.issueReports?.filter((report) => report.bookingId === b.id && report.stage === "check_in").map((report) => <Text key={report.id} style={s.caption}>Renter issue: {report.text} · {formatMalaysiaDateTime(report.createdAt)} MYT</Text>)}
       </Card>}
 
-      {/* STAGE 2: CHECK-OUT — BEFORE RETURN */}
-      <Card
+      {/* STAGE 2: CHECK-OUT — BEFORE RETURN (Renter Mode only — the lender's own Check-out —
+          After Return checkpoint, including any read-only view of this evidence, lives in
+          renderLenderEvidence("lender_after_return") instead; see Condition Evidence below). */}
+      {!owner && <Card
         onLayout={(event) => {
           const offset = event.nativeEvent.layout.y;
           setCheckOutOffset((current) =>
@@ -1099,10 +1122,8 @@ export default function RentalDetail() {
             marginBottom: 6,
           }}
         >
-          <Text style={s.h2}>{owner ? "Return Management and Renter Evidence" : "Check-out — Before Return"}</Text>
-          {owner ? (
-            <Badge text={b.lenderReturnConfirmedAt ? "Inspection Completed" : checkOutEvidence ? "Evidence Submitted" : "Pending Return"} green={!!b.lenderReturnConfirmedAt} />
-          ) : effectiveStatus === "completed" ? (
+          <Text style={s.h2}>Check-out — Before Return</Text>
+          {effectiveStatus === "completed" ? (
             <Badge text="Settled — No Issues" green />
           ) : checkOutEvidence || b.renterReturnConfirmedAt ? (
             <Badge text="Return Confirmed" />
@@ -1112,7 +1133,6 @@ export default function RentalDetail() {
             <Badge text="Pending Active Rental" />
           )}
         </View>
-        {owner && <Text style={s.caption}>Review the renter's return evidence below and confirm a clean return once your own After Return inspection is submitted.</Text>}
 
         {!!returnNotice && (
           <View style={{ marginBottom: 10 }}>
@@ -1120,7 +1140,7 @@ export default function RentalDetail() {
           </View>
         )}
 
-        {!owner && !isReturnEvidenceAvailable && !checkOutEvidence && !b.renterReturnConfirmedAt ? (
+        {!isReturnEvidenceAvailable && !checkOutEvidence && !b.renterReturnConfirmedAt ? (
           <>
             <Text style={s.caption}>
               Check-out condition evidence becomes available during the active rental after delivery.
@@ -1134,8 +1154,9 @@ export default function RentalDetail() {
               minPhotos={6}
               minVideos={1}
             />
+            {renderIssueReport("check_out", false)}
           </>
-        ) : !owner ? (
+        ) : (
           <>
             {b.renterReturnConfirmedAt || checkOutEvidence ? (
               <>
@@ -1209,6 +1230,10 @@ export default function RentalDetail() {
                     </>
                   )}
                 </View>
+                {renderIssueReport(
+                  "check_out",
+                  isReturnEvidenceAvailable || effectiveStatus === "return_pending",
+                )}
                 {!b.renterReturnConfirmedAt && (isEndReached ? <Button disabled={isSavingAction} onPress={() => run({ type: "returnConfirm", bookingId: id, role: "renter" })}>Confirm Return</Button> : <Notice text={`Confirm Return becomes available at ${formatMalaysiaDateTime(endMs)}. Your evidence is already saved.`} />)}
               </>
             ) : (
@@ -1233,6 +1258,7 @@ export default function RentalDetail() {
                   multiline
                   placeholder="Confirm all accessories are included and condition is clean."
                 />
+                {renderIssueReport("check_out", isReturnEvidenceAvailable)}
                 <Button disabled={returnPhotos.length < 6 || returnVideos.length < 1 || isSavingAction} onPress={() => run({ type: "conditionEvidence", bookingId: id, kind: "check_out", photos: returnPhotos, videos: returnVideos, notes: returnNotes })}>Submit Check-out Evidence</Button>
                 {isEndReached && <Button
                   disabled={returnPhotos.length < 6 || returnVideos.length < 1}
@@ -1252,133 +1278,8 @@ export default function RentalDetail() {
               </>
             )}
           </>
-        ) : (
-          /* LENDER VIEW: Read-only shared media + Two Decision Buttons */
-          <>
-            {checkOutEvidence ? (
-              <View style={{ gap: 8, marginTop: 4 }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Text
-                    style={[
-                      s.caption,
-                      { fontWeight: "700", color: colors.navy },
-                    ]}
-                  >
-                    Renter Return Media:{" "}
-                    {checkOutEvidence.photos?.length ||
-                      (checkOutEvidence.photo ? 1 : 0)}{" "}
-                    photos · {checkOutEvidence.videos?.length || 0} video(s)
-                  </Text>
-                  <Text style={s.caption}>
-                    {new Date(checkOutEvidence.createdAt).toLocaleString()}
-                  </Text>
-                </View>
-                <MediaPicker
-                  disabled
-                  photos={
-                    checkOutEvidence.photos &&
-                    checkOutEvidence.photos.length > 0
-                      ? checkOutEvidence.photos
-                      : checkOutEvidence.photo
-                        ? [checkOutEvidence.photo]
-                        : []
-                  }
-                  onPhotosChange={() => {}}
-                  videos={checkOutEvidence.videos || []}
-                  onVideosChange={() => {}}
-                  minPhotos={6}
-                  minVideos={1}
-                />
-                <Text style={s.body}>
-                  {checkOutEvidence.notes ||
-                    "Check-out condition evidence recorded by renter."}
-                </Text>
-                <Text style={s.caption}>
-                  Submitted by{" "}
-                  {state.profiles.find(
-                    (p) => p.id === checkOutEvidence.authorId,
-                  )?.name || "Renter"}
-                </Text>
-              </View>
-            ) : !b.lenderReturnConfirmedAt ? (
-              // Only a genuinely outstanding wait — never shown once the lender has already
-              // confirmed a clean return (Inspection Completed), even if no renter check-out
-              // media happens to be on record for this booking.
-              <Notice text="Waiting for renter to upload return condition evidence and submit check-out confirmation." />
-            ) : null}
-
-            {state.issueReports?.filter((report) => report.bookingId === b.id && report.stage === "check_out").map((report) => <Text key={report.id} style={s.caption}>Renter issue: {report.text} · {formatMalaysiaDateTime(report.createdAt)} MYT</Text>)}
-
-            {["active", "return_pending"].includes(effectiveStatus) && (
-              <View style={{ marginTop: 14, gap: 10 }}>
-                <Button
-                  disabled={isSavingAction || !b.renterReturnConfirmedAt || !b.lenderReturnReceivedAt || !state.evidence.some((e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "lender_after_return")}
-                  onPress={() =>
-                    run({
-                      type: "returnConfirm",
-                      bookingId: id,
-                      role: "owner",
-                      notes: "Owner inspection confirmed clean — No Issue",
-                    })
-                  }
-                >
-                  Confirm Clean Return
-                </Button>
-                {!b.renterReturnConfirmedAt && (
-                  <Text style={[s.caption, { textAlign: "center" }]}>
-                    Clean return confirmation is disabled until renter completes
-                    check-out and confirms return.
-                  </Text>
-                )}
-                {b.renterReturnConfirmedAt && (!b.lenderReturnReceivedAt || !state.evidence.some((e) => e.bookingId === b.id && e.authorId === user.id && e.kind === "lender_after_return")) && <Text style={s.caption}>Confirm receipt and submit After Return evidence before confirming a clean return.</Text>}
-              </View>
-            )}
-
-            {effectiveStatus === "completed" && (
-              <View
-                style={{
-                  backgroundColor: "#ECFDF5",
-                  borderWidth: 1,
-                  borderColor: "#A7F3D0",
-                  padding: 10,
-                  borderRadius: 8,
-                  marginTop: 12,
-                }}
-              >
-                <Text style={[s.bold, { color: "#065F46" }]}>
-                  ✓ Rental Concluded — No Issues
-                </Text>
-                <Text style={[s.caption, { color: "#047857", marginTop: 2 }]}>
-                  Full simulated deposit released to renter. Clean completion
-                  settled.
-                </Text>
-              </View>
-            )}
-          </>
         )}
-      </Card>
-
-      {/* One Report an Issue section for the lender — never duplicated per checkpoint — sits after
-          the Return Management and Renter Evidence panel above, per the required section order.
-          It covers whichever lender checkpoint is currently relevant: Before Delivery until the
-          item has actually been returned, After Return once the renter has confirmed return. */}
-      {owner && renderLenderIssueReport(
-        state.issueReports?.some((r) => r.bookingId === b.id && r.stage === "lender_after_return")
-          ? "lender_after_return"
-          : state.issueReports?.some((r) => r.bookingId === b.id && r.stage === "lender_before_delivery")
-            ? "lender_before_delivery"
-            : effectiveStatus === "return_pending" ? "lender_after_return" : "lender_before_delivery",
-      )}
-
-      {/* One Report an Issue section for the renter — never duplicated per checkpoint — sits
-          after both Condition Evidence cards. */}
-      {!owner && renderRenterIssueReportSection()}
+      </Card>}
 
       {/* DISPUTE RESOLUTION FIXTURES (PHASE 5) */}
       {effectiveStatus === "disputed" && (
