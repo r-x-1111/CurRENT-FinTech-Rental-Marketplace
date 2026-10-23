@@ -1,0 +1,71 @@
+CurRENT — Built With (dependency/technology manifest)
+Generated from package.json / package-lock.json as the authoritative installation source.
+Install with: npm install (or npm ci)
+
+=== Programming Languages ===
+TypeScript ~6.0.3
+JavaScript (ES2020+)
+
+=== Core Frontend Framework ===
+React 19.2.3
+React DOM 19.2.3
+React Native ^0.86.0
+React Native Web ^0.21.2
+Expo ^57.0.0
+Expo Router ^57.0.0 (file-based navigation, used for app/ screen structure)
+Expo Status Bar ~57.0.1
+
+=== Expo Native Modules ===
+expo-crypto ~57.0.3
+expo-font ~57.0.4
+expo-image-picker ~57.0.20
+expo-linear-gradient ~57.0.2
+@expo/vector-icons ^15.0.2
+react-native-reanimated ^4.5.1
+react-native-worklets ^0.10.1
+react-native-safe-area-context ~5.7.0
+react-native-screens ~4.26.0
+react-native-url-polyfill ^2.0.0
+
+=== Backend / Database / Auth Service ===
+Supabase (@supabase/supabase-js ^2.0.0) — Postgres database, authentication, row-level security, realtime messaging
+Backend architecture: Backend-as-a-Service (Supabase) + in-app TypeScript service layer (/services) — no standalone server process
+
+=== State Management & Data Storage ===
+React Context API + reducer (context/Marketplace.tsx) — in-memory marketplace state
+@react-native-async-storage/async-storage ^2.0.0 — local persistence (web/native)
+Supabase Postgres — durable, cross-session persistence for normal accounts and shared data
+
+=== Testing Tools ===
+tsx ^4.23.15 (test runner for tests/marketplace.test.ts via `npm test`)
+@playwright/test ^1.63.0 (end-to-end browser testing via `npm run test:e2e`)
+
+=== Development Tools ===
+TypeScript compiler (tsc) — `npm run typecheck`
+Prettier ^3.9.9 — code formatting
+@types/node ^26.6.4, @types/react ~19.2.4
+
+=== Deployment Platform ===
+Vercel (static web hosting) — configured via vercel.json
+  buildCommand: npm run build:web (expo export --platform web)
+  outputDirectory: dist
+
+=== Payments (Simulated/Demo Only) ===
+FPX (Demo) — simulated online banking payment flow
+BNPL (Demo) — simulated buy-now-pay-later flow
+No real payment gateway/processor is integrated; all transactions are demo/simulated for academic prototype purposes.
+
+=== Main Scripts (package.json) ===
+start        expo start
+web          expo start --web
+typecheck    tsc --noEmit
+test         tsx --test tests/marketplace.test.ts
+test:e2e     playwright test
+build:web    expo export --platform web
+preview      node scripts/serve-web.cjs
+provision:demo  tsx scripts/provision-demo-account.ts
+
+Note: This project is JavaScript/TypeScript-only (Node.js/npm toolchain). No Python runtime,
+requirements.txt-style pip dependencies, or Python backend exist in this codebase. built.txt is
+provided in place of requirements.txt per the BFM3130 submission's alternative allowance; the
+authoritative dependency manifest remains package.json / package-lock.json.

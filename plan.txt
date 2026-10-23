@@ -1,0 +1,213 @@
+CurRENT — System Design and Application Logic Plan
+BFM3130 Entrepreneurship in FinTech — IT Prototype Submission
+This document is derived from the actual current source code (app/, components/, context/,
+services/, lib/, supabase/) verified on 23 October 2026, cross-checked against docs/BUILD_PLAN.md,
+docs/IMPLEMENTATION.md and README.md. Historical doc sections describing older behaviour were
+NOT used as the source of truth where they conflicted with the current code.
+
+1. PROJECT OVERVIEW AND OBJECTIVES
+-----------------------------------
+CurRENT is a Malaysian peer-to-peer item rental marketplace prototype. Renters browse and book
+items from lenders; lenders list items, earn rental income, and manage deliveries. The objective
+of the prototype is to demonstrate a FinTech-relevant transaction flow (fees, commission, risk-based
+deposits, simulated payments) end-to-end in a working mobile/web application, not to operate as a
+production financial service.
+
+2. SYSTEM ARCHITECTURE: FRONTEND / BACKEND RESPONSIBILITIES
+-------------------------------------------------------------
+CurRENT uses a client-heavy architecture with a Backend-as-a-Service (BaaS) backend:
+
+- Frontend (documented in /frontend/README.md): Expo Router + React Native Web app under /app,
+  reusable components under /components, shared state under /context/Marketplace.tsx.
+- Backend (documented in /backend/README.md): Supabase (Postgres, Auth, Row-Level Security,
+  realtime messaging) plus an application-side TypeScript service layer under /services that
+  implements all business rules (fees, deposits, risk scoring, delivery quoting, demo payments).
+  There is no separate Node/Express API server; the service layer executes in the client bundle
+  and/or against Supabase directly. This is an accepted architecture pattern for FinTech MVPs and
+  was preserved as-is rather than replaced with an invented backend server, per the submission's
+  instruction not to introduce unimplemented components.
+
+3. TECHNOLOGIES AND FRAMEWORKS
+--------------------------------
+See built.txt for the full manifest. Summary: TypeScript, React 19, React Native 0.86, Expo 57,
+Expo Router 57, Supabase JS client, AsyncStorage, Playwright + tsx for testing, Vercel for web
+hosting.
+
+4. USER REGISTRATION, LOGIN AND AUTHENTICATION
+-------------------------------------------------
+Implemented in services/auth.ts and the app/auth.tsx screen, backed by Supabase Auth.
+- Email/password sign-up and sign-in via Supabase (signInWithPassword gateway interface).
+- Malaysian-specific registration fields (per README section 4.1).
+- A dedicated Demo Account (democurrent@gmail.com) uses a fixed demo OTP code (123456) for
+  classroom/demo access, isolated from normal-account data (see demoAccountProvisioning.ts,
+  demoWorkspaceSessions.ts, demoWorkspaceDefaults.ts).
+- Supabase error messages are translated into user-facing copy (describeSupabaseAuthError), including
+  handling for email rate limits and the handle_new_user trigger failure case.
+- Row-Level Security policies (supabase/migrations/002_account_workspaces_and_rls.sql) scope data
+  access per authenticated account/workspace.
+
+5. RENTER AND LENDER FEATURES
+---------------------------------
+Both roles share the same app shell and components, with role-specific screens/actions:
+- Renter: browse/search listings (app/(tabs)), book items, manage delivery address, make payment,
+  track rental status, raise disputes, view transaction history, view own Risk Score and history.
+- Lender: create/manage listings (app/listing, app/owner), moderate and track views, purchase
+  "Listing Boost" (RM35 / 7 days — services/deposit.ts LENDER_BOOST_FEE/LENDER_BOOST_DAYS), manage
+  incoming rental requests, accept/dispute returns, view payouts after commission deduction.
+
+6. LISTING CREATION, MANAGEMENT AND MODERATION
+--------------------------------------------------
+- Listings are created through app/listing screens; catalogue shaping and cross-state eligibility
+  fields are computed in services/catalogue.ts.
+- A moderation migration (supabase/migrations/007_listing_moderation.sql) and app/admin screens
+  support reviewing/moderating listings.
+- Listing Boost is a flat RM35 demo fee for 7 days of featured placement (single source of truth:
+  services/deposit.ts); historical boost purchases retain the price paid at purchase time.
+
+7. BOOKING AND RENTAL MANAGEMENT
+------------------------------------
+Implemented primarily in services/marketplace.ts and services/booking.ts:
+- Renter selects dates via calendar, picks a delivery time slot, enters delivery address, and
+  completes a quote covering rental fee, service fee, optional protection fee, and security deposit.
+- A single authoritative request -> booking -> check-in -> check-out lifecycle governs status
+  transitions (README section 9), with cancellation rules keyed to a 24-hour boundary from the
+  original rental start (README section 11.4).
+- Rental-scoped chat (services/chat.ts, migrations 003-005) ties messaging to a specific booking.
+
+8. SAME-STATE AND CROSS-STATE DELIVERY LOGIC
+------------------------------------------------
+Implemented in services/delivery.ts:
+- Same-state routes are quoted as a GrabExpress-style automatic delivery (routeArea() resolves).
+- Cross-state routes fall back to a Domestic Courier quote (quoteAutomaticDomesticCourier) when no
+  same-state route resolves, subject to package size/weight limits (COURIER_MAX_DIMENSION_CM) and
+  restricted-shipping-characteristic checks (e.g. "restricted_liquid").
+- crossStateDeliveryEligibility() returns one of: "available", "same_state_only" (oversize, liquid-
+  restricted item, or explicitly flagged listing/listing ID), or "requires_review" (missing package
+  details). The renter-facing booking panel blocks checkout with a specific warning
+  (CROSS_STATE_BOOKING_WARNING) when eligibility is not "available" and the route is cross-state.
+- A small, explicitly enumerated set of demo listings (PLATFORM_RESTRICTED_LISTING_IDS) is forced to
+  same-state-only delivery regardless of package data, for demo consistency.
+
+9. RENTAL RISK SCORE AND REFUNDABLE SECURITY DEPOSIT CALCULATIONS
+----------------------------------------------------------------------
+Risk Score (services/riskScore.ts, services/marketplace.ts):
+- Range 0-100, four bands: Low Risk 80-100, Medium Risk 40-79, High Risk 30-39, Very High Risk 0-29.
+- Unverified users have no score (N/A). On successful verification, a user's score is initialised
+  to 80 (Low Risk) — confirmed in source at services/marketplace.ts (user.riskScore = 80 and the
+  `?? 80` fallbacks used throughout booking/risk-history code).
+- Scores adjust based on rental outcomes (ActivityTimeline / RiskGauge components visualize this;
+  app/rental-risk-score.tsx and app/risk-score-history.tsx surface it to renters).
+
+Security Deposit (services/deposit.ts):
+- Tiered by risk level: Low 5% capped at RM500, Medium 10% capped at RM1,000, High 15% capped at
+  RM1,500; Very High and Unverified require platform assessment / verification (deposit = 0,
+  rate/cap 0, booking blocked or routed to manual review upstream).
+- Deposit = min(itemValue * tier.rate, tier.cap), rounded to 2 decimals.
+
+Fees and Commission (services/deposit.ts, services/booking.ts):
+- Renter/borrower service fee: flat 5% of the rental fee, with NO minimum charge
+  (calculateBorrowerServiceFee = rentalFee * 0.05, no floor applied) — confirms the BFM3130 "no
+  minimum RM5 charge" specification is the ACTUAL current implementation, not merely intended.
+- Lender/platform commission: 13% of the rental fee on new bookings (CURRENT_LENDER_COMMISSION_RATE
+  = 0.13); lender payout = rentalFee - commission (87%). A legacy rate constant (0.12) is retained
+  only to preserve the originally recorded rate on historical bookings made before the rate change;
+  it is not used for new bookings.
+
+10. SIMULATED FPX AND BNPL PAYMENT PROCESSES
+-------------------------------------------------
+- Payment method selection is implemented in services/booking.ts (resolvePaymentMethodLabel) and
+  surfaced in the checkout UI. Supported values: "Demo FPX"/"FPX" (displayed as "Online Payment
+  (Demo)") and "BNPL (Demo)".
+- No real payment gateway integration exists. All charges are recorded as simulated transactions
+  in the app's own transaction history, not sent to or settled by an actual bank/FPX network or
+  BNPL provider.
+
+11. OPTIONAL THIRD-PARTY RENTAL PROTECTION SIMULATION
+-----------------------------------------------------------
+Implemented in services/booking.ts:
+- Protection fee = MAX(RM5, replacementValue * 0.3% * (rentalDays / 7)); RENTAL_PROTECTION_RATE =
+  0.003, RENTAL_PROTECTION_MINIMUM_FEE = RM5.
+- Protection limit (payout cap) = MIN(replacementValue, RM60,000) (RENTAL_PROTECTION_LIMIT_CAP).
+- Items whose replacement value exceeds the cap are flagged via
+  requiresProtectionEligibilityReview() for manual review rather than auto-covered.
+- Code comments explicitly state the 0.3% rate and RM60,000 cap are CurRENT demo assumptions
+  "informed by" a published third-party model (Antbuildz Malaysia equipment rental protection), NOT
+  an actual quote, policy or guaranteed payout from a real insurer. No real insurer is integrated;
+  this is a pricing/limit simulation only.
+
+12. MESSAGING, TRANSACTION HISTORY AND DISPUTE MANAGEMENT
+----------------------------------------------------------------
+- Rental-scoped messaging: services/chat.ts plus Supabase migrations 003-005 (shared messaging,
+  chat history for unpublished listings, owner-initiated booking chat); surfaced in
+  app/conversation and app/notifications.tsx.
+- Transaction history: app/transactions.tsx, app/delivery-history.tsx, app/delivery-receipt.
+- Disputes: app/dispute screens; one Cancel Booking and one Apply Dispute action per lender rental
+  (README section 0.6); dispute outcomes affect deposit release and Risk Score.
+
+13. DATABASE DESIGN, USER DATA STORAGE AND PERSISTENCE
+-------------------------------------------------------------
+- Supabase Postgres schema defined across supabase/migrations/001-007: initial schema, account
+  workspaces + RLS, shared messaging, chat history for unpublished listings, owner-initiated booking
+  chat, guest catalog access, listing moderation.
+- services/marketplacePersistence.ts persists/restores the in-memory Marketplace context state to
+  Supabase (normal accounts, durable across sessions) and to local/async storage (demo workspace
+  session continuity — demoWorkspaceSessions.ts).
+- Demo-account data is deliberately isolated from normal-account data so classroom demonstrations
+  never corrupt or mix with a real user's persisted records.
+
+14. SECURITY AND ACCESS CONTROLS
+-------------------------------------
+- Authentication via Supabase Auth; Row-Level Security policies restrict data access per account/
+  workspace (migration 002).
+- Environment secrets (EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY) are supplied via
+  environment variables / .env (see .env.example), never committed as real values.
+- The Supabase anon key is a public, RLS-constrained client key by design (standard Supabase model),
+  not a service-role/secret key; no service-role key is used in client code.
+- Demo OTP (123456) is intentionally fixed for the single, published demo account only and is not a
+  production authentication mechanism.
+
+15. TESTING AND DEPLOYMENT
+-------------------------------
+- Unit/logic tests: tests/marketplace.test.ts, run via `npm test` (tsx --test).
+- End-to-end tests: Playwright, run via `npm run test:e2e`.
+- Type safety: `npm run typecheck` (tsc --noEmit).
+- Web build: `npm run build:web` (expo export --platform web) outputs to /dist.
+- Deployment: Vercel, configured in vercel.json (buildCommand: npm run build:web, outputDirectory:
+  dist, SPA rewrite to index.html). No changes were made to this configuration as part of this
+  documentation task.
+
+16. CURRENT PROTOTYPE LIMITATIONS
+--------------------------------------
+- No real payment gateway, bank (FPX), BNPL provider, or insurer integration — all are simulated/
+  demo flows recorded only within the app's own data.
+- No standalone backend API server; all business logic runs as an in-app TypeScript service layer
+  calling Supabase directly, which is suitable for a prototype but would need a server-side trust
+  boundary (e.g. edge functions or a real API) before handling real money or real insurance claims.
+- Cross-state delivery courier integration is a quoting simulation (services/delivery.ts), not a
+  live courier API.
+- Demo account data and OTP are intentionally simplified for classroom use and are not representative
+  of production-grade authentication.
+- A small set of listings is hardcoded to same-state-only delivery for demo consistency
+  (PLATFORM_RESTRICTED_LISTING_IDS) rather than derived purely from live package data.
+
+17. MAIN RENTAL JOURNEY (ITEM SELECTION -> COMPLETION)
+------------------------------------------------------------
+1. Renter browses Home/listings and selects an item.
+2. Renter picks rental dates on the calendar and a delivery time slot.
+3. Renter enters/selects a delivery address; same-state vs cross-state delivery is quoted and
+   eligibility-checked (services/delivery.ts); ineligible cross-state attempts are blocked with an
+   explanatory warning.
+4. App computes the quote: rental fee + 5% renter service fee + optional Rental Protection fee +
+   risk-tiered refundable security deposit (services/booking.ts, services/deposit.ts).
+5. Renter completes a simulated FPX or BNPL payment (no real money moves).
+6. Booking enters the request/booking lifecycle; lender is notified via rental-scoped chat.
+7. On the scheduled date, delivery occurs (same-state automatic delivery or cross-state courier);
+   check-in/condition evidence is recorded.
+8. At rental end, renter confirms return; lender accepts (clean) or disputes; the security deposit
+   is released or adjusted accordingly, and the Risk Score may be updated.
+9. On settlement, the lender's payout (rental fee minus 13% platform commission) is recorded, and the
+   transaction appears in both parties' transaction history.
+
+This plan.txt documents the application as implemented and verified in source on 23 October 2026.
+It does not introduce, assume, or describe any feature, integration or security control that is not
+present in the current codebase.

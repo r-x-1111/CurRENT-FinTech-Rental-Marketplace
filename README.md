@@ -7,6 +7,98 @@
 **Baseline:** Founder-approved V3.51 previously published on GitHub main/README.md, 11 October 2026.  
 **Tagline:** *Rent what you need. Earn from what you own.*
 
+---
+
+## BFM3130 Academic Submission Summary
+
+The sections below are a concise entry point added for the BFM3130 Entrepreneurship in FinTech IT
+prototype submission. Everything after "Table of Contents" is CurRENT's original, detailed
+development specification and history, and is preserved unchanged.
+
+### Project Overview
+CurRENT is a Malaysian peer-to-peer item rental marketplace. Renters browse and book items from
+lenders; lenders list items and earn rental income. The prototype demonstrates a FinTech-relevant
+transaction flow — platform fees, commission, risk-based refundable deposits, and simulated
+payments/insurance — in a working, deployed application.
+
+### Key Features (currently implemented)
+- Renter and lender accounts with Supabase Auth, plus an isolated Demo Account for classroom use.
+- Listing creation, media, availability calendar, and Listing Boost (RM35 / 7 days).
+- Booking with calendar date selection, delivery time slots, and same-state vs cross-state delivery
+  eligibility/quoting (GrabExpress-style same-state, Domestic Courier cross-state).
+- Rental Risk Score (0-100, four risk bands; new verified users start at 80) driving tiered,
+  refundable security deposits (5% / 10% / 15%, capped).
+- Renter service fee: flat 5% of the rental fee, no minimum charge.
+- Lender platform commission: 13% of the rental fee (lender receives 87%).
+- Simulated FPX and BNPL demo checkout (no real payment gateway).
+- Optional simulated third-party Rental Protection (demo premium/limit formula, not a real insurer).
+- Rental-scoped messaging, transaction history, cancellation rules, and dispute handling.
+
+### Technology Stack
+TypeScript, React 19, React Native 0.86, Expo 57 + Expo Router, React Native Web, Supabase
+(Postgres + Auth + Row-Level Security), AsyncStorage, Playwright + tsx for testing, Vercel for web
+hosting. Full manifest in [built.txt](built.txt).
+
+### Project Structure
+```
+app/            Expo Router screens (tabs, auth, listing, owner, rental, delivery, dispute, admin)
+components/     Reusable UI components (ListingCard, BookingCard, RiskGauge, ...)
+context/        Marketplace.tsx — shared app state (React Context + reducer)
+services/       Business logic: booking, deposit, riskScore, delivery, auth, chat, catalogue, ...
+lib/            Supabase client configuration
+supabase/       Database migrations (schema, RLS, messaging, moderation)
+types/          Shared TypeScript types
+tests/          Unit tests (tsx --test); e2e tests via Playwright (tests config: playwright.config.ts)
+docs/           BUILD_PLAN.md, IMPLEMENTATION.md — prior design/implementation notes
+frontend/       Documentation mapping the frontend architecture to the paths above
+backend/        Documentation mapping the backend (Supabase + services/) architecture
+built.txt       Dependency/technology manifest (see Technology Stack)
+plan.txt        Full system design and application logic write-up
+```
+`frontend/` and `backend/` are documentation folders, not code duplicates: Expo Router requires the
+real route tree to stay at `/app`, so physically relocating the app into `frontend/` would break
+routing and the Vercel build. See [frontend/README.md](frontend/README.md) and
+[backend/README.md](backend/README.md) for the detailed path-by-path mapping.
+
+### Installation and Setup
+1. Clone the repository: `git clone https://github.com/r-x-1111/CurRENT-FinTech-Rental-Marketplace.git`
+2. Install dependencies: `npm install` (or `npm ci` for a clean/reproducible install)
+3. Configure Supabase: copy `.env.example` to `.env` and set `EXPO_PUBLIC_SUPABASE_URL` and
+   `EXPO_PUBLIC_SUPABASE_ANON_KEY` from your Supabase project
+4. Start the app: `npm run web` (Expo web dev server) — or `npm run ios` / `npm run android` for
+   native targets
+5. Run tests: `npm test` (unit tests) and `npm run test:e2e` (Playwright end-to-end tests)
+6. Build for web: `npm run build:web` (outputs static build to `/dist`)
+7. Type-check: `npm run typecheck`
+
+### Deployment
+The web build is deployed to **Vercel**, configured via [vercel.json](vercel.json):
+`buildCommand: npm run build:web`, `outputDirectory: dist`, with a single-page-app rewrite to
+`index.html`. No deployment configuration was changed as part of this documentation update.
+
+### Academic Prototype Disclaimer
+**This is an academic prototype.** Payments (FPX, BNPL), courier delivery quoting, and Rental
+Protection ("insurance") are **simulated/demo flows only**. No real payment gateway, bank network,
+BNPL provider, courier API, or insurer is integrated. No real money, real insurance coverage, or
+real financial risk is involved anywhere in this application.
+
+### Additional Technical Documentation
+- [plan.txt](plan.txt) — full system design and application logic
+- [built.txt](built.txt) — dependency/technology manifest
+- [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) — original build plan (historical; verify against current
+  code, see note below)
+- [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) — implementation notes (historical; verify against
+  current code)
+- [frontend/README.md](frontend/README.md), [backend/README.md](backend/README.md) — architecture
+  mapping
+
+> Note: `docs/BUILD_PLAN.md` and `docs/IMPLEMENTATION.md` may describe earlier versions of the app.
+> `plan.txt` was written directly from the current source code (verified 23 October 2026) and is the
+> authoritative architecture reference for this submission; the detailed specification below this
+> point is CurRENT's own development history/spec document, also kept up to date by the project team.
+
+---
+
 ## Table of Contents
 
 - [Current application status (21 October 2026)](#current-application-status-21-october-2026)
